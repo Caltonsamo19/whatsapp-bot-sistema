@@ -10,7 +10,7 @@ const WhatsAppAI = require('./whatsapp_ai');
 // === CONFIGURAÇÃO GOOGLE SHEETS ===
 const GOOGLE_SHEETS_CONFIG = {
     scriptUrl: process.env.GOOGLE_SHEETS_URL,
-    timeout: 10000
+    timeout: 30000
 };
 
 console.log(`📊 Google Sheets configurado: ${GOOGLE_SHEETS_CONFIG.scriptUrl}`);
@@ -253,6 +253,24 @@ PACOTE MENSAL(30 dias)
 };
 
 // === FUNÇÃO GOOGLE SHEETS ===
+
+// Função para retry automático
+async function tentarComRetry(funcao, maxTentativas = 3, delay = 2000) {
+    for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
+        try {
+            return await funcao();
+        } catch (error) {
+            console.log(`⚠️ Tentativa ${tentativa}/${maxTentativas} falhou: ${error.message}`);
+            
+            if (tentativa === maxTentativas) {
+                throw error; // Última tentativa, propagar erro
+            }
+            
+            // Aguardar antes da próxima tentativa
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+}
 async function enviarParaGoogleSheets(referencia, valor, numero, grupoId, grupoNome, autorMensagem) {
     const dados = {
         referencia: referencia,
@@ -269,13 +287,17 @@ async function enviarParaGoogleSheets(referencia, valor, numero, grupoId, grupoN
     try {
         console.log(`📊 Enviando para Google Sheets [${grupoNome}]: ${referencia}|${valor}|${numero}`);
         
-        const response = await axios.post(GOOGLE_SHEETS_CONFIG.scriptUrl, dados, {
-            timeout: GOOGLE_SHEETS_CONFIG.timeout,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Bot-Source': 'WhatsApp-Bot'
-            }
-        });
+       const response = await axios.post(GOOGLE_SHEETS_CONFIG.scriptUrl, dados, {
+    timeout: GOOGLE_SHEETS_CONFIG.timeout,
+    headers: {
+        'Content-Type': 'application/json',
+        'X-Bot-Source': 'WhatsApp-Bot'
+    },
+    // Configuração de retry
+    validateStatus: function (status) {
+        return status < 500; // Resolve apenas se status < 500
+    }
+});
         
         if (response.data && response.data.success) {
             console.log(`✅ Google Sheets: Dados enviados! Row: ${response.data.row} | Grupo: ${grupoNome}`);
