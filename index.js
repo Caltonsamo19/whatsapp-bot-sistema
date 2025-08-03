@@ -139,7 +139,6 @@ NOME: NATACHA ALICE`
 
 PLANO SEMANAL(7 DIAS)
 
-47MT————— 1.7GB
 97MT————— 3.4GB
 147MT—————5.2GB
 196MT—————-7.1GB
@@ -203,7 +202,6 @@ PACOTE SEMANAL (7 Dias)
 
 PACOTE MENSAL(30 dias)
 3GB    - 95,00MT
-5GB     - 180,00MT
 12.8GB    - 250,00MT
 22.8GB   - 400,00MT
 32.8GB   - 550,00MT
@@ -1511,3 +1509,4 @@ process.on('SIGINT', async () => {
     console.log(ia.getStatus());
     process.exit(0);
 });
+
