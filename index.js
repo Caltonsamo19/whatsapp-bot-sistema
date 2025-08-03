@@ -148,7 +148,6 @@ PLANO SEMANAL(7 DIAS)
 💎 PACOTES MENSAIS 💎
    
 📲 5G   ➔ 150MT 💳
-📲 6G   ➔ 180MT 💳
 📲 10G  ➔ 280MT 💳
 📲 15G  ➔ 385MT 💳
 📲 20G  ➔ 480MT 💳
@@ -1509,4 +1508,5 @@ process.on('SIGINT', async () => {
     console.log(ia.getStatus());
     process.exit(0);
 });
+
 
