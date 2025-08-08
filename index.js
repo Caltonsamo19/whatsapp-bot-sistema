@@ -1261,7 +1261,6 @@ client.on('message', async (message) => {
                     `💰 Referência: ${referencia}\n` +
                     `💵 Valor: ${valor}MT\n` +
                     `📱 Número: ${numero}\n\n` +
-                    `📊 Enviado para Google Sheets!\n\n` +
                     `⏳ *Processando...*`
                 );
                 return;
@@ -1507,6 +1506,7 @@ process.on('SIGINT', async () => {
     console.log(ia.getStatus());
     process.exit(0);
 });
+
 
 
 
