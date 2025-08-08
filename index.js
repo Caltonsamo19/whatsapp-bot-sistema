@@ -1045,7 +1045,7 @@ client.on('message', async (message) => {
                             `💰 Referência: ${referencia}\n` +
                             `💵 Valor: ${valor}MT\n` +
                             `📱 Número: ${numero}\n\n` +
-                            `⏳ *_Processando..._*`
+                            `_⏳Processando... Aguarde enquanto o Sistema executa a transferencia_`
                         );
                         return;
                         
@@ -1257,11 +1257,11 @@ client.on('message', async (message) => {
                 }
                 
                 await message.reply(
-                    `✅ *Pedido processado!*\n\n` +
+                    `✅ *Pedido Recebido!*\n\n` +
                     `💰 Referência: ${referencia}\n` +
                     `💵 Valor: ${valor}MT\n` +
                     `📱 Número: ${numero}\n\n` +
-                    `⏳ *Processando...*`
+                    `_⏳Processando... Aguarde enquanto o Sistema executa a transferência_`
                 );
                 return;
                 
@@ -1506,6 +1506,7 @@ process.on('SIGINT', async () => {
     console.log(ia.getStatus());
     process.exit(0);
 });
+
 
 
 
