@@ -60,7 +60,7 @@ class WhatsAppAIAtacado {
     return precosUnicos;
   }
 
-  // === EXTRAIR NÚMERO ÚNICO (SIMPLIFICADO) ===
+  // === EXTRAIR NÚMERO ÚNICO (CORRIGIDO) ===
   extrairNumeroUnico(mensagem) {
     console.log(`   🔍 ATACADO: Extraindo número único da mensagem...`);
     
@@ -78,41 +78,94 @@ class WhatsAppAIAtacado {
       return null;
     }
     
-    if (matches.length > 1) {
-      console.log(`   ❌ ATACADO: Múltiplos números detectados: ${matches.join(', ')}`);
-      console.log(`   ⚠️ ATACADO: Sistema aceita apenas UM número por vez`);
-      return { multiplos: true, numeros: matches };
+    console.log(`   📱 ATACADO: Números brutos encontrados: ${matches.join(', ')}`);
+    
+    // FILTRAR números válidos (removendo números de pagamento)
+    const numerosValidos = [];
+    
+    for (const numero of matches) {
+      const posicao = mensagem.indexOf(numero);
+      const contextoBefore = mensagem.substring(Math.max(0, posicao - 50), posicao).toLowerCase();
+      const contextoAfter = mensagem.substring(posicao + numero.length, posicao + numero.length + 50).toLowerCase();
+      const contextoCompleto = (contextoBefore + contextoAfter).toLowerCase();
+      
+      console.log(`   🔍 ATACADO: Analisando ${numero}...`);
+      console.log(`   📖 ATACADO: Contexto antes: "${contextoBefore}"`);
+      console.log(`   📖 ATACADO: Contexto depois: "${contextoAfter}"`);
+      
+      // PALAVRAS QUE INDICAM NÚMERO DE PAGAMENTO (IGNORAR)
+      const indicadoresPagamento = [
+        'transferiste', 'taxa foi', 'para o número', 'para número', 'para conta',
+        'conta de', 'beneficiário', 'destinatario', 'nome:', 'para 8',
+        'mt para', 'para ' + numero, numero + ' -', '- ' + numero
+      ];
+      
+      // PALAVRAS QUE INDICAM NÚMERO DE DESTINO (ACEITAR)
+      const indicadoresDestino = [
+        'megas para', 'manda para', 'enviar para', 'envia para', 
+        'ativar para', 'este número', 'este numero', 'receber',
+        'activar para', 'ativa para', 'para receber'
+      ];
+      
+      const eNumeroPagamento = indicadoresPagamento.some(indicador => 
+        contextoCompleto.includes(indicador)
+      );
+      
+      const eNumeroDestino = indicadoresDestino.some(indicador => 
+        contextoCompleto.includes(indicador)
+      );
+      
+      // LÓGICA ESPECIAL: Número isolado no final da mensagem
+      const tamanhoMensagem = mensagem.length;
+      const percentualPosicao = (posicao / tamanhoMensagem) * 100;
+      const estaNofinal = percentualPosicao > 70; // Últimos 30% da mensagem
+      const contextoAposFinal = contextoAfter.trim();
+      const estaIsoladoNoFinal = estaNofinal && (contextoAposFinal === '' || contextoAposFinal.length < 10);
+      
+      console.log(`   📊 ATACADO: É pagamento: ${eNumeroPagamento}`);
+      console.log(`   📊 ATACADO: É destino: ${eNumeroDestino}`);
+      console.log(`   📊 ATACADO: Está no final (>70%): ${estaNofinal} (${percentualPosicao.toFixed(1)}%)`);
+      console.log(`   📊 ATACADO: Isolado no final: ${estaIsoladoNoFinal}`);
+      
+      // LÓGICA DE DECISÃO CORRIGIDA
+      if (eNumeroDestino) {
+        numerosValidos.push(numero);
+        console.log(`   ✅ ATACADO: ACEITO por contexto de destino: ${numero}`);
+      } else if (eNumeroPagamento) {
+        console.log(`   ❌ ATACADO: REJEITADO por ser pagamento: ${numero}`);
+      } else if (estaIsoladoNoFinal) {
+        numerosValidos.push(numero);
+        console.log(`   ✅ ATACADO: ACEITO por estar isolado no final: ${numero}`);
+      } else if (estaNofinal && !eNumeroPagamento) {
+        numerosValidos.push(numero);
+        console.log(`   ✅ ATACADO: ACEITO por estar no final: ${numero}`);
+      } else {
+        console.log(`   ❌ ATACADO: REJEITADO por ser ambíguo: ${numero}`);
+      }
     }
     
-    const numero = matches[0];
-    const posicao = mensagem.indexOf(numero);
-    const tamanhoMensagem = mensagem.length;
+    // Remover duplicatas
+    const numerosUnicos = [...new Set(numerosValidos)];
+    console.log(`   📱 ATACADO: Números válidos após filtragem: ${numerosUnicos.join(', ')}`);
     
-    console.log(`   🔍 ATACADO: Analisando ${numero} na posição ${posicao}/${tamanhoMensagem}`);
-    
-    const contextoBefore = mensagem.substring(Math.max(0, posicao - 50), posicao).toLowerCase();
-    const contextoAfter = mensagem.substring(posicao + numero.length, posicao + numero.length + 50).toLowerCase();
-    
-    // PALAVRAS QUE INDICAM NÚMERO DE PAGAMENTO (IGNORAR)
-    const indicadoresPagamento = [
-      'transferiste', 'taxa foi', 'para o número', 'para número', 'para conta',
-      'conta de', 'beneficiário', 'destinatario', 'nome:', 'para 8'
-    ];
-    
-    const eNumeroPagamento = indicadoresPagamento.some(indicador => 
-      contextoBefore.includes(indicador)
-    );
-    
-    if (eNumeroPagamento) {
-      console.log(`   ❌ ATACADO: Número rejeitado por ser de pagamento: ${numero}`);
+    // AGORA verificar se há múltiplos números VÁLIDOS
+    if (numerosUnicos.length === 0) {
+      console.log(`   ❌ ATACADO: Nenhum número válido encontrado`);
       return null;
     }
     
-    console.log(`   ✅ ATACADO: Número válido aceito: ${numero}`);
-    return numero;
+    if (numerosUnicos.length > 1) {
+      console.log(`   ❌ ATACADO: Múltiplos números VÁLIDOS detectados: ${numerosUnicos.join(', ')}`);
+      console.log(`   ⚠️ ATACADO: Sistema aceita apenas UM número por vez`);
+      return { multiplos: true, numeros: numerosUnicos };
+    }
+    
+    const numeroFinal = numerosUnicos[0];
+    console.log(`   ✅ ATACADO: Número único válido aceito: ${numeroFinal}`);
+    return numeroFinal;
   }
 
-  // === SEPARAR COMPROVANTE E NÚMERO (SIMPLIFICADO) ===
+  // === SEPARAR COMPROVANTE E NÚMERO (CORRIGIDO) ===
   separarComprovanteENumero(mensagem) {
     console.log(`   🔍 ATACADO: Separando comprovante e número...`);
     
@@ -123,7 +176,7 @@ class WhatsAppAIAtacado {
     
     const resultadoNumero = this.extrairNumeroUnico(mensagem);
     
-    // Se encontrou múltiplos números, retornar erro
+    // Se encontrou múltiplos números VÁLIDOS, retornar erro
     if (resultadoNumero && resultadoNumero.multiplos) {
       return { 
         textoComprovante: '', 
@@ -148,7 +201,8 @@ class WhatsAppAIAtacado {
         new RegExp(`\\s*este\\s+número\\s*${numero}\\s*`, 'gi'),
         new RegExp(`\\s*número\\s*${numero}\\s*`, 'gi'),
         new RegExp(`\\s*numero\\s*${numero}\\s*`, 'gi'),
-        new RegExp(`\\s*${numero}\\s*`, 'gi')
+        new RegExp(`\\s*${numero}\\s*$`, 'gi'), // Número no final
+        new RegExp(`^\\s*${numero}\\s*`, 'gi') // Número no início
       ];
       
       for (const padrao of padroes) {
@@ -666,7 +720,7 @@ Se não conseguires extrair, responde:
 
   // === FUNÇÃO PARA COMANDOS ADMIN ===
   getStatusDetalhado() {
-    let status = `🧠 *STATUS DA IA ATACADO v1.0*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    let status = `🧠 *STATUS DA IA ATACADO v1.1*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     
     status += `💾 Mensagens no histórico: ${this.historicoMensagens.length}\n`;
     status += `⏳ Comprovantes em aberto: ${Object.keys(this.comprovantesEmAberto).length}\n\n`;
@@ -679,13 +733,14 @@ Se não conseguires extrair, responde:
       });
     }
     
-    status += `\n🔧 *SISTEMA ATACADO:*\n`;
+    status += `\n🔧 *SISTEMA ATACADO v1.1:*\n`;
     status += `✅ Apenas GB (sem saldo)!\n`;
     status += `✅ Valor integral por número!\n`;
     status += `✅ UM número por vez!\n`;
     status += `✅ Sem divisão automática!\n`;
-    status += `✅ Sem múltiplos números!\n`;
-    status += `✅ Sistema simplificado!\n`;
+    status += `✅ CORRIGIDO: Filtra números de pagamento!\n`;
+    status += `✅ CORRIGIDO: Ignora números em contexto de transferência!\n`;
+    status += `✅ Sistema simplificado e inteligente!\n`;
     status += `✅ Processamento direto!\n`;
     
     return status;
