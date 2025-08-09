@@ -15,7 +15,81 @@ class WhatsAppAIAtacado {
     console.log('🧠 IA WhatsApp ATACADO inicializada - Sistema simplificado');
   }
 
-  // === EXTRAIR PREÇOS DA TABELA (SOMENTE GB) ===
+  // === EXTRAIR NÚMERO DE LEGENDA (FUNÇÃO ESPECÍFICA) ===
+  extrairNumeroDeLegenda(legendaImagem) {
+    console.log(`   🔍 ATACADO: Analisando legenda da imagem: "${legendaImagem}"`);
+    
+    if (!legendaImagem || typeof legendaImagem !== 'string' || legendaImagem.trim().length === 0) {
+      console.log(`   ❌ ATACADO: Legenda vazia ou inválida`);
+      return null;
+    }
+    
+    // Limpar a legenda
+    let legendaLimpa = legendaImagem
+      .replace(/[📱📲📞☎️🔢💳🎯🤖✅❌⏳💰📊💵📋⚡]/g, ' ') // Remover emojis
+      .replace(/\s+/g, ' ') // Normalizar espaços
+      .trim();
+    
+    console.log(`   📝 ATACADO: Legenda limpa: "${legendaLimpa}"`);
+    
+    // Buscar números de 9 dígitos que começam com 8
+    const regexNumeros = /\b8[0-9]{8}\b/g;
+    const numerosEncontrados = legendaLimpa.match(regexNumeros) || [];
+    
+    if (numerosEncontrados.length === 0) {
+      console.log(`   ❌ ATACADO: Nenhum número encontrado na legenda`);
+      return null;
+    }
+    
+    console.log(`   📱 ATACADO: Números na legenda: ${numerosEncontrados.join(', ')}`);
+    
+    // Para legendas, ser mais permissivo - geralmente é só o número de destino
+    if (numerosEncontrados.length === 1) {
+      const numero = numerosEncontrados[0];
+      console.log(`   ✅ ATACADO: Número único na legenda aceito: ${numero}`);
+      return numero;
+    }
+    
+    // Se múltiplos números, aplicar filtros
+    const numerosValidos = [];
+    
+    for (const numero of numerosEncontrados) {
+      const posicao = legendaLimpa.indexOf(numero);
+      const contextoBefore = legendaLimpa.substring(Math.max(0, posicao - 30), posicao).toLowerCase();
+      const contextoAfter = legendaLimpa.substring(posicao + numero.length, posicao + numero.length + 30).toLowerCase();
+      const contextoCompleto = (contextoBefore + contextoAfter).toLowerCase();
+      
+      console.log(`   🔍 ATACADO: Analisando ${numero} na legenda...`);
+      console.log(`   📖 ATACADO: Contexto legenda: "${contextoCompleto}"`);
+      
+      // Para legendas, indicadores de pagamento são mais raros
+      const indicadoresPagamento = [
+        'para o', 'para número', 'beneficiário', 'destinatario',
+        'taxa foi', 'transferiste'
+      ];
+      
+      const eNumeroPagamento = indicadoresPagamento.some(indicador => 
+        contextoCompleto.includes(indicador)
+      );
+      
+      if (!eNumeroPagamento) {
+        numerosValidos.push(numero);
+        console.log(`   ✅ ATACADO: Número da legenda aceito: ${numero}`);
+      } else {
+        console.log(`   ❌ ATACADO: Número da legenda rejeitado: ${numero}`);
+      }
+    }
+    
+    if (numerosValidos.length === 1) {
+      return numerosValidos[0];
+    } else if (numerosValidos.length > 1) {
+      console.log(`   ❌ ATACADO: Múltiplos números válidos na legenda: ${numerosValidos.join(', ')}`);
+      return { multiplos: true, numeros: numerosValidos };
+    }
+    
+    console.log(`   ❌ ATACADO: Nenhum número válido na legenda`);
+    return null;
+  }
   extrairPrecosTabela(tabelaTexto) {
     console.log(`   📋 Extraindo preços da tabela atacado (somente GB)...`);
     
@@ -373,13 +447,14 @@ class WhatsAppAIAtacado {
   async processarImagem(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
     console.log(`   📸 ATACADO: Processando imagem de ${remetente}`);
     
-    // Validação da legenda
+    // Validação melhorada da legenda
     const temLegendaValida = legendaImagem && 
                             typeof legendaImagem === 'string' && 
-                            legendaImagem.trim().length > 0;
+                            legendaImagem.trim().length > 0 &&
+                            legendaImagem.trim() !== '';
     
     if (temLegendaValida) {
-      console.log(`   📝 ATACADO: Legenda detectada: "${legendaImagem.trim()}"`);
+      console.log(`   📝 ATACADO: Legenda detectada (${legendaImagem.trim().length} chars): "${legendaImagem.trim()}"`);
     } else {
       console.log(`   📝 ATACADO: Sem legenda válida`);
     }
@@ -447,33 +522,32 @@ Se não conseguires ler a imagem ou extrair os dados:
         if (temLegendaValida) {
           console.log(`   🔍 ATACADO: ANALISANDO LEGENDA DA IMAGEM...`);
           
-          const resultadoLegenda = this.separarComprovanteENumero(legendaImagem);
+          // Usar função específica para legenda
+          const numeroLegenda = this.extrairNumeroDeLegenda(legendaImagem);
           
           // Se encontrou múltiplos números na legenda, retornar erro
-          if (resultadoLegenda.erro === 'multiplos_numeros') {
+          if (numeroLegenda && numeroLegenda.multiplos) {
             console.log(`   ❌ ATACADO: Múltiplos números na legenda não permitidos`);
             return {
               sucesso: false,
               tipo: 'multiplos_numeros_nao_permitido',
-              numeros: resultadoLegenda.numeros,
+              numeros: numeroLegenda.numeros,
               mensagem: 'Sistema atacado aceita apenas UM número por vez.'
             };
           }
           
-          const numero = resultadoLegenda.numero;
-          
-          if (numero) {
+          if (numeroLegenda) {
             console.log(`   🎯 ATACADO: IMAGEM + NÚMERO NA LEGENDA DETECTADOS!`);
             console.log(`   💰 ATACADO: Comprovante da imagem: ${comprovante.referencia} - ${comprovante.valor}MT`);
-            console.log(`   📱 ATACADO: Número da legenda: ${numero}`);
+            console.log(`   📱 ATACADO: Número da legenda: ${numeroLegenda}`);
             
-            const resultado = `${comprovante.referencia}|${comprovante.valor}|${numero}`;
+            const resultado = `${comprovante.referencia}|${comprovante.valor}|${numeroLegenda}`;
             console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${resultado}`);
             return { 
               sucesso: true, 
               dadosCompletos: resultado,
               tipo: 'numero_processado',
-              numero: numero,
+              numero: numeroLegenda,
               fonte: 'imagem_com_legenda'
             };
           } else {
