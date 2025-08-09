@@ -68,7 +68,7 @@ const MODERACAO_CONFIG = {
     },
     detectarLinks: true,
     apagarMensagem: true,
-    removerUsuario: true,
+    removerUsuario: false,
     excecoes: [
         '258861645968@c.us',
         '258871112049@c.us', 
@@ -78,8 +78,8 @@ const MODERACAO_CONFIG = {
 
 // Configuração para cada grupo (ATACADO)
 const CONFIGURACAO_GRUPOS = {
-    '120363402160265624@g.us': {
-        nome: 'Atacado - GB Completos',
+    '120363419652375064@g.us': {
+        nome: 'Net Fornecedor V',
         tabela: `GB'S COMPLETOS
 📱 10GB➜125MT 
 📱 20GB ➜ 250MT  
@@ -92,10 +92,9 @@ const CONFIGURACAO_GRUPOS = {
 📱 90GB ➜ 1125MT  
 📱 100GB➜1250MT
 
-💡 *SISTEMA ATACADO - VALOR INTEGRAL*
 📞 1 Comprovante = 1 Número = Valor Completo`,
 
-        pagamento: `FORMAS DE PAGAMENTO ATACADO
+        pagamento: `FORMAS DE PAGAMENTO
  
 M-PESA❤: 840326152 
 E-MOLA🧡: 870059057 
@@ -103,9 +102,7 @@ NOME: Vasco José Mahumane
 
 📝 Após a transferência, mande:
 1️⃣ Comprovativo 
-2️⃣ UM número que vai receber
-
-⚠️ ATACADO: Valor integral para cada número`
+2️⃣ UM número que vai receber`
     }
 };
 
@@ -903,7 +900,6 @@ client.on('message', async (message) => {
                             `💰 Referência: ${referencia}\n` +
                             `💵 Valor: ${valor}MT\n` +
                             `📱 Número: ${numero}\n\n` +
-                            `📊 Enviado para Google Sheets!\n\n` +
                             `⏳ *Processando valor integral...*`
                         );
                         return;
@@ -992,7 +988,6 @@ client.on('message', async (message) => {
                     `💰 Referência: ${referencia}\n` +
                     `💵 Valor: ${valor}MT\n` +
                     `📱 Número: ${numero}\n\n` +
-                    `📊 Enviado para Google Sheets!\n\n` +
                     `⏳ *Processando valor integral...*`
                 );
                 return;
@@ -1071,4 +1066,5 @@ process.on('SIGINT', async () => {
     console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG.scriptUrl}`);
     console.log(ia.getStatus());
     process.exit(0);
+
 });
