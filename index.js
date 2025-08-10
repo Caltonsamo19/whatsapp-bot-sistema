@@ -253,7 +253,7 @@ M-Pesa: (Leonor) 857451196`
 𝗗𝗶𝗮𝗿𝗶𝗼
 ✅PODE TER TXUNA CRÉDITO
 
-𝟱𝟬𝟬𝗠𝗕-𝟭𝟬𝗠𝗧
+
 𝟭024M𝗕__𝟭𝟴 𝗠𝗧
 𝟮048M𝗕__𝟯6𝗠𝗧
 𝟯072MB ___ 𝟱4𝗠𝗧
@@ -1555,6 +1555,7 @@ process.on('SIGINT', async () => {
     console.log(ia.getStatus());
     process.exit(0);
 });
+
 
 
 
