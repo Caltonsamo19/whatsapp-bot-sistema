@@ -54,8 +54,10 @@ let gruposLogados = new Set();
 
 // Configuração de administradores GLOBAIS
 const ADMINISTRADORES_GLOBAIS = [
-    '258861645968@c.us',
-    '258871112049@c.us', 
+    '258874100607@c.us',
+    '258871112049@c.us',
+    '258845356399@c.us', 
+    '258840326152@c.us', 
     '258852118624@c.us'
 ];
 
@@ -121,13 +123,14 @@ NOME: NATACHA ALICE`
 
     '120363152151047451@g.us': {
         nome: 'Phull Megas',
-        tabela: `🔥 *MEGA PROMO  VODACOM* 
+        tabela: `MEGA PROMO  VODACOM 
  ━━━━━━━━━━━━━━━
 📅 PACOTES DIÁRIOS 📅 24h 
 
 ✅ 600MB.  ➔ 10MT 🛜
 ✅ 900MB.  ➔ 15MT 🛜
-✅1024MB.      16MT 
+✅1024MB.      17MT 🛜
+✅ 1050MB.      18MT 🛜
 
 ✅ 1G + 200MB ➔ 20MT 📶
 ✅ 2G + 400MB ➔ 40MT 📶
@@ -158,13 +161,14 @@ PLANO SEMANAL(7 DIAS)
 
 💫  TURBO COMANDOS ✨
 
-📍 Use o comando *ilimitado* para ver a tabela de pacotes ilimitados
+📍 Use o comando ilimitado para ver a tabela de pacotes ilimitados
 
-☎ Use o comando *saldo* para ver a tabela de saldo
+☎ Use o comando saldo para ver a tabela de saldo
 
-💳 Use o comando *pagamento* para ver as formas de pagamento.
+💳 Use o comando pagamento para ver as formas de pagamento.
 
-🚀 Oferecemos sempre o melhor!*
+🚀 Oferecemos sempre o melhor!*
+
 `,
 
         pagamento: `🅼🅴🅶🅰🆂 🅿🆁🅾🅼🅾    💳 🛒⛔ FORMAS DE PAGAMENTO:⛔🛒💳
@@ -175,16 +179,16 @@ PLANO SEMANAL(7 DIAS)
 
 NOME:   Alice Armando Nhaquila📝
 
-!¡ 📂⛔🛒 ENVIE O SEU COMPROVATIVO NO GRUPO,  JUNTAMENTE COM O NÚMERO QUE VAI RECEBER OS MB✅⛔🛒
+!¡ 📂⛔🛒 ENVIE O SEU COMPROVATIVO NO GRUPO,  JUNTAMENTE COM O NÚMERO QUE VAI RECEBER OS MB✅⛔🛒
 `
     },
 
     '258840161370-1471468657@g.us': {
         nome: 'Venda Automática 24/7',
-        tabela: `TABELA ACTUALIZADA
-___________________________
+        tabela: `___________________________
+TABEL ACTUALIZADA
 
- PACOTE DIÁRIO ( 24H) 
+ ..PACOTE DIÁRIO ( 24H) 
 1024MB    - 17,00 MT
 2048MB   - 34,00 MT
 3072MB    - 51,00 MT
@@ -201,51 +205,96 @@ PACOTE SEMANAL (7 Dias)
 
 PACOTE MENSAL(30 dias)
 3GB    - 95,00MT
+5GB     - 180,00MT
 12.8GB    - 250,00MT
 22.8GB   - 400,00MT
 32.8GB   - 550,00MT
-51.2GB   - 950,00MT`,
+51.2GB   - 950,00MT
+___________________________
+CHAMADAS TODAS REDES + SMS + NET:
+Mensal(30dias):
+450MT - Ilimitado + 11.5GB.
+500MT - Ilimitado + 14.5GB.
+700MT - Ilimitado + 26.5GB.
+1000MT - Ilimitado + 37.5GB.
+1500MT - Ilimitado + 53.5GB
+2150MT - Ilimitado + 102.5GB
+PARA OS PACOTES MENSAIS, NÃO PODE TER TXUNA CRÉDITO.
+___________________________
+Serviços de Streamin
+PLANOS PREMIUM
 
-        pagamento: `╭━━━┛ 💸  ＦＯＲＭＡＳ ＤＥ ＰＡＧＡＭＥＮＴＯ:  
-┃
-┃ 🪙 E-Mola: (Glória) 👩‍💻
-┃     860186270  
-┃
-┃ 🪙 M-Pesa:  (Leonor)👨‍💻
-┃     857451196  
-┃
-┃
-┃ ⚠ IMPORTANTE:  
-┃     ▪ Envie o comprovativo em forma de mensagem e o número para receber rápido!
-┃
-┃┃
-╰━━━━━━━━━━━━━━━━━━━━━  
-        🚀 O futuro é agora. Vamos?
-`
-    },
-    '120363402160265624@g.us': {
-    nome: 'Treinamento IA ',
-    tabela: `Tabela de Fornecedor
-    GB'S COMPLETOS
-📱 10GB➜125MT 
-📱 20GB ➜ 250MT  
-📱 30GB ➜ 375MT  
-📱 40GB ➜ 500MT  
-📱 50GB ➜ 625MT  
-📱 60GB ➜ 750MT  
-📱 70GB ➜ 875MT  
-📱 80GB ➜ 1000MT  
-📱 90GB ➜ 1125MT  
-📱  100GB➜1250MT
+Netflix 
+AMADOR - 99MT | 7 dias 
+NOOB - 250MT | 30 dias 
+PREMIUM - 549MT | 35 dias 
+ELITE - 1499MT | 40 dias 
 
+SPOTIFY 
+AMADOR - 149MT | 30 dias
+ELITE - 447MT | 3 meses 
+APPLE MUSIC 
 
-*SALDO PROMO 1K🟰815*📞    
- 📞 50💫 45MT
-  📞 100💫 85MT
- 📞 500  💫 410MT💶 
- 📞 1000💫 815MT💶
+AMADOR - 199MT | 30 dias
+ELITE - 597MT | 3 meses 
+
+Temos muito mais serviço…
 `,
-    pagamento: `SUAS_FORMAS_DE_PAGAMENTO_AQUI`
+
+        pagamento: `FORMAS DE PAGAMENTO:
+E-Mola: (Glória) 860186270  
+M-Pesa: (Leonor) 857451196`
+    },
+    '120363228868368923@g.us': {
+    nome: 'VENDA DE MEGAS',
+    tabela: `𝗧𝗮𝗯𝗲𝗹𝗮 𝗮𝗰𝘁𝘂𝗮𝗹𝗶𝘇𝗮do 𝗱𝗲 𝘃𝗼𝗱𝗮𝗰𝗼𝗺
+
+
+𝗗𝗶𝗮𝗿𝗶𝗼
+✅PODE TER TXUNA CRÉDITO
+
+𝟱𝟬𝟬𝗠𝗕-𝟭𝟬𝗠𝗧
+𝟭024M𝗕__𝟭𝟴 𝗠𝗧
+𝟮048M𝗕__𝟯6𝗠𝗧
+𝟯072MB ___ 𝟱4𝗠𝗧
+𝟰096MB__𝟳0𝗠𝗧
+𝟱120M𝗕 ___ 𝟵𝟬𝗠𝗧
+𝟭0240MB___𝟭8𝟬𝗠𝗧
+
+𝗦𝗲𝗺𝗮𝗻𝗮𝗹
+❎ NÃO PODE TER TXUNA CRÉDITO
+
+𝟰5𝗠𝗧__𝟭𝟳41M𝗕
+80𝗠𝗧__𝟮𝟵70M𝗕
+90𝗠𝗧__𝟯𝟰82M𝗕
+𝟭40𝗠𝗧___𝟱325M𝗕
+𝟭80𝗠𝗧___𝟳270M𝗕
+
+𝐌𝐞𝐧𝐬𝐚𝐥
+❎ NÃO PODE TER TXUNA CRÉDITO
+
+𝟲057M𝗕__𝟮𝟬𝟬𝗠𝗧
+𝟴057MB__𝟮𝟯𝟬𝗠𝗧
+𝟭𝟬057MB___𝟮6𝟬𝗠𝗧
+𝟮𝟬057M𝗕___𝟰𝟱𝟬𝗠𝗧
+
+𝗗𝗶𝗮𝗺𝗮𝗻𝘁𝗲 𝗱𝗲 𝗩𝗼𝗱𝗮𝗰𝗼𝗺
+❎ NÃO PODE TER TXUNA CRÉDITO
+
+𝗠𝗲𝗻𝘀𝗮𝗹 (𝟯𝟬𝗗𝗶𝗮𝘀)
+⿡𝟰50𝗠𝘁 =𝗖𝗵𝗮𝗺𝗮𝗱𝗮𝘀 𝗶𝗹𝗶𝗺𝗶𝘁𝗮𝗱𝗮𝘀 +𝟭𝟭𝗚𝗕+𝗦𝗠𝗦
+⿢𝟱50 =𝗖𝗵𝗮𝗺𝗮𝗱𝗮𝘀 𝗶𝗹𝗶𝗺𝗶𝘁𝗮𝗱𝗮𝘀 +𝟭𝟱𝗚𝗕+𝗦𝗠𝗦
+⿣𝟳50=𝗖𝗵𝗮𝗺𝗮𝗱𝗮𝘀 𝗶𝗹𝗶𝗺𝗶𝘁𝗮𝗱𝗮𝘀 +𝟮𝟱𝗚𝗕+𝗦𝗠𝗦
+⿤𝟭050=𝗖𝗵𝗮𝗺𝗮𝗱𝗮𝘀 𝗶𝗹𝗶𝗺𝗶𝘁𝗮𝗱𝗮𝘀 +𝟰𝟮𝗚𝗕+𝗦𝗠𝗦
+
+`,
+    pagamento: `💳 FORMAS/ PAGAMENTOS :⤵
+- 📲 𝗘-𝗠𝗢𝗟𝗔: 868440408:
+- *JOSE TOMAS*
+- 📲 𝗠-𝗣𝗘𝗦𝗔 850189315:
+- *JOSE TOMÁS*
+
+📩 Envie o seu comprovantivo no grupo, juntamente com o número que vai receber os dados.`
 },
 };
 
@@ -1506,6 +1555,7 @@ process.on('SIGINT', async () => {
     console.log(ia.getStatus());
     process.exit(0);
 });
+
 
 
 
