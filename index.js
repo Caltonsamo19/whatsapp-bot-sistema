@@ -241,9 +241,21 @@ ELITE - 597MT | 3 meses
 Temos muito mais serviço…
 `,
 
-        pagamento: `FORMAS DE PAGAMENTO:
-E-Mola: (Glória) 860186270  
-M-Pesa: (Leonor) 857451196`
+        pagamento: `╭━━━┛ 💸  ＦＯＲＭＡＳ ＤＥ ＰＡＧＡＭＥＮＴＯ: 
+┃
+┃ 🪙 E-Mola: (Glória) 👩‍💻
+┃     860186270  
+┃
+┃ 🪙 M-Pesa:  (Leonor)👨‍💻
+┃     857451196  
+┃
+┃
+┃ ⚠ IMPORTANTE:  
+┃     ▪ Envie o comprovativo em forma de mensagem e o número para receber rápido!
+┃
+┃┃
+╰━━━━━━━━━━━━━━━━━━━━━  
+       🚀 O futuro é agora. Vamos?`
     },
     '120363228868368923@g.us': {
     nome: 'VENDA DE MEGAS',
@@ -1555,6 +1567,7 @@ process.on('SIGINT', async () => {
     console.log(ia.getStatus());
     process.exit(0);
 });
+
 
 
 
