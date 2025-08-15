@@ -108,10 +108,32 @@ NOME: Vasco José Mahumane
         nome: 'Only Saldo',
         tabela: `SALDO PROMO 1K🟰815📞
     
- Saldo 50💫 45MT
- Saldo 100💫 85MT
- Saldo 500  💫 410MT💶 
- Saldo 1000💫 815MT💶
+ *SALDO PROMO 1K🟰815*📞    
+ 📞 50💫 45MT
+  📞 100💫 85MT
+📞 200💫 170MT
+📞 300💫 255MT
+📞 400💫 340MT
+ 📞 500  💫 410MT💶 
+ 📞 1000💫 815MT💶
+📞 2000💫 1630MT
+📞 3000💫 2445MT
+📞 4000💫 3260MT
+📞 5000💫 4075MT
+📞 6000💫 4890MT
+📞 7000💫 5705MT
+📞 8000💫 6520MT
+📞 9000💫 7335MT
+📞 10000💫 8150MT
+ FORMAS DE PAGAMENTO
+
+M-PESA📱
+ 840326152
+  870059057
+Vasco José Mahumane
+💶💶💶💶💶💶💶
+
+📩 Após o envio do valor, mande o compravativo no grupo e o respectivo número beneficiário.
 `,
 
         pagamento: `FORMAS DE PAGAMENTO
@@ -1088,3 +1110,4 @@ process.on('SIGINT', async () => {
     process.exit(0);
 
 });
+
