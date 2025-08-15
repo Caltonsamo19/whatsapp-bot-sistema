@@ -103,6 +103,26 @@ NOME: Vasco José Mahumane
 📝 Após a transferência, mande:
 1️⃣ Comprovativo 
 2️⃣ UM número que vai receber`
+    },
+    '120363419741642342@g.us': {
+        nome: 'Only Saldo',
+        tabela: `SALDO PROMO 1K🟰815📞
+    
+ Saldo 50💫 45MT
+ Saldo 100💫 85MT
+ Saldo 500  💫 410MT💶 
+ Saldo 1000💫 815MT💶
+`,
+
+        pagamento: `FORMAS DE PAGAMENTO
+ 
+M-PESA❤: 840326152 
+E-MOLA🧡: 870059057 
+NOME: Vasco José Mahumane 
+
+📝 Após a transferência, mande:
+1️⃣ Comprovativo 
+2️⃣ UM número que vai receber`
     }
 };
 
