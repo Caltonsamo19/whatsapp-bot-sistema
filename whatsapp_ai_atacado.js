@@ -12,7 +12,7 @@ class WhatsAppAIAtacado {
       this.limparComprovantesAntigos();
     }, 10 * 60 * 1000);
     
-    console.log('🧠 IA WhatsApp ATACADO inicializada - Sistema simplificado');
+    console.log('🧠 IA WhatsApp ATACADO inicializada - Sistema inteligente com cálculo automático de megas');
   }
 
   // === EXTRAIR NÚMERO DE LEGENDA (FUNÇÃO ESPECÍFICA) ===
@@ -91,33 +91,49 @@ class WhatsAppAIAtacado {
     return null;
   }
   extrairPrecosTabela(tabelaTexto) {
-    console.log(`   📋 Extraindo preços da tabela atacado (somente GB)...`);
+    console.log(`   📋 Extraindo preços da tabela atacado...`);
     
     const precos = [];
     const linhas = tabelaTexto.split('\n');
     
     for (const linha of linhas) {
-      // Padrões específicos para GB
+      // Padrões específicos para GB e saldo
       const padroes = [
         // Formato: 10GB➜125MT
         /(\d+)GB➜(\d+)MT/gi,
         // Formato com espaços: 📱 10GB ➜ 125MT
         /📱\s*(\d+)GB\s*➜\s*(\d+)MT/gi,
         // Formato alternativo: 10GB - 125MT
-        /(\d+)GB\s*[-–—]\s*(\d+)MT/gi
+        /(\d+)GB\s*[-–—]\s*(\d+)MT/gi,
+        // Formato: 📞 50 💫 45 MT (para saldo)
+        /📞\s*(\d+)\s*💫\s*(\d+)\s*MT/gi,
+        // Formato alternativo saldo: 50💫 45MT
+        /(\d+)💫\s*(\d+)MT/gi
       ];
       
       for (const padrao of padroes) {
         let match;
         while ((match = padrao.exec(linha)) !== null) {
-          const quantidadeGB = parseInt(match[1]);
+          const quantidade = parseInt(match[1]);
           const preco = parseInt(match[2]);
           
+          // Determinar tipo e descrição
+          let tipo = 'gb';
+          let descricao = '';
+          
+          if (linha.includes('💫')) {
+            tipo = 'saldo';
+            descricao = `${quantidade} Saldo`;
+          } else if (linha.includes('GB')) {
+            tipo = 'gb';
+            descricao = `${quantidade}GB`;
+          }
+          
           precos.push({
-            quantidade: quantidadeGB * 1024, // Converter para MB
+            quantidade: quantidade,
             preco: preco,
-            descricao: `${quantidadeGB}GB`,
-            tipo: 'gb',
+            descricao: descricao,
+            tipo: tipo,
             original: linha.trim()
           });
         }
@@ -129,9 +145,62 @@ class WhatsAppAIAtacado {
       index === self.findIndex(p => p.preco === preco.preco && p.quantidade === preco.quantidade)
     ).sort((a, b) => a.preco - b.preco);
     
-    console.log(`   ✅ Preços GB extraídos: ${precosUnicos.length} pacotes encontrados`);
+    console.log(`   ✅ Preços extraídos: ${precosUnicos.length} pacotes encontrados`);
     
     return precosUnicos;
+  }
+
+  // === NOVA FUNÇÃO: CALCULAR MEGAS BASEADO NO VALOR ===
+  calcularMegasPorValor(valorPago, configGrupo) {
+    console.log(`   🧮 ATACADO: Calculando megas para valor ${valorPago}MT...`);
+    
+    if (!configGrupo || !configGrupo.tabela) {
+      console.log(`   ❌ ATACADO: Tabela do grupo não disponível`);
+      return null;
+    }
+    
+    const precos = this.extrairPrecosTabela(configGrupo.tabela);
+    
+    if (precos.length === 0) {
+      console.log(`   ❌ ATACADO: Nenhum preço encontrado na tabela`);
+      return null;
+    }
+    
+    const valorNumerico = parseFloat(valorPago);
+    
+    // Procurar preço exato primeiro
+    const precoExato = precos.find(p => p.preco === valorNumerico);
+    if (precoExato) {
+      console.log(`   ✅ ATACADO: Preço exato encontrado: ${precoExato.descricao}`);
+      return {
+        megas: precoExato.descricao,
+        quantidade: precoExato.quantidade,
+        tipo: precoExato.tipo,
+        preco: precoExato.preco
+      };
+    }
+    
+    // Se não encontrou exato, procurar o mais próximo (dentro de uma tolerância)
+    const tolerancia = 5; // MT
+    const precoProximo = precos.find(p => 
+      Math.abs(p.preco - valorNumerico) <= tolerancia
+    );
+    
+    if (precoProximo) {
+      console.log(`   ⚡ ATACADO: Preço aproximado encontrado: ${precoProximo.descricao} (diferença: ${Math.abs(precoProximo.preco - valorNumerico)}MT)`);
+      return {
+        megas: precoProximo.descricao,
+        quantidade: precoProximo.quantidade,
+        tipo: precoProximo.tipo,
+        preco: precoProximo.preco,
+        aproximado: true,
+        diferenca: Math.abs(precoProximo.preco - valorNumerico)
+      };
+    }
+    
+    // Se não encontrou nada, retornar null
+    console.log(`   ❌ ATACADO: Nenhum pacote encontrado para valor ${valorPago}MT`);
+    return null;
   }
 
   // === EXTRAIR NÚMERO ÚNICO (CORRIGIDO) ===
@@ -372,7 +441,7 @@ class WhatsAppAIAtacado {
     
     if (apenasNumeroRegex.test(mensagemLimpa)) {
       console.log(`   📱 ATACADO: Detectado número isolado: ${mensagemLimpa}`);
-      return await this.processarNumero(mensagemLimpa, remetente, timestamp);
+      return await this.processarNumero(mensagemLimpa, remetente, timestamp, configGrupo);
     }
     
     // SEPARAR comprovante e número
@@ -403,35 +472,63 @@ class WhatsAppAIAtacado {
       console.log(`   💰 ATACADO: Comprovante: ${comprovante.referencia} - ${comprovante.valor}MT`);
       console.log(`   📱 ATACADO: Número: ${numero}`);
       
-      const resultado = `${comprovante.referencia}|${comprovante.valor}|${numero}`;
-      console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO: ${resultado}`);
-      return { 
-        sucesso: true, 
-        dadosCompletos: resultado,
-        tipo: 'numero_processado',
-        numero: numero
-      };
+      // CALCULAR MEGAS AUTOMATICAMENTE
+      const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+      
+      if (megasCalculados) {
+        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numero}`;
+        console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO: ${resultado}`);
+        return { 
+          sucesso: true, 
+          dadosCompletos: resultado,
+          tipo: 'numero_processado',
+          numero: numero,
+          megas: megasCalculados.megas,
+          valorPago: comprovante.valor
+        };
+      } else {
+        console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
+        return {
+          sucesso: false,
+          tipo: 'valor_nao_encontrado_na_tabela',
+          valor: comprovante.valor,
+          mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+        };
+      }
     }
     
     // 3. Se encontrou apenas número (sem comprovante)
     if (numero && !comprovante) {
       console.log(`   📱 ATACADO: Apenas número detectado: ${numero}`);
-      return await this.processarNumero(numero, remetente, timestamp);
+      return await this.processarNumero(numero, remetente, timestamp, configGrupo);
     }
     
     // 4. Se encontrou apenas comprovante (sem número)
     if (comprovante && !numero) {
       console.log(`   💰 ATACADO: Apenas comprovante detectado: ${comprovante.referencia} - ${comprovante.valor}MT`);
       
-      await this.processarComprovante(comprovante, remetente, timestamp);
+      // VERIFICAR se o valor existe na tabela
+      const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
       
-      return { 
-        sucesso: true, 
-        tipo: 'comprovante_recebido',
-        referencia: comprovante.referencia,
-        valor: comprovante.valor,
-        mensagem: 'Comprovante recebido! Agora envie UM número que vai receber os megas.'
-      };
+      if (megasCalculados) {
+        await this.processarComprovante(comprovante, remetente, timestamp);
+        
+        return { 
+          sucesso: true, 
+          tipo: 'comprovante_recebido',
+          referencia: comprovante.referencia,
+          valor: comprovante.valor,
+          megas: megasCalculados.megas,
+          mensagem: `Comprovante recebido! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
+        };
+      } else {
+        return {
+          sucesso: false,
+          tipo: 'valor_nao_encontrado_na_tabela',
+          valor: comprovante.valor,
+          mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+        };
+      }
     }
     
     // 5. Não reconheceu
@@ -541,15 +638,30 @@ Se não conseguires ler a imagem ou extrair os dados:
             console.log(`   💰 ATACADO: Comprovante da imagem: ${comprovante.referencia} - ${comprovante.valor}MT`);
             console.log(`   📱 ATACADO: Número da legenda: ${numeroLegenda}`);
             
-            const resultado = `${comprovante.referencia}|${comprovante.valor}|${numeroLegenda}`;
-            console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${resultado}`);
-            return { 
-              sucesso: true, 
-              dadosCompletos: resultado,
-              tipo: 'numero_processado',
-              numero: numeroLegenda,
-              fonte: 'imagem_com_legenda'
-            };
+            // CALCULAR MEGAS AUTOMATICAMENTE
+            const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+            
+            if (megasCalculados) {
+              const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLegenda}`;
+              console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${resultado}`);
+              return { 
+                sucesso: true, 
+                dadosCompletos: resultado,
+                tipo: 'numero_processado',
+                numero: numeroLegenda,
+                megas: megasCalculados.megas,
+                valorPago: comprovante.valor,
+                fonte: 'imagem_com_legenda'
+              };
+            } else {
+              console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
+              return {
+                sucesso: false,
+                tipo: 'valor_nao_encontrado_na_tabela',
+                valor: comprovante.valor,
+                mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+              };
+            }
           } else {
             console.log(`   ❌ ATACADO: Nenhum número válido encontrado na legenda`);
           }
@@ -558,15 +670,28 @@ Se não conseguires ler a imagem ou extrair os dados:
         }
         
         // Sem número na legenda - processar comprovante normalmente
-        await this.processarComprovante(comprovante, remetente, timestamp);
+        // VERIFICAR se o valor existe na tabela
+        const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
         
-        return { 
-          sucesso: true, 
-          tipo: 'comprovante_imagem_recebido',
-          referencia: comprovante.referencia,
-          valor: comprovante.valor,
-          mensagem: 'Comprovante da imagem processado! Agora envie UM número que vai receber os megas.'
-        };
+        if (megasCalculados) {
+          await this.processarComprovante(comprovante, remetente, timestamp);
+          
+          return { 
+            sucesso: true, 
+            tipo: 'comprovante_imagem_recebido',
+            referencia: comprovante.referencia,
+            valor: comprovante.valor,
+            megas: megasCalculados.megas,
+            mensagem: `Comprovante da imagem processado! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
+          };
+        } else {
+          return {
+            sucesso: false,
+            tipo: 'valor_nao_encontrado_na_tabela',
+            valor: comprovante.valor,
+            mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+          };
+        }
       } else {
         console.log(`   ❌ ATACADO: IA não conseguiu extrair dados da imagem`);
         return {
@@ -587,7 +712,7 @@ Se não conseguires ler a imagem ou extrair os dados:
   }
 
   // === PROCESSAR NÚMERO (SIMPLIFICADO) ===
-  async processarNumero(numero, remetente, timestamp) {
+  async processarNumero(numero, remetente, timestamp, configGrupo = null) {
     console.log(`   🔢 ATACADO: Processando número ${numero} para ${remetente}`);
     
     // Verificar se tem comprovante em aberto
@@ -595,17 +720,32 @@ Se não conseguires ler a imagem ou extrair os dados:
       const comprovante = this.comprovantesEmAberto[remetente];
       console.log(`   ✅ ATACADO: Comprovante em aberto encontrado: ${comprovante.referencia} - ${comprovante.valor}MT`);
       
-      const resultado = `${comprovante.referencia}|${comprovante.valor}|${numero}`;
-      delete this.comprovantesEmAberto[remetente];
+      // CALCULAR MEGAS AUTOMATICAMENTE
+      const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
       
-      console.log(`   ✅ ATACADO: PEDIDO COMPLETO: ${resultado}`);
-      return { 
-        sucesso: true, 
-        dadosCompletos: resultado,
-        tipo: 'numero_processado',
-        numero: numero,
-        origem: 'comprovante_em_aberto'
-      };
+      if (megasCalculados) {
+        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numero}`;
+        delete this.comprovantesEmAberto[remetente];
+        
+        console.log(`   ✅ ATACADO: PEDIDO COMPLETO: ${resultado}`);
+        return { 
+          sucesso: true, 
+          dadosCompletos: resultado,
+          tipo: 'numero_processado',
+          numero: numero,
+          megas: megasCalculados.megas,
+          valorPago: comprovante.valor,
+          origem: 'comprovante_em_aberto'
+        };
+      } else {
+        console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
+        return {
+          sucesso: false,
+          tipo: 'valor_nao_encontrado_na_tabela',
+          valor: comprovante.valor,
+          mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+        };
+      }
     }
 
     // SE NÃO TEM COMPROVANTE EM ABERTO, buscar no histórico
@@ -613,15 +753,30 @@ Se não conseguires ler a imagem ou extrair os dados:
     const comprovante = await this.buscarComprovanteRecenteNoHistorico(remetente, timestamp);
     
     if (comprovante) {
-      const resultado = `${comprovante.referencia}|${comprovante.valor}|${numero}`;
-      console.log(`   ✅ ATACADO: ENCONTRADO NO HISTÓRICO: ${resultado}`);
-      return { 
-        sucesso: true, 
-        dadosCompletos: resultado,
-        tipo: 'numero_processado',
-        numero: numero,
-        origem: 'historico'
-      };
+      // CALCULAR MEGAS AUTOMATICAMENTE
+      const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+      
+      if (megasCalculados) {
+        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numero}`;
+        console.log(`   ✅ ATACADO: ENCONTRADO NO HISTÓRICO: ${resultado}`);
+        return { 
+          sucesso: true, 
+          dadosCompletos: resultado,
+          tipo: 'numero_processado',
+          numero: numero,
+          megas: megasCalculados.megas,
+          valorPago: comprovante.valor,
+          origem: 'historico'
+        };
+      } else {
+        console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
+        return {
+          sucesso: false,
+          tipo: 'valor_nao_encontrado_na_tabela',
+          valor: comprovante.valor,
+          mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+        };
+      }
     }
 
     // Sem comprovante
@@ -807,15 +962,15 @@ Se não conseguires extrair, responde:
       });
     }
     
-    status += `\n🔧 *SISTEMA ATACADO v1.1:*\n`;
-    status += `✅ Apenas GB (sem saldo)!\n`;
+    status += `\n�� *SISTEMA ATACADO v2.0:*\n`;
+    status += `✅ Cálculo automático de megas!\n`;
+    status += `✅ Formato REF|MEGAS|NUMERO!\n`;
     status += `✅ Valor integral por número!\n`;
     status += `✅ UM número por vez!\n`;
-    status += `✅ Sem divisão automática!\n`;
     status += `✅ CORRIGIDO: Filtra números de pagamento!\n`;
     status += `✅ CORRIGIDO: Ignora números em contexto de transferência!\n`;
-    status += `✅ Sistema simplificado e inteligente!\n`;
-    status += `✅ Processamento direto!\n`;
+    status += `✅ Sistema inteligente e automatizado!\n`;
+    status += `✅ Processamento direto com IA!\n`;
     
     return status;
   }
