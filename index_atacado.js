@@ -159,10 +159,10 @@ async function tentarComRetry(funcao, maxTentativas = 3, delay = 2000) {
     }
 }
 
-async function enviarParaGoogleSheets(referencia, valor, numero, grupoId, grupoNome, autorMensagem) {
+async function enviarParaGoogleSheets(referencia, megas, numero, grupoId, grupoNome, autorMensagem) {
     const dados = {
         referencia: referencia,
-        valor: parseInt(valor),
+        megas: megas, // Agora envia megas em vez de valor
         numero: numero,
         grupo_id: grupoId, // ID único do grupo
         grupo_nome: grupoNome, // Nome para exibição
@@ -174,7 +174,7 @@ async function enviarParaGoogleSheets(referencia, valor, numero, grupoId, grupoN
     };
     
     try {
-        console.log(`📊 Enviando para Google Sheets [${grupoNome}]: ${referencia}|${valor}|${numero}`);
+        console.log(`📊 Enviando para Google Sheets [${grupoNome}]: ${referencia}|${megas}|${numero}`);
         
         const response = await axios.post(GOOGLE_SHEETS_CONFIG.scriptUrl, dados, {
             timeout: GOOGLE_SHEETS_CONFIG.timeout,
@@ -201,10 +201,10 @@ async function enviarParaGoogleSheets(referencia, valor, numero, grupoId, grupoN
 }
 
 // === FUNÇÃO PRINCIPAL PARA TASKER ===
-async function enviarParaTasker(referencia, valor, numero, grupoId, autorMensagem) {
+async function enviarParaTasker(referencia, megas, numero, grupoId, autorMensagem) {
     const grupoNome = getConfiguracaoGrupo(grupoId)?.nome || 'Desconhecido';
     const timestamp = new Date().toLocaleString('pt-BR');
-    const linhaCompleta = `${referencia}|${valor}|${numero}`;
+    const linhaCompleta = `${referencia}|${megas}|${numero}`;
     
     console.log(`📊 ENVIANDO PARA GOOGLE SHEETS [${grupoNome}]: ${linhaCompleta}`);
     
@@ -221,7 +221,7 @@ async function enviarParaTasker(referencia, valor, numero, grupoId, autorMensage
     });
     
     // === TENTAR GOOGLE SHEETS PRIMEIRO ===
-    const resultado = await enviarParaGoogleSheets(referencia, valor, numero, grupoId, grupoNome, autorMensagem);
+    const resultado = await enviarParaGoogleSheets(referencia, megas, numero, grupoId, grupoNome, autorMensagem);
     
     if (resultado.sucesso) {
         // Marcar como enviado
@@ -481,7 +481,7 @@ async function salvarHistorico() {
     }
 }
 
-async function registrarComprador(grupoId, numeroComprador, nomeContato, valorTransferencia) {
+async function registrarComprador(grupoId, numeroComprador, nomeContato, megas) {
     const agora = new Date();
     const timestamp = agora.toISOString();
 
@@ -508,7 +508,7 @@ async function registrarComprador(grupoId, numeroComprador, nomeContato, valorTr
 
     historicoCompradores[grupoId].compradores[numeroComprador].historico.push({
         data: timestamp,
-        valor: valorTransferencia
+        megas: megas
     });
 
     if (historicoCompradores[grupoId].compradores[numeroComprador].historico.length > 10) {
@@ -517,7 +517,7 @@ async function registrarComprador(grupoId, numeroComprador, nomeContato, valorTr
     }
 
     await salvarHistorico();
-    console.log(`💰 Comprador atacado registrado: ${nomeContato} (${numeroComprador}) - ${valorTransferencia}MT`);
+    console.log(`💰 Comprador atacado registrado: ${nomeContato} (${numeroComprador}) - ${megas}`);
 }
 
 // === FILA DE MENSAGENS ===
@@ -579,7 +579,7 @@ client.on('qr', (qr) => {
 client.on('ready', async () => {
     console.log('✅ Bot ATACADO conectado e pronto!');
     console.log('🧠 IA WhatsApp ATACADO ativa!');
-    console.log('📦 Sistema simplificado: Valor integral por número!');
+    console.log('📦 Sistema inteligente: Cálculo automático de megas!');
     console.log('📊 Google Sheets configurado!');
     console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG.scriptUrl}`);
     
@@ -610,7 +610,7 @@ client.on('group-join', async (notification) => {
                 try {
                     const isMonitorado = CONFIGURACAO_GRUPOS.hasOwnProperty(chatId);
                     const mensagem = isMonitorado ? 
-                        `🤖 *BOT ATACADO ATIVO E CONFIGURADO!*\n\nEste grupo está monitorado e o sistema automático já está funcionando.\n\n📋 Digite: *tabela* (ver preços)\n💳 Digite: *pagamento* (ver formas)\n\n⚠️ *ATACADO: Valor integral por número*` :
+                        `🤖 *BOT ATACADO ATIVO E CONFIGURADO!*\n\nEste grupo está monitorado e o sistema automático já está funcionando.\n\n📋 Digite: *tabela* (ver preços)\n💳 Digite: *pagamento* (ver formas)\n\n⚠️ *ATACADO: Cálculo automático de megas*` :
                         `🤖 *BOT ATACADO CONECTADO!*\n\n⚙️ Este grupo ainda não está configurado.\n🔧 Contacte o administrador para ativação.\n\n📝 ID do grupo copiado no console do servidor.`;
                     
                     await client.sendMessage(chatId, mensagem);
@@ -627,21 +627,22 @@ client.on('group-join', async (notification) => {
             console.log(`👋 Novo membro no grupo ${configGrupo.nome}`);
             
             const mensagemBoasVindas = `
-🤖 *SISTEMA ATACADO - VALOR INTEGRAL* 
+�� *SISTEMA ATACADO - CÁLCULO AUTOMÁTICO DE MEGAS* 
 
 Bem-vindo(a) ao *${configGrupo.nome}*! 
 
-✨ *Aqui usamos sistema atacado!*
+✨ *Aqui usamos sistema atacado inteligente!*
 
 🛒 *Como comprar:*
 1️⃣ Faça o pagamento 
 2️⃣ Envie comprovante + UM número
-3️⃣ Receba valor INTEGRAL no número!
+3️⃣ Sistema calcula megas automaticamente!
+4️⃣ Receba megas no número!
 
 📋 Digite: *tabela* (ver preços)
 💳 Digite: *pagamento* (ver formas)
 
-⚡ *Valor completo por número!*
+⚡ *Cálculo automático baseado na tabela!*
             `;
             
             setTimeout(async () => {
@@ -885,7 +886,7 @@ client.on('message', async (message) => {
 
         // === PROCESSAMENTO DE IMAGENS ===
         if (message.type === 'image') {
-            console.log(`📸 Imagem recebida`);
+            console.log(`�� Imagem recebida`);
             
             try {
                 const media = await message.downloadMedia();
@@ -909,19 +910,20 @@ client.on('message', async (message) => {
                         await message.reply(
                             `✅ *Comprovante da imagem processado!*\n\n` +
                             `💰 Referência: ${resultadoIA.referencia}\n` +
-                            `💵 Valor: ${resultadoIA.valor}MT\n\n` +
-                            `📱 *Agora envie UM número que vai receber os ${resultadoIA.valor}MT em megas!*`
+                            `💵 Valor: ${resultadoIA.valor}MT\n` +
+                            `📊 Megas: ${resultadoIA.megas}\n\n` +
+                            `📱 *Agora envie UM número que vai receber ${resultadoIA.megas}!*`
                         );
                         return;
                         
                     } else if (resultadoIA.tipo === 'numero_processado') {
                         const dadosCompletos = resultadoIA.dadosCompletos;
-                        const [referencia, valor, numero] = dadosCompletos.split('|');
+                        const [referencia, megas, numero] = dadosCompletos.split('|');
                         const nomeContato = message._data.notifyName || 'N/A';
                         const autorMensagem = message.author || 'Desconhecido';
                         
-                        await enviarParaTasker(referencia, valor, numero, message.from, autorMensagem);
-                        await registrarComprador(message.from, numero, nomeContato, valor);
+                        await enviarParaTasker(referencia, megas, numero, message.from, autorMensagem);
+                        await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                         
                         if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
                             const timestampMensagem = new Date().toLocaleString('pt-BR');
@@ -931,8 +933,10 @@ client.on('message', async (message) => {
                         await message.reply(
                             `✅ *Screenshot + Número processados!*\n\n` +
                             `💰 Referência: ${referencia}\n` +
-                            `💵 Valor: ${valor}MT\n` +
+                            `💵 Valor: ${resultadoIA.valorPago || 'N/A'}MT\n` +
+                            `📊 Megas: ${megas}\n` +
                             `📱 Número: ${numero}\n\n` +
+                            `📊 *Formato enviado:* REF|MEGAS|NUMERO\n` +
                             `⏳ *Processando valor integral...*`
                         );
                         return;
@@ -997,19 +1001,20 @@ client.on('message', async (message) => {
                 await message.reply(
                     `✅ *Comprovante processado!*\n\n` +
                     `💰 Referência: ${resultadoIA.referencia}\n` +
-                    `💵 Valor: ${resultadoIA.valor}MT\n\n` +
-                    `📱 *Envie UM número que vai receber os ${resultadoIA.valor}MT em megas!*`
+                    `💵 Valor: ${resultadoIA.valor}MT\n` +
+                    `📊 Megas: ${resultadoIA.megas}\n\n` +
+                    `📱 *Envie UM número que vai receber ${resultadoIA.megas}!*`
                 );
                 return;
                 
             } else if (resultadoIA.tipo === 'numero_processado') {
                 const dadosCompletos = resultadoIA.dadosCompletos;
-                const [referencia, valor, numero] = dadosCompletos.split('|');
+                const [referencia, megas, numero] = dadosCompletos.split('|');
                 const nomeContato = message._data.notifyName || 'N/A';
                 const autorMensagem = message.author || 'Desconhecido';
                 
-                await enviarParaTasker(referencia, valor, numero, message.from, autorMensagem);
-                await registrarComprador(message.from, numero, nomeContato, valor);
+                await enviarParaTasker(referencia, megas, numero, message.from, autorMensagem);
+                await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                 
                 if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
                     const timestampMensagem = new Date().toLocaleString('pt-BR');
@@ -1019,8 +1024,10 @@ client.on('message', async (message) => {
                 await message.reply(
                     `✅ *Pedido processado!*\n\n` +
                     `💰 Referência: ${referencia}\n` +
-                    `💵 Valor: ${valor}MT\n` +
+                    `💵 Valor: ${resultadoIA.valorPago || 'N/A'}MT\n` +
+                    `📊 Megas: ${megas}\n` +
                     `📱 Número: ${numero}\n\n` +
+                    `📊 *Formato enviado:* REF|MEGAS|NUMERO\n` +
                     `⏳ *Processando valor integral...*`
                 );
                 return;
@@ -1094,7 +1101,7 @@ process.on('SIGINT', async () => {
     }
     
     console.log('🧠 IA: ATIVA');
-    console.log('📦 Sistema atacado: VALOR INTEGRAL');
+    console.log('📦 Sistema atacado: CÁLCULO AUTOMÁTICO DE MEGAS');
     console.log('📊 Google Sheets: CONFIGURADO');
     console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG.scriptUrl}`);
     console.log(ia.getStatus());
