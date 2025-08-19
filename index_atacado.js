@@ -7,13 +7,45 @@ const axios = require('axios'); // npm install axios
 // === IMPORTAR A IA ATACADO ===
 const WhatsAppAIAtacado = require('./whatsapp_ai_atacado');
 
-// === CONFIGURAÇÃO GOOGLE SHEETS ===
-const GOOGLE_SHEETS_CONFIG = {
-    scriptUrl: process.env.GOOGLE_SHEETS_URL,
-    timeout: 30000
+// === CONFIGURAÇÃO GOOGLE SHEETS - BOT ATACADO ===
+const GOOGLE_SHEETS_CONFIG_ATACADO = {
+    scriptUrl: process.env.GOOGLE_SHEETS_SCRIPT_URL_ATACADO || 'https://script.google.com/macros/s/AKfycbz.../exec',
+    timeout: 30000,
+    retryAttempts: 3,
+    retryDelay: 2000,
+    planilhaId: process.env.GOOGLE_SHEETS_ID_ATACADO || '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
+    nomePlanilha: 'Dados Atacado',
+    colunas: {
+        timestamp: 'A',
+        referencia: 'B', 
+        megas: 'C',
+        numero: 'D',
+        grupo: 'E',
+        autor: 'F',
+        status: 'G'
+    }
 };
 
-console.log(`📊 Google Sheets configurado: ${GOOGLE_SHEETS_CONFIG.scriptUrl}`);
+// === CONFIGURAÇÃO GOOGLE SHEETS - BOT RETALHO (mantida para compatibilidade) ===
+const GOOGLE_SHEETS_CONFIG = {
+    scriptUrl: process.env.GOOGLE_SHEETS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbz.../exec',
+    timeout: 30000,
+    retryAttempts: 3,
+    retryDelay: 2000,
+    planilhaId: process.env.GOOGLE_SHEETS_ID || '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
+    nomePlanilha: 'Dados Retalho',
+    colunas: {
+        timestamp: 'A',
+        referencia: 'B',
+        valor: 'C',
+        numero: 'D',
+        grupo: 'E',
+        autor: 'F',
+        status: 'G'
+    }
+};
+
+console.log(`📊 Google Sheets configurado: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
 
 // Criar instância do cliente
 const client = new Client({
@@ -159,28 +191,24 @@ async function tentarComRetry(funcao, maxTentativas = 3, delay = 2000) {
     }
 }
 
-async function enviarParaGoogleSheets(referencia, megas, numero, grupoId, grupoNome, autorMensagem) {
+// === FUNÇÃO GOOGLE SHEETS SIMPLIFICADA ===
+async function enviarParaGoogleSheets(dadosCompletos, grupoId, timestamp) {
     const dados = {
-        referencia: referencia,
-        megas: megas, // Agora envia megas em vez de valor
-        numero: numero,
-        grupo_id: grupoId, // ID único do grupo
-        grupo_nome: grupoNome, // Nome para exibição
-        autor: autorMensagem,
-        timestamp: new Date().toISOString(),
-        processado: false,
-        tasker_id: Date.now() + Math.random().toString(36).substr(2, 9),
-        bot_type: 'atacado' // Identificar bot atacado
+        grupo_id: grupoId,
+        timestamp: timestamp,
+        dados: dadosCompletos  // REF|MEGAS|NUMERO|TIMESTAMP como string única
     };
     
     try {
-        console.log(`📊 Enviando para Google Sheets [${grupoNome}]: ${referencia}|${megas}|${numero}`);
+        console.log(`📊 Enviando para Google Sheets SIMPLIFICADO: ${dadosCompletos}`);
+        console.log(`📍 Grupo: ${grupoId}`);
+        console.log(`⏰ Timestamp: ${timestamp}`);
         
-        const response = await axios.post(GOOGLE_SHEETS_CONFIG.scriptUrl, dados, {
-            timeout: GOOGLE_SHEETS_CONFIG.timeout,
+        const response = await axios.post(GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl, dados, {
+            timeout: GOOGLE_SHEETS_CONFIG_ATACADO.timeout,
             headers: {
                 'Content-Type': 'application/json',
-                'X-Bot-Source': 'WhatsApp-Bot-Atacado'
+                'X-Bot-Source': 'WhatsApp-Bot-Atacado-Simplificado'
             },
             validateStatus: function (status) {
                 return status < 500;
@@ -188,29 +216,44 @@ async function enviarParaGoogleSheets(referencia, megas, numero, grupoId, grupoN
         });
         
         if (response.data && response.data.success) {
-            console.log(`✅ Google Sheets: Dados enviados! Row: ${response.data.row} | Grupo: ${grupoNome}`);
+            console.log(`✅ Google Sheets: Dados enviados! Row: ${response.data.row}`);
+            console.log(`📋 Dados inseridos: ${response.data.dados}`);
             return { sucesso: true, row: response.data.row };
         } else {
             throw new Error(response.data?.error || 'Resposta inválida');
         }
         
     } catch (error) {
-        console.error(`❌ Erro Google Sheets [${grupoNome}]: ${error.message}`);
+        console.error(`❌ Erro Google Sheets: ${error.message}`);
         return { sucesso: false, erro: error.message };
     }
 }
 
 // === FUNÇÃO PRINCIPAL PARA TASKER ===
-async function enviarParaTasker(referencia, megas, numero, grupoId, autorMensagem) {
-    const grupoNome = getConfiguracaoGrupo(grupoId)?.nome || 'Desconhecido';
-    const timestamp = new Date().toLocaleString('pt-BR');
-    const linhaCompleta = `${referencia}|${megas}|${numero}`;
+async function enviarParaTasker(referencia, megas, numero, grupoId, autorMensagem = 'Desconhecido') {
+    const timestamp = new Date().toLocaleString('pt-BR', {
+        year: 'numeric',
+        month: '2-digit', 
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
     
-    console.log(`📊 ENVIANDO PARA GOOGLE SHEETS [${grupoNome}]: ${linhaCompleta}`);
+    // CRIAR STRING COM TIMESTAMP NO FINAL
+    const dadosCompletos = `${referencia}|${megas}|${numero}|${timestamp}`;
+    
+    const grupoNome = getConfiguracaoGrupo(grupoId)?.nome || 'Desconhecido';
+    
+    console.log(`📊 ENVIANDO DADOS SIMPLIFICADOS:`);
+    console.log(`   📋 Dados: ${dadosCompletos}`);
+    console.log(`   📍 Grupo: ${grupoNome} (${grupoId})`);
+    console.log(`   ⏰ Timestamp: ${timestamp}`);
     
     // Armazenar localmente (backup)
     dadosParaTasker.push({
-        dados: linhaCompleta,
+        dados: dadosCompletos,
         grupo_id: grupoId,
         grupo: grupoNome,
         autor: autorMensagem,
@@ -220,8 +263,8 @@ async function enviarParaTasker(referencia, megas, numero, grupoId, autorMensage
         bot_type: 'atacado'
     });
     
-    // === TENTAR GOOGLE SHEETS PRIMEIRO ===
-    const resultado = await enviarParaGoogleSheets(referencia, megas, numero, grupoId, grupoNome, autorMensagem);
+    // === ENVIAR PARA GOOGLE SHEETS ===
+    const resultado = await enviarParaGoogleSheets(dadosCompletos, grupoId, timestamp);
     
     if (resultado.sucesso) {
         // Marcar como enviado
@@ -232,20 +275,24 @@ async function enviarParaTasker(referencia, megas, numero, grupoId, autorMensage
     } else {
         // Fallback para WhatsApp se Google Sheets falhar
         console.log(`🔄 [${grupoNome}] Google Sheets falhou, usando WhatsApp backup...`);
-        enviarViaWhatsAppTasker(linhaCompleta, grupoNome, autorMensagem);
+        enviarViaWhatsAppTasker(dadosCompletos, grupoNome, autorMensagem);
         dadosParaTasker[dadosParaTasker.length - 1].metodo = 'whatsapp_backup';
     }
     
     // Backup em arquivo
-    await salvarArquivoTasker(linhaCompleta, grupoNome, timestamp);
+    await salvarArquivoTasker(dadosCompletos, grupoNome, timestamp);
     
     // Manter apenas últimos 100 registros
     if (dadosParaTasker.length > 100) {
         dadosParaTasker = dadosParaTasker.slice(-100);
     }
     
-    return linhaCompleta;
+    return dadosCompletos;
 }
+
+// === FUNÇÃO AUXILIAR PARA CÁLCULO DE MEGAS ===
+// Esta função deve ser implementada na classe WhatsAppAIAtacado
+// Por enquanto, mantemos apenas a estrutura básica
 
 function enviarViaWhatsAppTasker(linhaCompleta, grupoNome, autorMensagem) {
     const item = {
@@ -580,8 +627,8 @@ client.on('ready', async () => {
     console.log('✅ Bot ATACADO conectado e pronto!');
     console.log('🧠 IA WhatsApp ATACADO ativa!');
     console.log('📦 Sistema inteligente: Cálculo automático de megas!');
-    console.log('📊 Google Sheets configurado!');
-    console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG.scriptUrl}`);
+    console.log('📊 Google Sheets ATACADO configurado!');
+    console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
     
     await carregarHistorico();
     
@@ -697,7 +744,7 @@ client.on('message', async (message) => {
             if (comando === '.test_sheets') {
                 console.log(`🧪 Testando Google Sheets...`);
                 
-                const resultado = await enviarParaGoogleSheets('TEST123', '1250', '842223344', 'test_group', 'Teste Admin Atacado', 'TestUser');
+                const resultado = await enviarParaGoogleSheets('TEST123|1250|842223344|' + new Date().toLocaleString('pt-BR'), 'test_group', new Date().toLocaleString('pt-BR'));
                 
                 if (resultado.sucesso) {
                     await message.reply(`✅ *Google Sheets funcionando!*\n\n📊 URL: ${GOOGLE_SHEETS_CONFIG.scriptUrl}\n📝 Row: ${resultado.row}\n🎉 Dados enviados com sucesso!`);
@@ -718,7 +765,7 @@ client.on('message', async (message) => {
                 
                 console.log(`🧪 Testando Google Sheets para grupo: ${configGrupo.nome}`);
                 
-                const resultado = await enviarParaGoogleSheets('TEST999', '1250', '847777777', grupoAtual, configGrupo.nome, 'TestAdmin');
+                const resultado = await enviarParaGoogleSheets('TEST999|1250|847777777|' + new Date().toLocaleString('pt-BR'), grupoAtual, new Date().toLocaleString('pt-BR'));
                 
                 if (resultado.sucesso) {
                     await message.reply(`✅ *Teste enviado para ${configGrupo.nome}!*\n\n📊 Row: ${resultado.row}\n🔍 O celular deste grupo deve processar em até 30 segundos.\n\n📱 *Grupo ID:* \`${grupoAtual}\``);
@@ -910,7 +957,6 @@ client.on('message', async (message) => {
                         await message.reply(
                             `✅ *Comprovante da imagem processado!*\n\n` +
                             `💰 Referência: ${resultadoIA.referencia}\n` +
-                            `💵 Valor: ${resultadoIA.valor}MT\n` +
                             `📊 Megas: ${resultadoIA.megas}\n\n` +
                             `📱 *Agora envie UM número que vai receber ${resultadoIA.megas}!*`
                         );
@@ -933,11 +979,9 @@ client.on('message', async (message) => {
                         await message.reply(
                             `✅ *Screenshot + Número processados!*\n\n` +
                             `💰 Referência: ${referencia}\n` +
-                            `💵 Valor: ${resultadoIA.valorPago || 'N/A'}MT\n` +
                             `📊 Megas: ${megas}\n` +
                             `📱 Número: ${numero}\n\n` +
-                            `📊 *Formato enviado:* REF|MEGAS|NUMERO\n` +
-                            `⏳ *Processando valor integral...*`
+                            `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
                         );
                         return;
                     }
@@ -1001,7 +1045,6 @@ client.on('message', async (message) => {
                 await message.reply(
                     `✅ *Comprovante processado!*\n\n` +
                     `💰 Referência: ${resultadoIA.referencia}\n` +
-                    `💵 Valor: ${resultadoIA.valor}MT\n` +
                     `📊 Megas: ${resultadoIA.megas}\n\n` +
                     `📱 *Envie UM número que vai receber ${resultadoIA.megas}!*`
                 );
@@ -1024,11 +1067,9 @@ client.on('message', async (message) => {
                 await message.reply(
                     `✅ *Pedido processado!*\n\n` +
                     `💰 Referência: ${referencia}\n` +
-                    `💵 Valor: ${resultadoIA.valorPago || 'N/A'}MT\n` +
                     `📊 Megas: ${megas}\n` +
                     `📱 Número: ${numero}\n\n` +
-                    `📊 *Formato enviado:* REF|MEGAS|NUMERO\n` +
-                    `⏳ *Processando valor integral...*`
+                    `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
                 );
                 return;
             }
@@ -1102,8 +1143,8 @@ process.on('SIGINT', async () => {
     
     console.log('🧠 IA: ATIVA');
     console.log('📦 Sistema atacado: CÁLCULO AUTOMÁTICO DE MEGAS');
-    console.log('📊 Google Sheets: CONFIGURADO');
-    console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG.scriptUrl}`);
+    console.log('📊 Google Sheets ATACADO: CONFIGURADO');
+    console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
     console.log(ia.getStatus());
     process.exit(0);
 
