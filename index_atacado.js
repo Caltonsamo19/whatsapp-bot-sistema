@@ -279,6 +279,43 @@ async function enviarParaTasker(referencia, megas, numero, grupoId) {
 // Esta função deve ser implementada na classe WhatsAppAIAtacado
 // Por enquanto, mantemos apenas a estrutura básica
 
+// === FUNÇÃO PARA CONVERTER MEGAS ===
+function converterMegasParaNumero(megas) {
+    if (typeof megas === 'string') {
+        // Remover espaços e converter para maiúsculas
+        const megasLimpo = megas.trim().toUpperCase();
+        
+        // Padrões de conversão
+        const padroes = [
+            { regex: /(\d+(?:\.\d+)?)\s*GB?/i, multiplicador: 1024 },
+            { regex: /(\d+(?:\.\d+)?)\s*MB?/i, multiplicador: 1 },
+            { regex: /(\d+(?:\.\d+)?)\s*KB?/i, multiplicador: 1/1024 },
+            { regex: /(\d+(?:\.\d+)?)\s*TB?/i, multiplicador: 1024 * 1024 }
+        ];
+        
+        for (const padrao of padroes) {
+            const match = megasLimpo.match(padrao.regex);
+            if (match) {
+                const numero = parseFloat(match[1]);
+                const resultado = Math.round(numero * padrao.multiplicador);
+                console.log(`🔄 Conversão: ${megas} → ${resultado} MB`);
+                return resultado.toString();
+            }
+        }
+        
+        // Se não encontrar padrão, tentar extrair apenas números
+        const apenasNumeros = megasLimpo.replace(/[^\d.]/g, '');
+        if (apenasNumeros) {
+            console.log(`🔄 Conversão direta: ${megas} → ${apenasNumeros} MB`);
+            return apenasNumeros;
+        }
+    }
+    
+    // Se não conseguir converter, retornar o valor original
+    console.log(`⚠️ Não foi possível converter: ${megas}`);
+    return megas;
+}
+
 function enviarViaWhatsAppTasker(linhaCompleta, grupoNome, autorMensagem) {
     const item = {
         conteudo: linhaCompleta,
@@ -953,7 +990,10 @@ client.on('message', async (message) => {
                         const nomeContato = message._data.notifyName || 'N/A';
                         const autorMensagem = message.author || 'Desconhecido';
                         
-                        await enviarParaTasker(referencia, megas, numero, message.from);
+                        // Converter megas para formato numérico
+                        const megasConvertido = converterMegasParaNumero(megas);
+                        
+                        await enviarParaTasker(referencia, megasConvertido, numero, message.from);
                         await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                         
                         if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -1041,7 +1081,10 @@ client.on('message', async (message) => {
                 const nomeContato = message._data.notifyName || 'N/A';
                 const autorMensagem = message.author || 'Desconhecido';
                 
-                await enviarParaTasker(referencia, megas, numero, message.from);
+                // Converter megas para formato numérico
+                const megasConvertido = converterMegasParaNumero(megas);
+                
+                await enviarParaTasker(referencia, megasConvertido, numero, message.from);
                 await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                 
                 if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
