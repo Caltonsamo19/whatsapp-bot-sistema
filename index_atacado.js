@@ -528,6 +528,85 @@ async function logGrupoInfo(chatId, evento = 'detectado') {
     }
 }
 
+// === SISTEMA DE BACKUP DE TABELAS ===
+
+// Arquivo para armazenar backups
+const ARQUIVO_BACKUP_TABELAS = 'backup_tabelas_atacado.json';
+let backupsTabelas = [];
+
+// Carregar backups existentes
+async function carregarBackupsTabelas() {
+    try {
+        const data = await fs.readFile(ARQUIVO_BACKUP_TABELAS, 'utf8');
+        backupsTabelas = JSON.parse(data);
+        console.log('📋 Backups de tabelas carregados!');
+    } catch (error) {
+        console.log('📋 Criando novo sistema de backup de tabelas...');
+        backupsTabelas = [];
+    }
+}
+
+// Salvar backups
+async function salvarBackupsTabelas() {
+    try {
+        await fs.writeFile(ARQUIVO_BACKUP_TABELAS, JSON.stringify(backupsTabelas, null, 2));
+        console.log('💾 Backups de tabelas salvos!');
+    } catch (error) {
+        console.error('❌ Erro ao salvar backups:', error);
+    }
+}
+
+// Salvar backup de uma tabela/pagamento
+async function salvarBackupTabela(grupoId, tipo, valorAnterior, novoValor) {
+    const configGrupo = getConfiguracaoGrupo(grupoId);
+    if (!configGrupo) return;
+    
+    const backup = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        grupoId: grupoId,
+        grupoNome: configGrupo.nome,
+        tipo: tipo, // 'tabela' ou 'pagamento'
+        valorAnterior: valorAnterior,
+        novoValor: novoValor,
+        timestamp: Date.now(),
+        admin: 'Sistema'
+    };
+    
+    backupsTabelas.push(backup);
+    
+    // Manter apenas os últimos 50 backups
+    if (backupsTabelas.length > 50) {
+        backupsTabelas = backupsTabelas.slice(-50);
+    }
+    
+    await salvarBackupsTabelas();
+    console.log(`📋 Backup criado: ${tipo} para ${configGrupo.nome}`);
+}
+
+// Listar backups disponíveis
+async function listarBackupsTabelas() {
+    return backupsTabelas.sort((a, b) => b.timestamp - a.timestamp);
+}
+
+// Restaurar backup
+async function restaurarBackupTabela(backupId) {
+    const backup = backupsTabelas.find(b => b.id === backupId);
+    if (!backup) return null;
+    
+    const configGrupo = getConfiguracaoGrupo(backup.grupoId);
+    if (!configGrupo) return null;
+    
+    // Restaurar valor anterior
+    if (backup.tipo === 'tabela') {
+        CONFIGURACAO_GRUPOS[backup.grupoId].tabela = backup.valorAnterior;
+    } else if (backup.tipo === 'pagamento') {
+        CONFIGURACAO_GRUPOS[backup.grupoId].pagamento = backup.valorAnterior;
+    }
+    
+    console.log(`📋 Backup restaurado: ${backup.tipo} para ${configGrupo.nome}`);
+    return backup;
+}
+
 // === HISTÓRICO DE COMPRADORES ===
 
 async function carregarHistorico() {
@@ -653,6 +732,7 @@ client.on('ready', async () => {
     console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
     
     await carregarHistorico();
+    await carregarBackupsTabelas();
     
     console.log('\n🤖 Monitorando grupos ATACADO:');
     Object.keys(CONFIGURACAO_GRUPOS).forEach(grupoId => {
@@ -661,6 +741,8 @@ client.on('ready', async () => {
     });
     
     console.log('\n🔧 Comandos admin: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
+    console.log('📋 Comandos de tabela: .set_tabela .set_pagamento .ver_tabela .ver_pagamento .backup_tabelas .restaurar_tabela');
+    console.log('❓ Comando de ajuda: .ajuda ou .help');
 });
 
 client.on('group-join', async (notification) => {
@@ -741,6 +823,184 @@ client.on('message', async (message) => {
                 const statusIA = ia.getStatusDetalhado();
                 await message.reply(statusIA);
                 console.log(`🧠 Comando .ia executado`);
+                return;
+            }
+
+            // === COMANDOS PARA MODIFICAÇÃO DE TABELAS ===
+            if (comando.startsWith('.set_tabela ')) {
+                const novaTabela = message.body.replace('.set_tabela ', '');
+                
+                if (!message.from.endsWith('@g.us')) {
+                    await message.reply('❌ Use este comando em um grupo!');
+                    return;
+                }
+                
+                const configGrupo = getConfiguracaoGrupo(message.from);
+                if (!configGrupo) {
+                    await message.reply('❌ Este grupo não está configurado!');
+                    return;
+                }
+                
+                // Fazer backup da tabela anterior
+                const tabelaAnterior = configGrupo.tabela;
+                
+                // Atualizar a tabela
+                CONFIGURACAO_GRUPOS[message.from].tabela = novaTabela;
+                
+                // Salvar backup
+                await salvarBackupTabela(message.from, 'tabela', tabelaAnterior, novaTabela);
+                
+                await message.reply(
+                    `✅ *TABELA ATUALIZADA COM SUCESSO!*\n\n` +
+                    `🏢 Grupo: ${configGrupo.nome}\n` +
+                    `📋 Nova tabela aplicada\n\n` +
+                    `💡 Use *.ver_tabela* para visualizar\n` +
+                    `🔄 Sistema reiniciará em 30 segundos`
+                );
+                
+                console.log(`📋 Tabela atualizada para grupo ${configGrupo.nome}`);
+                
+                // Reiniciar sistema após 30 segundos
+                setTimeout(() => {
+                    console.log('🔄 Reiniciando sistema após atualização de tabela...');
+                    process.exit(0);
+                }, 30000);
+                
+                return;
+            }
+
+            if (comando.startsWith('.set_pagamento ')) {
+                const novoPagamento = message.body.replace('.set_pagamento ', '');
+                
+                if (!message.from.endsWith('@g.us')) {
+                    await message.reply('❌ Use este comando em um grupo!');
+                    return;
+                }
+                
+                const configGrupo = getConfiguracaoGrupo(message.from);
+                if (!configGrupo) {
+                    await message.reply('❌ Este grupo não está configurado!');
+                    return;
+                }
+                
+                // Fazer backup das formas de pagamento anteriores
+                const pagamentoAnterior = configGrupo.pagamento;
+                
+                // Atualizar formas de pagamento
+                CONFIGURACAO_GRUPOS[message.from].pagamento = novoPagamento;
+                
+                // Salvar backup
+                await salvarBackupTabela(message.from, 'pagamento', pagamentoAnterior, novoPagamento);
+                
+                await message.reply(
+                    `✅ *FORMAS DE PAGAMENTO ATUALIZADAS!*\n\n` +
+                    `🏢 Grupo: ${configGrupo.nome}\n` +
+                    `💳 Novas formas aplicadas\n\n` +
+                    `💡 Use *.ver_pagamento* para visualizar\n` +
+                    `🔄 Sistema reiniciará em 30 segundos`
+                );
+                
+                console.log(`💳 Formas de pagamento atualizadas para grupo ${configGrupo.nome}`);
+                
+                // Reiniciar sistema após 30 segundos
+                setTimeout(() => {
+                    console.log('🔄 Reiniciando sistema após atualização de pagamento...');
+                    process.exit(0);
+                }, 30000);
+                
+                return;
+            }
+
+            if (comando === '.ver_tabela') {
+                if (!message.from.endsWith('@g.us')) {
+                    await message.reply('❌ Use este comando em um grupo!');
+                    return;
+                }
+                
+                const configGrupo = getConfiguracaoGrupo(message.from);
+                if (!configGrupo) {
+                    await message.reply('❌ Este grupo não está configurado!');
+                    return;
+                }
+                
+                await message.reply(
+                    `📋 *TABELA ATUAL - ${configGrupo.nome}*\n\n` +
+                    `${configGrupo.tabela}\n\n` +
+                    `💡 Para modificar: *.set_tabela NOVA_TABELA*`
+                );
+                return;
+            }
+
+            if (comando === '.ver_pagamento') {
+                if (!message.from.endsWith('@g.us')) {
+                    await message.reply('❌ Use este comando em um grupo!');
+                    return;
+                }
+                
+                const configGrupo = getConfiguracaoGrupo(message.from);
+                if (!configGrupo) {
+                    await message.reply('❌ Este grupo não está configurado!');
+                    return;
+                }
+                
+                await message.reply(
+                    `💳 *FORMAS DE PAGAMENTO ATUAIS - ${configGrupo.nome}*\n\n` +
+                    `${configGrupo.pagamento}\n\n` +
+                    `💡 Para modificar: *.set_pagamento NOVAS_FORMAS*`
+                );
+                return;
+            }
+
+            if (comando === '.backup_tabelas') {
+                const backups = await listarBackupsTabelas();
+                
+                if (backups.length === 0) {
+                    await message.reply('📋 *Nenhum backup de tabela encontrado!*');
+                    return;
+                }
+                
+                let resposta = `📋 *BACKUPS DE TABELAS DISPONÍVEIS*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+                
+                backups.forEach((backup, index) => {
+                    const data = new Date(backup.timestamp).toLocaleString('pt-BR');
+                    resposta += `${index + 1}. 🏢 ${backup.grupoNome}\n`;
+                    resposta += `   📅 ${data}\n`;
+                    resposta += `   🔄 ${backup.tipo}\n`;
+                    resposta += `   🆔 \`${backup.id}\`\n\n`;
+                });
+                
+                resposta += `💡 Para restaurar: *.restaurar_tabela ID_BACKUP*`;
+                
+                await message.reply(resposta);
+                return;
+            }
+
+            if (comando.startsWith('.restaurar_tabela ')) {
+                const backupId = comando.replace('.restaurar_tabela ', '');
+                
+                try {
+                    const backup = await restaurarBackupTabela(backupId);
+                    
+                    if (backup) {
+                        await message.reply(
+                            `✅ *BACKUP RESTAURADO COM SUCESSO!*\n\n` +
+                            `🏢 Grupo: ${backup.grupoNome}\n` +
+                            `📋 Tipo: ${backup.tipo}\n` +
+                            `📅 Data: ${new Date(backup.timestamp).toLocaleString('pt-BR')}\n\n` +
+                            `🔄 Sistema reiniciará em 30 segundos`
+                        );
+                        
+                        // Reiniciar sistema após 30 segundos
+                        setTimeout(() => {
+                            console.log('🔄 Reiniciando sistema após restauração de backup...');
+                            process.exit(0);
+                        }, 30000);
+                    } else {
+                        await message.reply('❌ Backup não encontrado!');
+                    }
+                } catch (error) {
+                    await message.reply(`❌ Erro ao restaurar backup: ${error.message}`);
+                }
                 return;
             }
 
@@ -915,6 +1175,36 @@ client.on('message', async (message) => {
                     `${configGrupo ? `🏢 Nome: ${configGrupo.nome}` : '🔧 Precisa ser configurado'}\n\n` +
                     `📝 Verifique o console para detalhes completos`
                 );
+                return;
+            }
+
+            if (comando === '.ajuda' || comando === '.help') {
+                const resposta = `🤖 *COMANDOS ADMINISTRATIVOS DISPONÍVEIS*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                    `🧠 *SISTEMA:*\n` +
+                    `• .ia - Status da IA\n` +
+                    `• .stats - Estatísticas dos grupos\n` +
+                    `• .sheets - Status do Google Sheets\n` +
+                    `• .test_sheets - Teste de conectividade\n\n` +
+                    `📋 *GRUPOS:*\n` +
+                    `• .grupos - Lista de grupos detectados\n` +
+                    `• .grupo_atual - Informações do grupo atual\n` +
+                    `• .grupos_status - Status detalhado dos grupos\n\n` +
+                    `📊 *TABELAS E PREÇOS:*\n` +
+                    `• .ver_tabela - Ver tabela atual do grupo\n` +
+                    `• .ver_pagamento - Ver formas de pagamento\n` +
+                    `• .set_tabela NOVA_TABELA - Alterar tabela\n` +
+                    `• .set_pagamento NOVAS_FORMAS - Alterar pagamento\n` +
+                    `• .backup_tabelas - Listar backups disponíveis\n` +
+                    `• .restaurar_tabela ID - Restaurar backup\n\n` +
+                    `🧹 *LIMPEZA:*\n` +
+                    `• .clear_sheets - Limpar dados do Google Sheets\n` +
+                    `• .clear_grupo NOME - Limpar dados de um grupo\n\n` +
+                    `💡 *EXEMPLOS:*\n` +
+                    `• .set_tabela "NOVA TABELA AQUI"\n` +
+                    `• .set_pagamento "NOVAS FORMAS AQUI"\n` +
+                    `• .restaurar_tabela abc123def`;
+                
+                await message.reply(resposta);
                 return;
             }
         }
@@ -1161,6 +1451,7 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('SIGINT', async () => {
     console.log('\n💾 Salvando antes de sair...');
     await salvarHistorico();
+    await salvarBackupsTabelas();
     
     // Salvar dados finais do Tasker
     if (dadosParaTasker.length > 0) {
@@ -1173,6 +1464,7 @@ process.on('SIGINT', async () => {
     console.log('📦 Sistema atacado: CÁLCULO AUTOMÁTICO DE MEGAS');
     console.log('📊 Google Sheets ATACADO: CONFIGURADO');
     console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
+    console.log('📋 Sistema de backup de tabelas: ATIVO');
     console.log(ia.getStatus());
     process.exit(0);
 
