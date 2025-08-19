@@ -7,23 +7,14 @@ const axios = require('axios'); // npm install axios
 // === IMPORTAR A IA ATACADO ===
 const WhatsAppAIAtacado = require('./whatsapp_ai_atacado');
 
-// === CONFIGURAÇÃO GOOGLE SHEETS - BOT ATACADO ===
+// === CONFIGURAÇÃO GOOGLE SHEETS - BOT ATACADO (CONFIGURADA) ===
 const GOOGLE_SHEETS_CONFIG_ATACADO = {
-    scriptUrl: process.env.GOOGLE_SHEETS_SCRIPT_URL_ATACADO || 'https://script.google.com/macros/s/AKfycbz.../exec',
+    scriptUrl: process.env.GOOGLE_SHEETS_SCRIPT_URL_ATACADO || 'https://script.google.com/macros/s/AKfycbzdvM-IrH4a6gS53WZ0J-AGXY0duHfgv15DyxdqUm1BLEm3Z15T67qgstu6yPTedgOSCA/exec',
+    planilhaUrl: 'https://docs.google.com/spreadsheets/d/1ivc8gHD5WBWsvcwmK2dLBWpEHCI9J0C17Kog2NesuuE/edit',
+    planilhaId: '1ivc8gHD5WBWsvcwmK2dLBWpEHCI9J0C17Kog2NesuuE',
     timeout: 30000,
     retryAttempts: 3,
-    retryDelay: 2000,
-    planilhaId: process.env.GOOGLE_SHEETS_ID_ATACADO || '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
-    nomePlanilha: 'Dados Atacado',
-    colunas: {
-        timestamp: 'A',
-        referencia: 'B', 
-        megas: 'C',
-        numero: 'D',
-        grupo: 'E',
-        autor: 'F',
-        status: 'G'
-    }
+    retryDelay: 2000
 };
 
 // === CONFIGURAÇÃO GOOGLE SHEETS - BOT RETALHO (mantida para compatibilidade) ===
@@ -230,7 +221,7 @@ async function enviarParaGoogleSheets(dadosCompletos, grupoId, timestamp) {
 }
 
 // === FUNÇÃO PRINCIPAL PARA TASKER ===
-async function enviarParaTasker(referencia, megas, numero, grupoId, autorMensagem = 'Desconhecido') {
+async function enviarParaTasker(referencia, megas, numero, grupoId) {
     const timestamp = new Date().toLocaleString('pt-BR', {
         year: 'numeric',
         month: '2-digit', 
@@ -256,33 +247,27 @@ async function enviarParaTasker(referencia, megas, numero, grupoId, autorMensage
         dados: dadosCompletos,
         grupo_id: grupoId,
         grupo: grupoNome,
-        autor: autorMensagem,
         timestamp: timestamp,
         enviado: false,
-        metodo: 'pendente',
-        bot_type: 'atacado'
+        metodo: 'pendente'
     });
     
     // === ENVIAR PARA GOOGLE SHEETS ===
     const resultado = await enviarParaGoogleSheets(dadosCompletos, grupoId, timestamp);
     
     if (resultado.sucesso) {
-        // Marcar como enviado
         dadosParaTasker[dadosParaTasker.length - 1].enviado = true;
         dadosParaTasker[dadosParaTasker.length - 1].metodo = 'google_sheets';
         dadosParaTasker[dadosParaTasker.length - 1].row = resultado.row;
         console.log(`✅ [${grupoNome}] Enviado para Google Sheets! Row: ${resultado.row}`);
     } else {
-        // Fallback para WhatsApp se Google Sheets falhar
         console.log(`🔄 [${grupoNome}] Google Sheets falhou, usando WhatsApp backup...`);
-        enviarViaWhatsAppTasker(dadosCompletos, grupoNome, autorMensagem);
+        enviarViaWhatsAppTasker(dadosCompletos, grupoNome);
         dadosParaTasker[dadosParaTasker.length - 1].metodo = 'whatsapp_backup';
     }
     
-    // Backup em arquivo
     await salvarArquivoTasker(dadosCompletos, grupoNome, timestamp);
     
-    // Manter apenas últimos 100 registros
     if (dadosParaTasker.length > 100) {
         dadosParaTasker = dadosParaTasker.slice(-100);
     }
@@ -968,7 +953,7 @@ client.on('message', async (message) => {
                         const nomeContato = message._data.notifyName || 'N/A';
                         const autorMensagem = message.author || 'Desconhecido';
                         
-                        await enviarParaTasker(referencia, megas, numero, message.from, autorMensagem);
+                        await enviarParaTasker(referencia, megas, numero, message.from);
                         await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                         
                         if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -1056,7 +1041,7 @@ client.on('message', async (message) => {
                 const nomeContato = message._data.notifyName || 'N/A';
                 const autorMensagem = message.author || 'Desconhecido';
                 
-                await enviarParaTasker(referencia, megas, numero, message.from, autorMensagem);
+                await enviarParaTasker(referencia, megas, numero, message.from);
                 await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                 
                 if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
