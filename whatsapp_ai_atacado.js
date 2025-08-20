@@ -15,6 +15,27 @@ class WhatsAppAIAtacado {
     console.log('🧠 IA WhatsApp ATACADO inicializada - Sistema inteligente com cálculo automático de megas');
   }
 
+  // === FUNÇÃO AUXILIAR PARA LIMPEZA DE NÚMEROS ===
+  limparNumero(numero) {
+    if (!numero || typeof numero !== 'string') {
+      return numero;
+    }
+    
+    // Remover caracteres especiais invisíveis e normalizar
+    let numeroLimpo = numero
+      .replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '') // Caracteres de direção
+      .replace(/^\+258\s*/, '') // Remover código internacional
+      .replace(/\s+/g, '') // Remover espaços
+      .trim();
+    
+    // Verificar se é um número válido moçambicano
+    if (/^8[0-9]{8}$/.test(numeroLimpo)) {
+      return numeroLimpo;
+    }
+    
+    return numero;
+  }
+
   // === EXTRAIR NÚMERO DE LEGENDA (FUNÇÃO ESPECÍFICA) ===
   extrairNumeroDeLegenda(legendaImagem) {
     console.log(`   🔍 ATACADO: Analisando legenda da imagem: "${legendaImagem}"`);
@@ -32,8 +53,8 @@ class WhatsAppAIAtacado {
     
     console.log(`   📝 ATACADO: Legenda limpa: "${legendaLimpa}"`);
     
-    // Buscar números de 9 dígitos que começam com 8
-    const regexNumeros = /\b8[0-9]{8}\b/g;
+    // Buscar números moçambicanos com formatação flexível (incluindo caracteres especiais)
+    const regexNumeros = /(?:\+258\s*)?8[0-9]{8}/g;
     const numerosEncontrados = legendaLimpa.match(regexNumeros) || [];
     
     if (numerosEncontrados.length === 0) {
@@ -45,7 +66,7 @@ class WhatsAppAIAtacado {
     
     // Para legendas, ser mais permissivo - geralmente é só o número de destino
     if (numerosEncontrados.length === 1) {
-      const numero = numerosEncontrados[0];
+      const numero = limparNumero(numerosEncontrados[0]);
       console.log(`   ✅ ATACADO: Número único na legenda aceito: ${numero}`);
       return numero;
     }
@@ -73,8 +94,9 @@ class WhatsAppAIAtacado {
       );
       
       if (!eNumeroPagamento) {
-        numerosValidos.push(numero);
-        console.log(`   ✅ ATACADO: Número da legenda aceito: ${numero}`);
+        const numeroLimpo = limparNumero(numero);
+        numerosValidos.push(numeroLimpo);
+        console.log(`   ✅ ATACADO: Número da legenda aceito: ${numeroLimpo} (original: ${numero})`);
       } else {
         console.log(`   ❌ ATACADO: Número da legenda rejeitado: ${numero}`);
       }
@@ -212,8 +234,8 @@ class WhatsAppAIAtacado {
       return null;
     }
     
-    // Procurar números de 9 dígitos que começam com 8
-    const regex = /\b8[0-9]{8}\b/g;
+    // Procurar números moçambicanos com formatação flexível (mais robusta)
+    const regex = /(?:\+258\s*)?8[0-9]{8}/g;
     const matches = mensagem.match(regex);
     
     if (!matches || matches.length === 0) {
@@ -272,16 +294,19 @@ class WhatsAppAIAtacado {
       
       // LÓGICA DE DECISÃO CORRIGIDA
       if (eNumeroDestino) {
-        numerosValidos.push(numero);
-        console.log(`   ✅ ATACADO: ACEITO por contexto de destino: ${numero}`);
+        const numeroLimpo = limparNumero(numero);
+        numerosValidos.push(numeroLimpo);
+        console.log(`   ✅ ATACADO: ACEITO por contexto de destino: ${numeroLimpo} (original: ${numero})`);
       } else if (eNumeroPagamento) {
         console.log(`   ❌ ATACADO: REJEITADO por ser pagamento: ${numero}`);
       } else if (estaIsoladoNoFinal) {
-        numerosValidos.push(numero);
-        console.log(`   ✅ ATACADO: ACEITO por estar isolado no final: ${numero}`);
+        const numeroLimpo = limparNumero(numero);
+        numerosValidos.push(numeroLimpo);
+        console.log(`   ✅ ATACADO: ACEITO por estar isolado no final: ${numeroLimpo} (original: ${numero})`);
       } else if (estaNofinal && !eNumeroPagamento) {
-        numerosValidos.push(numero);
-        console.log(`   ✅ ATACADO: ACEITO por estar no final: ${numero}`);
+        const numeroLimpo = limparNumero(numero);
+        numerosValidos.push(numeroLimpo);
+        console.log(`   ✅ ATACADO: ACEITO por estar no final: ${numeroLimpo} (original: ${numero})`);
       } else {
         console.log(`   ❌ ATACADO: REJEITADO por ser ambíguo: ${numero}`);
       }
@@ -303,7 +328,7 @@ class WhatsAppAIAtacado {
       return { multiplos: true, numeros: numerosUnicos };
     }
     
-    const numeroFinal = numerosUnicos[0];
+    const numeroFinal = limparNumero(numerosUnicos[0]);
     console.log(`   ✅ ATACADO: Número único válido aceito: ${numeroFinal}`);
     return numeroFinal;
   }
@@ -437,11 +462,12 @@ class WhatsAppAIAtacado {
     
     // VERIFICAR se é apenas um número
     const mensagemLimpa = mensagem.trim();
-    const apenasNumeroRegex = /^8[0-9]{8}$/;
+    const apenasNumeroRegex = /^(?:\+258\s*)?8[0-9]{8}$/;
     
     if (apenasNumeroRegex.test(mensagemLimpa)) {
-      console.log(`   📱 ATACADO: Detectado número isolado: ${mensagemLimpa}`);
-      return await this.processarNumero(mensagemLimpa, remetente, timestamp, configGrupo);
+      const numeroLimpo = limparNumero(mensagemLimpa);
+      console.log(`   📱 ATACADO: Detectado número isolado: ${numeroLimpo} (original: ${mensagemLimpa})`);
+      return await this.processarNumero(numeroLimpo, remetente, timestamp, configGrupo);
     }
     
     // SEPARAR comprovante e número
@@ -476,16 +502,17 @@ class WhatsAppAIAtacado {
       const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
       
       if (megasCalculados) {
-        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numero}`;
-        console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO: ${resultado}`);
-        return { 
-          sucesso: true, 
-          dadosCompletos: resultado,
-          tipo: 'numero_processado',
-          numero: numero,
-          megas: megasCalculados.megas,
-          valorPago: comprovante.valor
-        };
+              const numeroLimpo = limparNumero(numero);
+      const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLimpo}`;
+      console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO: ${resultado}`);
+      return { 
+        sucesso: true, 
+        dadosCompletos: resultado,
+        tipo: 'numero_processado',
+        numero: numeroLimpo,
+        megas: megasCalculados.megas,
+        valorPago: comprovante.valor
+      };
       } else {
         console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
         return {
@@ -499,8 +526,9 @@ class WhatsAppAIAtacado {
     
     // 3. Se encontrou apenas número (sem comprovante)
     if (numero && !comprovante) {
-      console.log(`   📱 ATACADO: Apenas número detectado: ${numero}`);
-      return await this.processarNumero(numero, remetente, timestamp, configGrupo);
+      const numeroLimpo = limparNumero(numero);
+      console.log(`   📱 ATACADO: Apenas número detectado: ${numeroLimpo} (original: ${numero})`);
+      return await this.processarNumero(numeroLimpo, remetente, timestamp, configGrupo);
     }
     
     // 4. Se encontrou apenas comprovante (sem número)
