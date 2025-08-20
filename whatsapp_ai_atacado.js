@@ -492,7 +492,7 @@ class WhatsAppAIAtacado {
           sucesso: false,
           tipo: 'valor_nao_encontrado_na_tabela',
           valor: comprovante.valor,
-          mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+          mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
         };
       }
     }
@@ -526,7 +526,7 @@ class WhatsAppAIAtacado {
           sucesso: false,
           tipo: 'valor_nao_encontrado_na_tabela',
           valor: comprovante.valor,
-          mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+          mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
         };
       }
     }
@@ -659,7 +659,7 @@ Se não conseguires ler a imagem ou extrair os dados:
                 sucesso: false,
                 tipo: 'valor_nao_encontrado_na_tabela',
                 valor: comprovante.valor,
-                mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+                mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
               };
             }
           } else {
@@ -682,14 +682,14 @@ Se não conseguires ler a imagem ou extrair os dados:
             referencia: comprovante.referencia,
             valor: comprovante.valor,
             megas: megasCalculados.megas,
-            mensagem: `Comprovante da imagem processado! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
+            mensagem: `Comprovante da imagem processado! Megas: ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
           };
         } else {
           return {
             sucesso: false,
             tipo: 'valor_nao_encontrado_na_tabela',
             valor: comprovante.valor,
-            mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+            mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
           };
         }
       } else {
@@ -697,7 +697,7 @@ Se não conseguires ler a imagem ou extrair os dados:
         return {
           sucesso: false,
           tipo: 'imagem_nao_reconhecida',
-          mensagem: 'Não consegui ler o comprovante na imagem. Envie como texto.'
+          mensagem: `❌ *NÃO CONSEGUI LER A IMAGEM!*\n\n📸 *Possíveis problemas:*\n• Imagem muito escura ou clara\n• Texto muito pequeno ou borrado\n• Comprovante cortado ou incompleto\n\n💡 *Soluções:*\n• Tire uma foto mais clara e focada\n• Certifique-se que todo o comprovante está visível\n• Ou envie o comprovante como texto`
         };
       }
       
@@ -706,7 +706,7 @@ Se não conseguires ler a imagem ou extrair os dados:
       return {
         sucesso: false,
         tipo: 'erro_processamento_imagem',
-        mensagem: 'Erro ao processar imagem. Tente enviar como texto.'
+        mensagem: `❌ *ERRO AO PROCESSAR IMAGEM!*\n\n📸 *O que aconteceu:*\n• Erro técnico ao analisar a imagem\n• Formato de imagem não suportado\n• Problema de conexão com a IA\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto\n• Verifique se a imagem não está corrompida`
       };
     }
   }
@@ -743,7 +743,7 @@ Se não conseguires ler a imagem ou extrair os dados:
           sucesso: false,
           tipo: 'valor_nao_encontrado_na_tabela',
           valor: comprovante.valor,
-          mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+          mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n💰 Valor enviado: *${comprovante.valor}MT*\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
         };
       }
     }
@@ -774,7 +774,7 @@ Se não conseguires ler a imagem ou extrair os dados:
           sucesso: false,
           tipo: 'valor_nao_encontrado_na_tabela',
           valor: comprovante.valor,
-          mensagem: `Valor ${comprovante.valor}MT não encontrado na tabela de preços. Verifique os valores disponíveis.`
+          mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
         };
       }
     }
