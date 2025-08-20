@@ -316,6 +316,76 @@ function converterMegasParaNumero(megas) {
     return megas;
 }
 
+// === FUNÇÃO PARA VALIDAR E LIMPAR REFERÊNCIAS ===
+function validarELimparReferencia(referencia) {
+    if (!referencia || typeof referencia !== 'string') {
+        console.log(`⚠️ Referência inválida: ${referencia}`);
+        return 'REF_INVALIDA';
+    }
+    
+    // Remover espaços extras e caracteres problemáticos
+    let refLimpa = referencia.trim();
+    
+    // Log da referência original
+    console.log(`🔍 Referência original: "${referencia}"`);
+    console.log(`🔍 Referência limpa: "${refLimpa}"`);
+    
+    // Verificar se a referência está muito curta (possivelmente quebrada)
+    if (refLimpa.length < 3) {
+        console.log(`⚠️ Referência muito curta (${refLimpa.length} chars): "${refLimpa}"`);
+        return 'REF_MUITO_CURTA';
+    }
+    
+    // Verificar se a referência contém caracteres suspeitos
+    const caracteresSuspeitos = /[^\w\-\.]/g;
+    if (caracteresSuspeitos.test(refLimpa)) {
+        console.log(`⚠️ Referência contém caracteres suspeitos: "${refLimpa}"`);
+        // Tentar limpar caracteres problemáticos
+        refLimpa = refLimpa.replace(caracteresSuspeitos, '');
+        console.log(`🔧 Referência após limpeza: "${refLimpa}"`);
+    }
+    
+    // Verificar se a referência está vazia após limpeza
+    if (!refLimpa || refLimpa.length === 0) {
+        console.log(`❌ Referência ficou vazia após limpeza`);
+        return 'REF_VAZIA';
+    }
+    
+    console.log(`✅ Referência válida: "${refLimpa}"`);
+    return refLimpa;
+}
+
+// === FUNÇÃO PARA PROCESSAR DADOS COMPLETOS COM VALIDAÇÃO ===
+function processarDadosCompletos(dadosCompletos) {
+    console.log(`🔍 Processando dados completos: "${dadosCompletos}"`);
+    
+    if (!dadosCompletos || typeof dadosCompletos !== 'string') {
+        console.log(`❌ Dados completos inválidos: ${dadosCompletos}`);
+        return { referencia: 'DADOS_INVALIDOS', megas: '0', numero: '0' };
+    }
+    
+    // Dividir os dados
+    const partes = dadosCompletos.split('|');
+    console.log(`🔍 Partes encontradas: ${partes.length} - ${JSON.stringify(partes)}`);
+    
+    if (partes.length < 3) {
+        console.log(`❌ Dados incompletos: esperado 3+ partes, encontrado ${partes.length}`);
+        return { referencia: 'DADOS_INCOMPLETOS', megas: '0', numero: '0' };
+    }
+    
+    // Extrair e validar cada parte
+    const referencia = validarELimparReferencia(partes[0]);
+    const megas = partes[1] || '0';
+    const numero = partes[2] || '0';
+    
+    console.log(`🔍 Dados processados:`);
+    console.log(`   📋 Referência: "${referencia}"`);
+    console.log(`   📊 Megas: "${megas}"`);
+    console.log(`   📱 Número: "${numero}"`);
+    
+    return { referencia, megas, numero };
+}
+
 function enviarViaWhatsAppTasker(linhaCompleta, grupoNome, autorMensagem) {
     const item = {
         conteudo: linhaCompleta,
@@ -742,6 +812,7 @@ client.on('ready', async () => {
     
     console.log('\n🔧 Comandos admin: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
     console.log('📋 Comandos de tabela: .set_tabela .set_pagamento .ver_tabela .ver_pagamento .backup_tabelas .restaurar_tabela');
+    console.log('🧪 Comandos de teste: .teste .debug');
     console.log('❓ Comando de ajuda: .ajuda ou .help');
 });
 
@@ -823,6 +894,50 @@ client.on('message', async (message) => {
                 const statusIA = ia.getStatusDetalhado();
                 await message.reply(statusIA);
                 console.log(`🧠 Comando .ia executado`);
+                return;
+            }
+
+            // === COMANDO DE TESTE SIMPLES ===
+            if (comando === '.teste') {
+                console.log(`🧪 Comando de teste executado por: ${message.from}`);
+                console.log(`🔍 É admin? ${isAdmin}`);
+                console.log(`📱 Número: ${message.from}`);
+                console.log(`📝 Mensagem: ${message.body}`);
+                
+                await message.reply(
+                    `🧪 *COMANDO DE TESTE EXECUTADO!*\n\n` +
+                    `📱 Seu número: ${message.from}\n` +
+                    `🔍 É administrador: ${isAdmin ? '✅ SIM' : '❌ NÃO'}\n` +
+                    `📝 Mensagem enviada: ${message.body}\n\n` +
+                    `💡 Se não estiver funcionando, verifique:\n` +
+                    `• Se seu número está na lista de admins\n` +
+                    `• Se o bot está rodando\n` +
+                    `• Se há erros no console`
+                );
+                return;
+            }
+
+            // === COMANDO DE DEBUG ===
+            if (comando === '.debug') {
+                const numeroLimpo = message.from.replace('@c.us', '').replace('@g.us', '');
+                const adminCheck = isAdministrador(message.from);
+                const adminCheckLimpo = isAdministrador(numeroLimpo + '@c.us');
+                
+                console.log(`🔍 DEBUG - Número completo: ${message.from}`);
+                console.log(`🔍 DEBUG - Número limpo: ${numeroLimpo}`);
+                console.log(`🔍 DEBUG - Admin check completo: ${adminCheck}`);
+                console.log(`🔍 DEBUG - Admin check limpo: ${adminCheckLimpo}`);
+                console.log(`🔍 DEBUG - Lista admins: ${JSON.stringify(ADMINISTRADORES_GLOBAIS)}`);
+                
+                await message.reply(
+                    `🔍 *DEBUG EXECUTADO!*\n\n` +
+                    `📱 Número completo: \`${message.from}\`\n` +
+                    `📱 Número limpo: \`${numeroLimpo}\`\n` +
+                    `🔍 Admin check completo: ${adminCheck ? '✅ SIM' : '❌ NÃO'}\n` +
+                    `🔍 Admin check limpo: ${adminCheckLimpo ? '✅ SIM' : '❌ NÃO'}\n` +
+                    `📋 Lista de admins:\n${ADMINISTRADORES_GLOBAIS.map(admin => `• \`${admin}\``).join('\n')}\n\n` +
+                    `💡 Use este comando para diagnosticar problemas`
+                );
                 return;
             }
 
@@ -1196,6 +1311,10 @@ client.on('message', async (message) => {
                     `• .set_pagamento NOVAS_FORMAS - Alterar pagamento\n` +
                     `• .backup_tabelas - Listar backups disponíveis\n` +
                     `• .restaurar_tabela ID - Restaurar backup\n\n` +
+                    `🧪 *TESTE E DEBUG:*\n` +
+                    `• .teste - Comando de teste simples\n` +
+                    `• .debug - Debug detalhado do sistema\n` +
+                    `• .teste_ref - Testar validação de referências\n\n` +
                     `🧹 *LIMPEZA:*\n` +
                     `• .clear_sheets - Limpar dados do Google Sheets\n` +
                     `• .clear_grupo NOME - Limpar dados de um grupo\n\n` +
@@ -1203,6 +1322,38 @@ client.on('message', async (message) => {
                     `• .set_tabela "NOVA TABELA AQUI"\n` +
                     `• .set_pagamento "NOVAS FORMAS AQUI"\n` +
                     `• .restaurar_tabela abc123def`;
+                
+                await message.reply(resposta);
+                return;
+            }
+
+            // === COMANDO DE TESTE DE REFERÊNCIAS ===
+            if (comando === '.teste_ref') {
+                console.log(`🧪 Testando validação de referências...`);
+                
+                const testes = [
+                    'CHK8H3PYK|10GB|847675880',
+                    ' CHK8H3PYK | 10GB | 847675880 ',
+                    'CHK|10GB|847675880',
+                    'CHK8H3PYK!@#|10GB|847675880',
+                    'CHK8H3PYK|10GB',
+                    'CH|10GB|847675880'
+                ];
+                
+                let resposta = `🧪 *TESTE DE VALIDAÇÃO DE REFERÊNCIAS*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+                
+                for (let i = 0; i < testes.length; i++) {
+                    const teste = testes[i];
+                    const resultado = processarDadosCompletos(teste);
+                    
+                    resposta += `${i + 1}. 📋 "${teste}"\n`;
+                    resposta += `   ✅ Referência: "${resultado.referencia}"\n`;
+                    resposta += `   📊 Megas: "${resultado.megas}"\n`;
+                    resposta += `   📱 Número: "${resultado.numero}"\n\n`;
+                }
+                
+                resposta += `💡 *Sistema de validação ativo!*\n`;
+                resposta += `🔍 Referências quebradas são detectadas e corrigidas automaticamente.`;
                 
                 await message.reply(resposta);
                 return;
@@ -1276,7 +1427,7 @@ client.on('message', async (message) => {
                         
                     } else if (resultadoIA.tipo === 'numero_processado') {
                         const dadosCompletos = resultadoIA.dadosCompletos;
-                        const [referencia, megas, numero] = dadosCompletos.split('|');
+                        const { referencia, megas, numero } = processarDadosCompletos(dadosCompletos);
                         const nomeContato = message._data.notifyName || 'N/A';
                         const autorMensagem = message.author || 'Desconhecido';
                         
@@ -1367,7 +1518,7 @@ client.on('message', async (message) => {
                 
             } else if (resultadoIA.tipo === 'numero_processado') {
                 const dadosCompletos = resultadoIA.dadosCompletos;
-                const [referencia, megas, numero] = dadosCompletos.split('|');
+                const { referencia, megas, numero } = processarDadosCompletos(dadosCompletos);
                 const nomeContato = message._data.notifyName || 'N/A';
                 const autorMensagem = message.author || 'Desconhecido';
                 
