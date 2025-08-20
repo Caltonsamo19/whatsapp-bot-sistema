@@ -1321,7 +1321,9 @@ client.on('message', async (message) => {
                     `💡 *EXEMPLOS:*\n` +
                     `• .set_tabela "NOVA TABELA AQUI"\n` +
                     `• .set_pagamento "NOVAS FORMAS AQUI"\n` +
-                    `• .restaurar_tabela abc123def`;
+                    `• .restaurar_tabela abc123def\n\n` +
+                    `📚 *COMANDO COMPLETO:*\n` +
+                    `• .comandos - Lista completa de todos os comandos`;
                 
                 await message.reply(resposta);
                 return;
@@ -1354,6 +1356,50 @@ client.on('message', async (message) => {
                 
                 resposta += `💡 *Sistema de validação ativo!*\n`;
                 resposta += `🔍 Referências quebradas são detectadas e corrigidas automaticamente.`;
+                
+                await message.reply(resposta);
+                return;
+            }
+
+            // === COMANDO COMPLETO DE COMANDOS ===
+            if (comando === '.comandos') {
+                const resposta = `📚 *LISTA COMPLETA DE COMANDOS ATACADO*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                    `🧠 *SISTEMA E IA:*\n` +
+                    `• .ia - Status detalhado da IA\n` +
+                    `• .stats - Estatísticas dos grupos\n` +
+                    `• .sheets - Status do Google Sheets\n` +
+                    `• .test_sheets - Teste de conectividade Google Sheets\n` +
+                    `• .test_grupo - Teste específico para grupo atual\n\n` +
+                    `📋 *GERENCIAMENTO DE GRUPOS:*\n` +
+                    `• .grupos - Lista de grupos detectados\n` +
+                    `• .grupo_atual - Informações do grupo atual\n` +
+                    `• .grupos_status - Status detalhado de todos os grupos\n\n` +
+                    `📊 *TABELAS E PREÇOS:*\n` +
+                    `• .ver_tabela - Ver tabela atual do grupo\n` +
+                    `• .ver_pagamento - Ver formas de pagamento\n` +
+                    `• .set_tabela "NOVA_TABELA" - Alterar tabela do grupo\n` +
+                    `• .set_pagamento "NOVAS_FORMAS" - Alterar formas de pagamento\n` +
+                    `• .backup_tabelas - Listar backups disponíveis\n` +
+                    `• .restaurar_tabela ID - Restaurar backup específico\n\n` +
+                    `🧪 *TESTE E DEBUG:*\n` +
+                    `• .teste - Comando de teste simples\n` +
+                    `• .debug - Debug detalhado do sistema\n` +
+                    `• .teste_ref - Testar validação de referências\n\n` +
+                    `🧹 *LIMPEZA E MANUTENÇÃO:*\n` +
+                    `• .clear_sheets - Limpar dados do Google Sheets\n` +
+                    `• .clear_grupo NOME - Limpar dados de um grupo específico\n\n` +
+                    `💡 *COMANDOS DE AJUDA:*\n` +
+                    `• .ajuda ou .help - Ajuda rápida\n` +
+                    `• .comandos - Esta lista completa\n\n` +
+                    `🔧 *EXEMPLOS DE USO:*\n` +
+                    `• .set_tabela "10GB➜125MT\\n20GB➜250MT"\n` +
+                    `• .set_pagamento "M-Pesa, E-Mola, Transferência"\n` +
+                    `• .restaurar_tabela abc123def456\n` +
+                    `• .clear_grupo "Nome do Grupo"\n\n` +
+                    `📱 *NOTAS IMPORTANTES:*\n` +
+                    `• Use comandos de tabela apenas em grupos\n` +
+                    `• Sistema reinicia após alterações de tabela\n` +
+                    `• Todos os comandos requerem permissão de admin`;
                 
                 await message.reply(resposta);
                 return;
