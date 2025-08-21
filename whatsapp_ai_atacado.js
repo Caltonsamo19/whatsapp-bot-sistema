@@ -26,65 +26,59 @@ class WhatsAppAIAtacado {
       console.log(`   📝 ATACADO: Legenda detectada: "${legendaImagem.trim()}"`);
     }
 
-    // PROMPT MELHORADO - Muito mais específico e robusto
+    // PROMPT ULTRA ESPECÍFICO - Foco em referências quebradas
     const promptMelhorado = `
 ANALISE esta imagem de comprovante M-Pesa/E-Mola de Moçambique.
 
-INSTRUÇÕES CRÍTICAS:
-1. REFERÊNCIA - FORMATOS ESPECÍFICOS:
-   
-   🔵 M-PESA: Códigos como "CHK8H3PYK", "CHL5H3W177", "CGC4GQ17W84"
-   - Geralmente 8-12 caracteres alfanuméricos
-   - Aparecem após "Confirmado", "ID da transação"
-   
-   🟡 E-MOLA: Formatos como "PP250712.2035.u31398", "EP240815.1420.h45672"
-   - Formato: XX######.####.###### (letras + números + pontos)
-   - Podem começar com PP, EP, ou outras letras
-   - Sempre têm pontos separando as partes
-   - Aparecem após "ID da transação", "Referência"
+⚠️ ATENÇÃO CRÍTICA - REFERÊNCIAS QUEBRADAS:
+A referência da transação FREQUENTEMENTE está quebrada em múltiplas linhas!
 
-2. ATENÇÃO ESPECIAL PARA E-MOLA:
-   - NÃO remova os pontos das referências E-Mola!
-   - Mantenha formato original: "PP250712.2035.u31398"
-   - Se quebrada em linhas: "PP250712." + "2035." + "u31398" = "PP250712.2035.u31398"
+EXEMPLO REAL que você DEVE encontrar:
+Se na imagem você vê:
+Linha 1: "CHK8H3PYK"
+Linha 2: "PE"
+RESULTADO CORRETO: "CHK8H3PYKPE" (juntando tudo!)
 
-3. VALOR: Procure o valor transferido em MT (Meticais)
-   - Formatos: "125.00MT", "125MT", "125,00MT", "125.00 MT"
-   - Pode aparecer após "Transferiste", "Taxa foi de", etc.
-   - IGNORE taxas (geralmente 0.00MT ou valores muito baixos)
+OUTRO EXEMPLO:
+Se na imagem você vê:
+Linha 1: "CHL5H3W177"  
+Linha 2: "ABC"
+RESULTADO CORRETO: "CHL5H3W177ABC"
 
-4. CASOS ESPECIAIS:
-   - Se a referência estiver quebrada em linhas, RECONSTRUE ela
-   - Para E-Mola: MANTENHA os pontos na posição correta
-   - Se houver múltiplos valores, escolha o MAIOR (é o valor principal)
+🔍 INSTRUÇÕES ESPECÍFICAS:
+1. PROCURE por texto que pareça código de transação
+2. SE encontrar partes em linhas diferentes, JUNTE TODAS
+3. Referências M-Pesa podem ter 8-15 caracteres no total
+4. Referências E-Mola têm formato: XX######.####.######
 
-EXEMPLOS de referências:
-M-Pesa quebradas: "CHK8H" + "3PYK" = "CHK8H3PYK"
-E-Mola quebradas: "PP250712." + "2035." + "u31398" = "PP250712.2035.u31398"
-E-Mola quebradas: "EP240815." + "1420.h45672" = "EP240815.1420.h45672"
+🔵 M-PESA: 
+- Exemplos completos: "CHK8H3PYKPE", "CHL5H3W177ABC", "CGC4GQ17W84XY"
+- SEMPRE junte todas as partes que encontrar!
 
-Responda SEMPRE no formato JSON exato:
+🟡 E-MOLA:
+- Exemplos: "PP250712.2035.u31398", "EP240815.1420.h45672"
+- Mantenha os pontos no lugar correto
+
+VALOR: Procure valor em MT (ex: "125.00MT", "375MT")
+
+⚠️ NÃO CORTE A REFERÊNCIA! Inclua TODAS as partes que encontrar!
+
+Responda no formato:
 {
-  "referencia": "PP250712.2035.u31398",
-  "valor": "125",
-  "encontrado": true,
-  "confianca": "alta",
-  "tipo": "emola"
-}
-
-OU para M-Pesa:
-{
-  "referencia": "CHK8H3PYK",
+  "referencia": "CHK8H3PYKPE",
   "valor": "125",
   "encontrado": true,
   "confianca": "alta",
   "tipo": "mpesa"
 }
 
-Se não conseguir extrair os dados:
+Para E-Mola:
 {
-  "encontrado": false,
-  "motivo": "texto ilegível/borrado/cortado"
+  "referencia": "PP250712.2035.u31398",
+  "valor": "375",
+  "encontrado": true,
+  "confianca": "alta",
+  "tipo": "emola"
 }`;
 
     try {
@@ -106,8 +100,8 @@ Se não conseguir extrair os dados:
             ]
           }
         ],
-        temperature: 0.3, // Aumentei um pouco para mais flexibilidade
-        max_tokens: 500 // Mais tokens para respostas detalhadas
+        temperature: 0.1, // Mais preciso para primeira tentativa
+        max_tokens: 600 // Mais espaço para explicações detalhadas
       });
 
       console.log(`   🔍 ATACADO: Primeira tentativa - Resposta da IA: ${resposta.choices[0].message.content}`);
@@ -119,42 +113,48 @@ Se não conseguir extrair os dados:
         console.log(`   🔄 ATACADO: Primeira tentativa falhou, tentando novamente com prompt alternativo...`);
         
         const promptAlternativo = `
-Esta é minha SEGUNDA TENTATIVA para ler este comprovante M-Pesa/E-Mola.
+🚨 SEGUNDA TENTATIVA - FOCO TOTAL EM REFERÊNCIAS QUEBRADAS!
 
-FOQUE APENAS em encontrar:
-1. UM CÓDIGO DE REFERÊNCIA:
-   - M-Pesa: código alfanumérico (ex: CHK8H3PYK)
-   - E-Mola: formato com pontos (ex: PP250712.2035.u31398)
-   
-2. UM VALOR em MT/Meticais
+PROBLEMA: A primeira tentativa pode ter cortado a referência!
 
-ATENÇÃO CRÍTICA PARA E-MOLA:
-- Se encontrar referência E-Mola, MANTENHA os pontos!
-- Formato correto: "PP250712.2035.u31398" (com pontos)
-- NÃO transforme em: "PP2507122035u31398" (sem pontos)
+Na imagem, procure por QUALQUER texto que pareça código:
+- Pode estar em 2, 3 ou mais linhas separadas
+- Junte TODAS as partes que encontrar
+- NÃO deixe nada para trás!
 
-DICAS:
-- A referência pode estar em QUALQUER lugar da imagem
-- Pode estar quebrada em linhas diferentes
-- O valor principal é o MAIOR valor em MT que encontrar
-- Ignore valores muito pequenos (taxas)
+EXEMPLO REAL DO QUE VOCÊ DEVE FAZER:
+Se você vê na tela:
+"CHK8H3PYK" (primeira linha)
+"PE" (segunda linha)  
+"123" (terceira linha - se houver)
 
-TENTE HARDER! Analise cada pixel se necessário.
+RESULTADO: "CHK8H3PYKPE123" (juntando TUDO!)
 
-Formato de resposta E-Mola:
+🔍 DICAS PARA ENCONTRAR REFERÊNCIA COMPLETA:
+1. Olhe linha por linha na imagem
+2. Procure por códigos alfanuméricos
+3. Se encontrar múltiplas partes, JUNTE TODAS
+4. Referências M-Pesa podem ter até 15 caracteres
+5. Referências E-Mola mantêm os pontos
+
+⚠️ ESTE É O PROBLEMA PRINCIPAL: VOCÊ ESTÁ CORTANDO AS REFERÊNCIAS!
+
+TENTE NOVAMENTE e inclua TODA a referência que conseguir ver!
+
+Para M-Pesa (SEM pontos):
 {
-  "referencia": "PP250712.2035.u31398",
-  "valor": "VALOR_EM_MT",
-  "encontrado": true,
-  "tipo": "emola"
-}
-
-Formato de resposta M-Pesa:
-{
-  "referencia": "CHK8H3PYK",
-  "valor": "VALOR_EM_MT",
+  "referencia": "REFERENCIA_COMPLETA_AQUI",
+  "valor": "VALOR",
   "encontrado": true,
   "tipo": "mpesa"
+}
+
+Para E-Mola (COM pontos):
+{
+  "referencia": "PP250712.2035.u31398",
+  "valor": "VALOR", 
+  "encontrado": true,
+  "tipo": "emola"
 }`;
 
         resposta = await this.openai.chat.completions.create({
@@ -174,8 +174,8 @@ Formato de resposta M-Pesa:
               ]
             }
           ],
-          temperature: 0.5, // Mais criatividade na segunda tentativa
-          max_tokens: 400
+          temperature: 0.7, // Muito mais criativo na segunda tentativa
+          max_tokens: 500
         });
 
         console.log(`   🔍 ATACADO: Segunda tentativa - Resposta da IA: ${resposta.choices[0].message.content}`);
