@@ -1,4 +1,3 @@
-
 const { OpenAI } = require("openai");
 
 class WhatsAppAIAtacado {
@@ -12,363 +11,318 @@ class WhatsAppAIAtacado {
       this.limparComprovantesAntigos();
     }, 10 * 60 * 1000);
     
-    console.log('🧠 IA WhatsApp ATACADO inicializada - Sistema inteligente com cálculo automático de megas e processamento de imagens otimizado');
+    console.log('🧠 IA WhatsApp ATACADO MELHORADA - Processamento de imagens otimizado');
   }
 
-  // === VALIDAÇÃO DE IMAGEM ===
-  validarImagem(imagemBase64) {
-    if (!imagemBase64 || typeof imagemBase64 !== 'string') {
-      return { valida: false, erro: 'imagem_nao_fornecida' };
-    }
-    
-    // Verificar tamanho mínimo (100 caracteres = ~75 bytes)
-    if (imagemBase64.length < 100) {
-      return { valida: false, erro: 'imagem_muito_pequena' };
-    }
-    
-    // Verificar tamanho máximo (10MB = ~13.3 milhões de caracteres base64)
-    if (imagemBase64.length > 13333333) {
-      return { valida: false, erro: 'imagem_muito_grande' };
-    }
-    
-    // Verificar se é base64 válido
-    const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-    if (!base64Regex.test(imagemBase64)) {
-      return { valida: false, erro: 'formato_base64_invalido' };
-    }
-    
-    // Verificar se contém caracteres válidos para imagem
-    const caracteresInvalidos = /[^A-Za-z0-9+/=]/;
-    if (caracteresInvalidos.test(imagemBase64)) {
-      return { valida: false, erro: 'caracteres_invalidos' };
-    }
-    
-    return { valida: true };
-  }
-
-  // === PROCESSAR IMAGEM (SIMPLIFICADO) ===
+  // === PROCESSAMENTO DE IMAGEM MELHORADO ===
   async processarImagem(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
-    console.log(`   📸 ATACADO: Processando imagem de ${remetente}`);
+    console.log(`   📸 ATACADO: Processando imagem de ${remetente} com IA melhorada`);
     
-    // VALIDAÇÃO DA IMAGEM
-    const validacao = this.validarImagem(imagemBase64);
-    if (!validacao.valida) {
-      console.log(`   ❌ ATACADO: Imagem inválida: ${validacao.erro}`);
-      
-      const mensagensErro = {
-        'imagem_nao_fornecida': `❌ *IMAGEM NÃO FORNECIDA!*\n\n📸 *O que aconteceu:*\n• Nenhuma imagem foi enviada\n• Erro no sistema de envio\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto`,
-        'imagem_muito_pequena': `❌ *IMAGEM MUITO PEQUENA!*\n\n📸 *O que aconteceu:*\n• A imagem está corrompida ou muito pequena\n• Formato não suportado\n\n💡 *Soluções:*\n• Tire uma nova foto do comprovante\n• Certifique-se que a imagem está nítida\n• Ou envie o comprovante como texto`,
-        'imagem_muito_grande': `❌ *IMAGEM MUITO GRANDE!*\n\n📸 *O que aconteceu:*\n• A imagem excede o tamanho máximo (10MB)\n• Pode estar em resolução muito alta\n\n💡 *Soluções:*\n• Reduza a qualidade da foto\n• Ou envie o comprovante como texto`,
-        'formato_base64_invalido': `❌ *FORMATO DE IMAGEM INVÁLIDO!*\n\n📸 *O que aconteceu:*\n• Formato de imagem não suportado\n• Imagem corrompida ou inválida\n\n💡 *Soluções:*\n• Use formato JPEG, PNG ou JPG\n• Tire uma nova foto do comprovante\n• Ou envie o comprovante como texto`,
-        'caracteres_invalidos': `❌ *IMAGEM CORROMPIDA!*\n\n📸 *O que aconteceu:*\n• A imagem contém caracteres inválidos\n• Pode estar corrompida durante o envio\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto`
-      };
-      
-      return {
-        sucesso: false,
-        tipo: 'imagem_invalida',
-        erro: validacao.erro,
-        mensagem: mensagensErro[validacao.erro] || `❌ *IMAGEM INVÁLIDA!*\n\n🔧 *Erro técnico:* ${validacao.erro}`
-      };
-    }
-    
-    // Validação melhorada da legenda
     const temLegendaValida = legendaImagem && 
                             typeof legendaImagem === 'string' && 
-                            legendaImagem.trim().length > 0 &&
-                            legendaImagem.trim() !== '';
+                            legendaImagem.trim().length > 0;
     
     if (temLegendaValida) {
-      console.log(`   📝 ATACADO: Legenda detectada (${legendaImagem.trim().length} chars): "${legendaImagem.trim()}"`);
-    } else {
-      console.log(`   📝 ATACADO: Sem legenda válida`);
+      console.log(`   📝 ATACADO: Legenda detectada: "${legendaImagem.trim()}"`);
     }
-    
-    const prompt = `
-Analisa esta imagem de comprovante de pagamento M-Pesa ou E-Mola de Moçambique.
 
-Procura por:
-1. Referência da transação (exemplos: CGC4GQ17W84, PP250712.2035.u31398, etc.)
-2. Valor transferido (em MT - Meticais)
+    // PROMPT MELHORADO - Muito mais específico e robusto
+    const promptMelhorado = `
+ANALISE esta imagem de comprovante M-Pesa/E-Mola de Moçambique.
 
-ATENÇÃO: 
-- Procura por palavras como "Confirmado", "ID da transacao", "Transferiste"
-- O valor pode estar em formato "100.00MT", "100MT", "100,00MT"
-- A referência é geralmente um código alfanumérico
-- Se não conseguires ler, responde APENAS: {"encontrado": false}
+INSTRUÇÕES CRÍTICAS:
+1. REFERÊNCIA - FORMATOS ESPECÍFICOS:
+   
+   🔵 M-PESA: Códigos como "CHK8H3PYK", "CHL5H3W177", "CGC4GQ17W84"
+   - Geralmente 8-12 caracteres alfanuméricos
+   - Aparecem após "Confirmado", "ID da transação"
+   
+   🟡 E-MOLA: Formatos como "PP250712.2035.u31398", "EP240815.1420.h45672"
+   - Formato: XX######.####.###### (letras + números + pontos)
+   - Podem começar com PP, EP, ou outras letras
+   - Sempre têm pontos separando as partes
+   - Aparecem após "ID da transação", "Referência"
 
-Responde APENAS no formato JSON válido:
+2. ATENÇÃO ESPECIAL PARA E-MOLA:
+   - NÃO remova os pontos das referências E-Mola!
+   - Mantenha formato original: "PP250712.2035.u31398"
+   - Se quebrada em linhas: "PP250712." + "2035." + "u31398" = "PP250712.2035.u31398"
+
+3. VALOR: Procure o valor transferido em MT (Meticais)
+   - Formatos: "125.00MT", "125MT", "125,00MT", "125.00 MT"
+   - Pode aparecer após "Transferiste", "Taxa foi de", etc.
+   - IGNORE taxas (geralmente 0.00MT ou valores muito baixos)
+
+4. CASOS ESPECIAIS:
+   - Se a referência estiver quebrada em linhas, RECONSTRUE ela
+   - Para E-Mola: MANTENHA os pontos na posição correta
+   - Se houver múltiplos valores, escolha o MAIOR (é o valor principal)
+
+EXEMPLOS de referências:
+M-Pesa quebradas: "CHK8H" + "3PYK" = "CHK8H3PYK"
+E-Mola quebradas: "PP250712." + "2035." + "u31398" = "PP250712.2035.u31398"
+E-Mola quebradas: "EP240815." + "1420.h45672" = "EP240815.1420.h45672"
+
+Responda SEMPRE no formato JSON exato:
 {
-  "referencia": "CGC4GQ17W84",
-  "valor": "210",
-  "encontrado": true
+  "referencia": "PP250712.2035.u31398",
+  "valor": "125",
+  "encontrado": true,
+  "confianca": "alta",
+  "tipo": "emola"
 }
 
-Se não conseguires ler a imagem ou extrair os dados:
-{"encontrado": false}
-`;
+OU para M-Pesa:
+{
+  "referencia": "CHK8H3PYK",
+  "valor": "125",
+  "encontrado": true,
+  "confianca": "alta",
+  "tipo": "mpesa"
+}
+
+Se não conseguir extrair os dados:
+{
+  "encontrado": false,
+  "motivo": "texto ilegível/borrado/cortado"
+}`;
 
     try {
-      console.log(`   🤖 ATACADO: Enviando imagem para análise da IA...`);
-      
-      const resposta = await this.openai.chat.completions.create({
+      // PRIMEIRA TENTATIVA com prompt melhorado
+      let resposta = await this.openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
             role: "user",
             content: [
-              { type: "text", text: prompt },
+              { type: "text", text: promptMelhorado },
               {
                 type: "image_url",
                 image_url: {
                   url: `data:image/jpeg;base64,${imagemBase64}`,
-                  detail: "high"
+                  detail: "high" // Máxima qualidade para melhor leitura
                 }
               }
             ]
           }
         ],
-        temperature: 0.1,
-        max_tokens: 300,
-        timeout: 30000 // 30 segundos timeout
+        temperature: 0.3, // Aumentei um pouco para mais flexibilidade
+        max_tokens: 500 // Mais tokens para respostas detalhadas
       });
 
-      if (!resposta || !resposta.choices || !resposta.choices[0] || !resposta.choices[0].message) {
-        throw new Error('Resposta inválida da IA');
+      console.log(`   🔍 ATACADO: Primeira tentativa - Resposta da IA: ${resposta.choices[0].message.content}`);
+      
+      let resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
+      
+      // SE A PRIMEIRA TENTATIVA FALHOU, FAZER SEGUNDA TENTATIVA
+      if (!resultado || !resultado.encontrado) {
+        console.log(`   🔄 ATACADO: Primeira tentativa falhou, tentando novamente com prompt alternativo...`);
+        
+        const promptAlternativo = `
+Esta é minha SEGUNDA TENTATIVA para ler este comprovante M-Pesa/E-Mola.
+
+FOQUE APENAS em encontrar:
+1. UM CÓDIGO DE REFERÊNCIA:
+   - M-Pesa: código alfanumérico (ex: CHK8H3PYK)
+   - E-Mola: formato com pontos (ex: PP250712.2035.u31398)
+   
+2. UM VALOR em MT/Meticais
+
+ATENÇÃO CRÍTICA PARA E-MOLA:
+- Se encontrar referência E-Mola, MANTENHA os pontos!
+- Formato correto: "PP250712.2035.u31398" (com pontos)
+- NÃO transforme em: "PP2507122035u31398" (sem pontos)
+
+DICAS:
+- A referência pode estar em QUALQUER lugar da imagem
+- Pode estar quebrada em linhas diferentes
+- O valor principal é o MAIOR valor em MT que encontrar
+- Ignore valores muito pequenos (taxas)
+
+TENTE HARDER! Analise cada pixel se necessário.
+
+Formato de resposta E-Mola:
+{
+  "referencia": "PP250712.2035.u31398",
+  "valor": "VALOR_EM_MT",
+  "encontrado": true,
+  "tipo": "emola"
+}
+
+Formato de resposta M-Pesa:
+{
+  "referencia": "CHK8H3PYK",
+  "valor": "VALOR_EM_MT",
+  "encontrado": true,
+  "tipo": "mpesa"
+}`;
+
+        resposta = await this.openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: promptAlternativo },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:image/jpeg;base64,${imagemBase64}`,
+                    detail: "high"
+                  }
+                }
+              ]
+            }
+          ],
+          temperature: 0.5, // Mais criatividade na segunda tentativa
+          max_tokens: 400
+        });
+
+        console.log(`   🔍 ATACADO: Segunda tentativa - Resposta da IA: ${resposta.choices[0].message.content}`);
+        resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
       }
 
-      const conteudoIA = resposta.choices[0].message.content;
-      console.log(`   🔍 ATACADO: Resposta da IA para imagem: ${conteudoIA}`);
-      
-      if (!conteudoIA || typeof conteudoIA !== 'string') {
-        throw new Error('Conteúdo da IA inválido');
-      }
-      
-      const resultado = this.extrairJSON(conteudoIA);
-      console.log(`   ✅ ATACADO: JSON extraído da imagem:`, resultado);
-      
-      // VALIDAÇÃO DO RESULTADO
-      if (!resultado || typeof resultado !== 'object') {
-        throw new Error('Resultado da IA não é um objeto válido');
-      }
-      
-      if (resultado.encontrado === false) {
-        console.log(`   ❌ ATACADO: IA não conseguiu extrair dados da imagem`);
-        return {
-          sucesso: false,
-          tipo: 'imagem_nao_reconhecida',
-          mensagem: `❌ *NÃO CONSEGUI LER A IMAGEM!*\n\n📸 *Possíveis problemas:*\n• Imagem muito escura ou clara\n• Texto muito pequeno ou borrado\n• Comprovante cortado ou incompleto\n• Formato de imagem não suportado\n\n💡 *Soluções:*\n• Tire uma foto mais clara e focada\n• Certifique-se que todo o comprovante está visível\n• Ou envie o comprovante como texto`
+      // PROCESSAR RESULTADO
+      if (resultado && resultado.encontrado) {
+        const comprovante = {
+          referencia: this.limparReferencia(resultado.referencia),
+          valor: this.limparValor(resultado.valor),
+          fonte: 'imagem_melhorada',
+          confianca: resultado.confianca || 'media',
+          tipo: resultado.tipo || 'desconhecido'
         };
-      }
-      
-      if (!resultado.referencia || !resultado.valor) {
-        throw new Error('Dados incompletos da IA - falta referência ou valor');
-      }
-      
-      const comprovante = {
-        referencia: resultado.referencia.toString().trim(),
-        valor: this.limparValor(resultado.valor.toString()),
-        fonte: 'imagem'
-      };
-      
-      // VALIDAÇÃO FINAL DOS DADOS
-      if (!comprovante.referencia || comprovante.referencia.length < 3) {
-        throw new Error('Referência muito curta ou inválida');
-      }
-      
-      if (!comprovante.valor || parseFloat(comprovante.valor) <= 0) {
-        throw new Error('Valor inválido ou zero');
-      }
-      
-      console.log(`   ✅ ATACADO: Dados extraídos da imagem: ${comprovante.referencia} - ${comprovante.valor}MT`);
-      
-      // VERIFICAR SE HÁ LEGENDA COM NÚMERO
-      if (temLegendaValida) {
-        console.log(`   🔍 ATACADO: ANALISANDO LEGENDA DA IMAGEM...`);
         
-        // Usar função específica para legenda
-        const numeroLegenda = this.extrairNumeroDeLegenda(legendaImagem);
+        console.log(`   ✅ ATACADO: Dados extraídos com sucesso: ${comprovante.referencia} - ${comprovante.valor}MT (${comprovante.tipo}, confiança: ${comprovante.confianca})`);
         
-        // Se encontrou múltiplos números na legenda, retornar erro
-        if (numeroLegenda && numeroLegenda.multiplos) {
-          console.log(`   ❌ ATACADO: Múltiplos números na legenda não permitidos`);
+        // VALIDAÇÃO ADICIONAL PARA E-MOLA
+        if (comprovante.tipo === 'emola' && !comprovante.referencia.includes('.')) {
+          console.log(`   ⚠️ ATACADO: ATENÇÃO - Referência E-Mola sem pontos detectada: ${comprovante.referencia}`);
+          console.log(`   🔧 ATACADO: Pode ter havido erro na limpeza da referência E-Mola`);
+        }
+        // Continuar com o processamento normal...
+        if (temLegendaValida) {
+          const numeroLegenda = this.extrairNumeroDeLegenda(legendaImagem);
+          
+          if (numeroLegenda && numeroLegenda.multiplos) {
+            return {
+              sucesso: false,
+              tipo: 'multiplos_numeros_nao_permitido',
+              numeros: numeroLegenda.numeros,
+              mensagem: 'Sistema atacado aceita apenas UM número por vez.'
+            };
+          }
+          
+          if (numeroLegenda) {
+            const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+            
+            if (megasCalculados) {
+              const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLegenda}`;
+              console.log(`   ✅ ATACADO: PEDIDO COMPLETO (IMAGEM + LEGENDA): ${resultado}`);
+              return { 
+                sucesso: true, 
+                dadosCompletos: resultado,
+                tipo: 'numero_processado',
+                numero: numeroLegenda,
+                megas: megasCalculados.megas,
+                valorPago: comprovante.valor,
+                fonte: 'imagem_com_legenda_melhorada'
+              };
+            } else {
+              return {
+                sucesso: false,
+                tipo: 'valor_nao_encontrado_na_tabela',
+                valor: comprovante.valor,
+                mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis`
+              };
+            }
+          }
+        }
+        
+        // Processar comprovante sem número
+        const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+        
+        if (megasCalculados) {
+          await this.processarComprovante(comprovante, remetente, timestamp);
+          
+          return { 
+            sucesso: true, 
+            tipo: 'comprovante_imagem_recebido',
+            referencia: comprovante.referencia,
+            valor: comprovante.valor,
+            megas: megasCalculados.megas,
+            mensagem: `✅ *COMPROVANTE PROCESSADO!*\n📋 *REF:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n📊 *MEGAS:* ${megasCalculados.megas}\n\n📱 Agora envie UM número para receber os megas.`
+          };
+        } else {
           return {
             sucesso: false,
-            tipo: 'multiplos_numeros_nao_permitido',
-            numeros: numeroLegenda.numeros,
-            mensagem: '❌ *MÚLTIPLOS NÚMEROS DETECTADOS!*\n\n📱 *Números encontrados:* ' + numeroLegenda.numeros.join(', ') + '\n\n💡 *Sistema atacado aceita apenas UM número por vez.*\n\n📝 *Solução:* Envie apenas o número que vai receber os megas.'
+            tipo: 'valor_nao_encontrado_na_tabela',
+            valor: comprovante.valor,
+            mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis`
           };
         }
         
-        if (numeroLegenda) {
-          console.log(`   🎯 ATACADO: IMAGEM + NÚMERO NA LEGENDA DETECTADOS!`);
-          console.log(`   💰 ATACADO: Comprovante da imagem: ${comprovante.referencia} - ${comprovante.valor}MT`);
-          console.log(`   📱 ATACADO: Número da legenda: ${numeroLegenda}`);
-          
-          // CALCULAR MEGAS AUTOMATICAMENTE
-          const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
-          
-          if (megasCalculados) {
-            const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLegenda}`;
-            console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${resultado}`);
-            return { 
-              sucesso: true, 
-              dadosCompletos: resultado,
-              tipo: 'numero_processado',
-              numero: numeroLegenda,
-              megas: megasCalculados.megas,
-              valorPago: comprovante.valor,
-              fonte: 'imagem_com_legenda'
-            };
-          } else {
-            console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
-            return {
-              sucesso: false,
-              tipo: 'valor_nao_encontrado_na_tabela',
-              valor: comprovante.valor,
-              mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
-            };
-          }
-        } else {
-          console.log(`   ❌ ATACADO: Nenhum número válido encontrado na legenda`);
-        }
       } else {
-        console.log(`   ⚠️ ATACADO: Legenda não disponível ou vazia`);
-      }
-      
-      // Sem número na legenda - processar comprovante normalmente
-      // VERIFICAR se o valor existe na tabela
-      const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
-      
-      if (megasCalculados) {
-        await this.processarComprovante(comprovante, remetente, timestamp);
-        
-        return { 
-          sucesso: true, 
-          tipo: 'comprovante_imagem_recebido',
-          referencia: comprovante.referencia,
-          valor: comprovante.valor,
-          megas: megasCalculados.megas,
-          mensagem: `✅ *COMPROVANTE PROCESSADO!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n📱 *MEGAS:* ${megasCalculados.megas}\n\n📱 *Agora envie UM número que vai receber os megas.*`
-        };
-      } else {
+        console.log(`   ❌ ATACADO: Ambas as tentativas falharam em extrair dados da imagem`);
         return {
           sucesso: false,
-          tipo: 'valor_nao_encontrado_na_tabela',
-          valor: comprovante.valor,
-          mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
+          tipo: 'imagem_nao_reconhecida_melhorada',
+          mensagem: `❌ *NÃO CONSEGUI LER A IMAGEM!*\n\n🔍 *Tentei 2 vezes com IA avançada*\n\n📸 *Possíveis problemas:*\n• Imagem muito escura/clara/borrada\n• Texto muito pequeno ou cortado\n• Comprovante incompleto\n• Formato não suportado\n\n💡 *Soluções:*\n• Tire uma foto mais clara e focada\n• Certifique-se que TODO o comprovante está visível\n• Aumente o brilho se estiver escuro\n• Ou envie o comprovante como texto copiado`
         };
       }
       
     } catch (error) {
-      console.error('❌ ATACADO: Erro ao processar imagem:', error);
-      
-      // TRATAMENTO ESPECÍFICO DE ERROS
-      if (error.message.includes('timeout') || error.message.includes('timeout')) {
-        return {
-          sucesso: false,
-          tipo: 'timeout_ia',
-          mensagem: `⏰ *TEMPO ESGOTADO!*\n\n🤖 *O que aconteceu:*\n• A IA demorou muito para analisar a imagem\n• Possível problema de conexão\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto\n• Verifique sua conexão com a internet`
-        };
-      }
-      
-      if (error.message.includes('rate limit') || error.message.includes('quota')) {
-        return {
-          sucesso: false,
-          tipo: 'limite_ia_excedido',
-          mensagem: `🚫 *LIMITE DE USO EXCEDIDO!*\n\n🤖 *O que aconteceu:*\n• Limite de uso da IA foi atingido\n• Muitas imagens processadas simultaneamente\n\n💡 *Soluções:*\n• Aguarde alguns minutos e tente novamente\n• Ou envie o comprovante como texto\n• Entre em contato com o administrador`
-        };
-      }
-      
-      if (error.message.includes('invalid image') || error.message.includes('format')) {
-        return {
-          sucesso: false,
-          tipo: 'formato_imagem_invalido',
-          mensagem: `❌ *FORMATO DE IMAGEM INVÁLIDO!*\n\n📸 *O que aconteceu:*\n• Formato de imagem não suportado\n• Imagem corrompida ou inválida\n\n💡 *Soluções:*\n• Use formato JPEG, PNG ou JPG\n• Tire uma nova foto do comprovante\n• Ou envie o comprovante como texto`
-        };
-      }
-      
-      // ERRO GENÉRICO
+      console.error('❌ ATACADO: Erro ao processar imagem melhorada:', error);
       return {
         sucesso: false,
         tipo: 'erro_processamento_imagem',
-        mensagem: `❌ *ERRO AO PROCESSAR IMAGEM!*\n\n📸 *O que aconteceu:*\n• Erro técnico ao analisar a imagem\n• Problema de conexão com a IA\n• Erro interno do sistema\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto\n• Verifique se a imagem não está corrompida\n\n🔧 *Erro técnico:* ${error.message}`
+        mensagem: `❌ *ERRO TÉCNICO NA IA!*\n\n🔧 *Detalhes:* ${error.message}\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto\n• Contate o suporte se persistir`
       };
     }
   }
 
-  // === FUNÇÃO AUXILIAR PARA EXTRAIR JSON ===
-  extrairJSON(texto) {
-    if (!texto || typeof texto !== 'string') {
-      throw new Error('Texto inválido para extrair JSON');
-    }
-    
-    console.log(`   🔍 ATACADO: Tentando extrair JSON de: "${texto.substring(0, 100)}..."`);
+  // === EXTRAÇÃO DE JSON MELHORADA ===
+  extrairJSONMelhorado(texto) {
+    console.log(`   🔍 ATACADO: Extraindo JSON melhorado de: ${texto}`);
     
     try {
-      // Tentativa 1: Parse direto
+      // Tentativa 1: JSON direto
       return JSON.parse(texto);
     } catch (e) {
-      console.log(`   ⚠️ ATACADO: Parse direto falhou, tentando limpar...`);
-      
       try {
-        // Tentativa 2: Remover markdown e limpar
-        let limpo = texto
-          .replace(/```json\n?/g, '')
-          .replace(/```\n?/g, '')
-          .replace(/^```json/g, '')
-          .replace(/```$/g, '')
-          .trim();
-        
-        // Remover possíveis caracteres especiais no início/fim
-        limpo = limpo.replace(/^[^\{\[]*/, '').replace(/[^\}\]]*$/, '');
-        
-        console.log(`   🔍 ATACADO: Texto limpo: "${limpo.substring(0, 100)}..."`);
-        
+        // Tentativa 2: Remover markdown
+        let limpo = texto.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         return JSON.parse(limpo);
       } catch (e2) {
-        console.log(`   ⚠️ ATACADO: Limpeza falhou, tentando regex...`);
-        
         try {
-          // Tentativa 3: Extrair com regex
+          // Tentativa 3: Encontrar JSON no texto
           const match = texto.match(/\{[\s\S]*\}/);
           if (match) {
-            console.log(`   🔍 ATACADO: JSON encontrado com regex: "${match[0].substring(0, 100)}..."`);
             return JSON.parse(match[0]);
           }
-          
-          // Tentativa 4: Procurar por arrays também
-          const matchArray = texto.match(/\[[\s\S]*\]/);
-          if (matchArray) {
-            console.log(`   🔍 ATACADO: Array encontrado com regex: "${matchArray[0].substring(0, 100)}..."`);
-            return JSON.parse(matchArray[0]);
-          }
-          
         } catch (e3) {
-          console.log(`   ❌ ATACADO: Regex também falhou`);
-        }
-        
-        // Tentativa 5: Limpeza mais agressiva
-        try {
-          let textoLimpo = texto
-            .replace(/[^\{\}\[\]",:0-9a-zA-Z\s\.\-]/g, '') // Manter apenas caracteres JSON válidos
-            .replace(/\s+/g, ' ') // Normalizar espaços
-            .trim();
-          
-          // Procurar por padrões JSON válidos
-          const jsonMatch = textoLimpo.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            console.log(`   🔍 ATACADO: JSON limpo encontrado: "${jsonMatch[0].substring(0, 100)}..."`);
-            return JSON.parse(jsonMatch[0]);
+          try {
+            // Tentativa 4: Extrair manualmente usando regex
+            const refMatch = texto.match(/["']?referencia["']?\s*:\s*["']([^"']+)["']/i);
+            const valorMatch = texto.match(/["']?valor["']?\s*:\s*["']?([^"',}]+)["']?/i);
+            const encontradoMatch = texto.match(/["']?encontrado["']?\s*:\s*(true|false)/i);
+            const tipoMatch = texto.match(/["']?tipo["']?\s*:\s*["']([^"']+)["']/i);
+            
+            if (refMatch && valorMatch) {
+              return {
+                referencia: refMatch[1].trim(),
+                valor: valorMatch[1].trim(),
+                encontrado: encontradoMatch ? encontradoMatch[1] === 'true' : true,
+                tipo: tipoMatch ? tipoMatch[1] : 'desconhecido'
+              };
+            }
+          } catch (e4) {
+            console.error('❌ ATACADO: Todas as tentativas de parsing falharam:', e4);
           }
-          
-        } catch (e4) {
-          console.log(`   ❌ ATACADO: Limpeza agressiva também falhou`);
         }
-        
-        // Se chegou aqui, não foi possível extrair
-        throw new Error(`Não foi possível extrair JSON válido do texto: ${texto.substring(0, 200)}...`);
       }
     }
+    
+    return { encontrado: false, motivo: 'parsing_failed' };
   }
 
   // === LIMPEZA DE REFERÊNCIA MELHORADA ===
@@ -679,20 +633,7 @@ Se não conseguires ler a imagem ou extrair os dados:
   }
 
   getStatusDetalhado() {
-    let status = `🧠 *IA ATACADO v2.1 MELHORADA*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n✅ Processamento de imagens OTIMIZADO!\n✅ 2 tentativas com prompts diferentes\n✅ Correção automática de referências quebradas\n✅ Extração melhorada de JSON\n✅ Limpeza avançada de referências\n✅ Detecção de erros mais precisa\n✅ Mensagens de erro mais úteis\n\n💾 Mensagens: ${this.historicoMensagens.length}\n⏳ Comprovantes: ${Object.keys(this.comprovantesEmAberto).length}`;
-    status += `\n🧠 *SISTEMA ATACADO v2.1:*\n`;
-    status += `✅ Cálculo automático de megas!\n`;
-    status += `✅ Formato REF|MEGAS|NUMERO!\n`;
-    status += `✅ Valor integral por número!\n`;
-    status += `✅ UM número por vez!\n`;
-    status += `✅ CORRIGIDO: Filtra números de pagamento!\n`;
-    status += `✅ CORRIGIDO: Ignora números em contexto de transferência!\n`;
-    status += `✅ CORRIGIDO: Processamento de imagens otimizado!\n`;
-    status += `✅ CORRIGIDO: Validação robusta de imagens!\n`;
-    status += `✅ CORRIGIDO: Tratamento de erros da IA melhorado!\n`;
-    status += `✅ Sistema inteligente e automatizado!\n`;
-    status += `✅ Processamento direto com IA!\n`;
-    return status;
+    return `🧠 *IA ATACADO v2.1 MELHORADA*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n✅ Processamento de imagens OTIMIZADO!\n✅ 2 tentativas com prompts diferentes\n✅ Correção automática de referências quebradas\n✅ Extração melhorada de JSON\n✅ Limpeza avançada de referências\n✅ Detecção de erros mais precisa\n✅ Mensagens de erro mais úteis\n\n💾 Mensagens: ${this.historicoMensagens.length}\n⏳ Comprovantes: ${Object.keys(this.comprovantesEmAberto).length}`;
   }
 }
 
