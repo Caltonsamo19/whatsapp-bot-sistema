@@ -12,7 +12,7 @@ class WhatsAppAIAtacado {
       this.limparComprovantesAntigos();
     }, 10 * 60 * 1000);
     
-    console.log('🧠 IA WhatsApp ATACADO COMPLETA v2.2 - Processamento de imagens E texto otimizado');
+    console.log('🧠 IA WhatsApp ATACADO COMPLETA v2.3 - Processamento de imagens E texto otimizado + cálculo de preços');
   }
 
   // === PROCESSAMENTO DE IMAGEM MELHORADO ===
@@ -506,53 +506,100 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
     return null;
   }
 
-  // === EXTRAIR PREÇOS TABELA (mantida do código original) ===
+  // === EXTRAIR PREÇOS TABELA (MELHORADA) ===
   extrairPrecosTabela(tabelaTexto) {
-    console.log(`   📋 Extraindo preços da tabela atacado...`);
+    console.log(`   📋 ATACADO: Extraindo preços da tabela melhorada...`);
+    
+    if (!tabelaTexto || typeof tabelaTexto !== 'string') {
+      console.log(`   ❌ ATACADO: Tabela inválida`);
+      return [];
+    }
     
     const precos = [];
     const linhas = tabelaTexto.split('\n');
     
+    console.log(`   📊 ATACADO: Analisando ${linhas.length} linhas da tabela...`);
+    
     for (const linha of linhas) {
+      const linhaLimpa = linha.trim();
+      if (!linhaLimpa) continue;
+      
+      console.log(`   🔍 ATACADO: Analisando linha: "${linhaLimpa}"`);
+      
+      // Padrões melhorados para detectar preços
       const padroes = [
-        /(\d+)GB➜(\d+)MT/gi,
-        /📱\s*(\d+)GB\s*➜\s*(\d+)MT/gi,
-        /(\d+)GB\s*[-–—]\s*(\d+)MT/gi,
+        // Padrão GB -> MT
+        /(\d+)\s*GB\s*[➜→→-–—]\s*(\d+)\s*MT/gi,
+        /📱\s*(\d+)\s*GB\s*[➜→→-–—]\s*(\d+)\s*MT/gi,
+        /(\d+)\s*GB\s*[➜→→-–—]\s*(\d+)/gi,
+        
+        // Padrão Saldo -> MT
+        /(\d+)\s*💫\s*(\d+)\s*MT/gi,
         /📞\s*(\d+)\s*💫\s*(\d+)\s*MT/gi,
-        /(\d+)💫\s*(\d+)MT/gi
+        /(\d+)\s*💫\s*(\d+)/gi,
+        /saldo\s*(\d+)\s*[➜→→-–—]\s*(\d+)\s*MT/gi,
+        
+        // Padrão genérico número -> MT
+        /(\d+)\s*[➜→→-–—]\s*(\d+)\s*MT/gi,
+        /(\d+)\s*[➜→→-–—]\s*(\d+)/gi,
+        
+        // Padrão com emojis
+        /📱\s*(\d+)\s*[➜→→-–—]\s*(\d+)/gi,
+        /📞\s*(\d+)\s*[➜→→-–—]\s*(\d+)/gi
       ];
       
       for (const padrao of padroes) {
         let match;
-        while ((match = padrao.exec(linha)) !== null) {
+        while ((match = padrao.exec(linhaLimpa)) !== null) {
           const quantidade = parseInt(match[1]);
           const preco = parseInt(match[2]);
           
-          let tipo = 'gb';
-          let descricao = '';
-          
-          if (linha.includes('💫')) {
-            tipo = 'saldo';
-            descricao = `${quantidade} Saldo`;
-          } else if (linha.includes('GB')) {
-            tipo = 'gb';
-            descricao = `${quantidade}GB`;
+          if (quantidade > 0 && preco > 0) {
+            let tipo = 'gb';
+            let descricao = '';
+            
+            // Determinar tipo baseado no conteúdo da linha
+            if (linhaLimpa.includes('💫') || linhaLimpa.toLowerCase().includes('saldo')) {
+              tipo = 'saldo';
+              descricao = `${quantidade} Saldo`;
+            } else if (linhaLimpa.includes('GB') || linhaLimpa.toLowerCase().includes('gb')) {
+              tipo = 'gb';
+              descricao = `${quantidade}GB`;
+            } else {
+              // Tentar inferir tipo baseado no valor
+              if (preco <= 50) {
+                tipo = 'saldo';
+                descricao = `${quantidade} Saldo`;
+              } else {
+                tipo = 'gb';
+                descricao = `${quantidade}GB`;
+              }
+            }
+            
+            const precoObj = {
+              quantidade: quantidade,
+              preco: preco,
+              descricao: descricao,
+              tipo: tipo,
+              original: linhaLimpa
+            };
+            
+            // Verificar se já existe um preço igual
+            const existe = precos.some(p => p.quantidade === quantidade && p.preco === preco);
+            if (!existe) {
+              precos.push(precoObj);
+              console.log(`   ✅ ATACADO: Preço extraído: ${descricao} - ${preco}MT (${tipo})`);
+            }
           }
-          
-          precos.push({
-            quantidade: quantidade,
-            preco: preco,
-            descricao: descricao,
-            tipo: tipo,
-            original: linha.trim()
-          });
         }
       }
     }
     
-    const precosUnicos = precos.filter((preco, index, self) => 
-      index === self.findIndex(p => p.preco === preco.preco && p.quantidade === preco.quantidade)
-    ).sort((a, b) => a.preco - b.preco);
+    // Ordenar por preço
+    const precosUnicos = precos.sort((a, b) => a.preco - b.preco);
+    
+    console.log(`   📊 ATACADO: Total de preços extraídos: ${precosUnicos.length}`);
+    console.log(`   💰 ATACADO: Preços: ${precosUnicos.map(p => `${p.descricao}: ${p.preco}MT`).join(', ')}`);
     
     return precosUnicos;
   }
@@ -619,7 +666,7 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
     
     // VERIFICAR PEDIDOS ESPECÍFICOS PRIMEIRO
     if (configGrupo) {
-      const pedidosEspecificos = this.analisarPedidosEspecificos(mensagem, configGrupo);
+      const pedidosEspecificos = await this.analisarPedidosEspecificos(mensagem, configGrupo);
       if (pedidosEspecificos) {
         console.log(`   🎯 ATACADO: PEDIDOS ESPECÍFICOS DETECTADOS!`);
         
@@ -807,17 +854,34 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
     };
   }
 
-  // === ANALISAR COMPROVANTE DE TEXTO ===
+  // === ANALISAR COMPROVANTE DE TEXTO (MELHORADA) ===
   async analisarComprovante(mensagem) {
     console.log(`   🔍 ATACADO: Analisando comprovante de texto: "${mensagem}"`);
     
-    const temConfirmado = /^confirmado/i.test(mensagem.trim());
-    const temID = /^id\s/i.test(mensagem.trim());
+    // Padrões mais abrangentes para detectar comprovativos
+    const padroesComprovante = [
+      /^confirmado/i,
+      /^id\s/i,
+      /^saldo\s/i,
+      /^transferiste\s/i,
+      /^pagamento\s/i,
+      /^comprovante\s/i,
+      /^recibo\s/i,
+      /^transacao\s/i,
+      /^mpesa/i,
+      /^e.?mola/i,
+      /^referencia\s/i,
+      /^codigo\s/i
+    ];
     
-    if (!temConfirmado && !temID) {
-      console.log(`   ❌ ATACADO: Mensagem não parece ser um comprovante (não começa com "Confirmado" ou "ID")`);
+    const eComprovante = padroesComprovante.some(padrao => padrao.test(mensagem.trim()));
+    
+    if (!eComprovante) {
+      console.log(`   ❌ ATACADO: Mensagem não parece ser um comprovante`);
       return null;
     }
+
+    console.log(`   ✅ ATACADO: Comprovante detectado! Analisando com IA...`);
 
     const prompt = `
 Analisa esta mensagem de comprovante de pagamento M-Pesa ou E-Mola de Moçambique:
@@ -826,11 +890,18 @@ Analisa esta mensagem de comprovante de pagamento M-Pesa ou E-Mola de Moçambiqu
 
 Extrai a referência da transação e o valor transferido.
 
+IMPORTANTE:
+- Para E-Mola: Procura por formato XX######.####.###### (ex: PP250821.1259.A86718)
+- Para M-Pesa: Procura por código alfanumérico (ex: CGC4GQ17W84)
+- Para valores: Procura por números seguidos de MT ou meticais
+- Se a mensagem contém "Saldo" + número, o número pode ser a referência
+
 Responde APENAS no formato JSON:
 {
-  "referencia": "CGC4GQ17W84",
-  "valor": "210",
-  "encontrado": true
+  "referencia": "PP250821.1259.A86718",
+  "valor": "250",
+  "encontrado": true,
+  "tipo": "emola"
 }
 
 Se não conseguires extrair, responde:
@@ -841,11 +912,11 @@ Se não conseguires extrair, responde:
       const resposta = await this.openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: "Você é especialista em analisar comprovantes de pagamento moçambicanos M-Pesa e E-Mola." },
+          { role: "system", content: "Você é especialista em analisar comprovantes de pagamento moçambicanos M-Pesa e E-Mola. Analisa cuidadosamente cada mensagem para extrair referências e valores." },
           { role: "user", content: prompt }
         ],
         temperature: 0.1,
-        max_tokens: 200
+        max_tokens: 300
       });
 
       console.log(`   🔍 ATACADO: Resposta da IA para comprovante: ${resposta.choices[0].message.content}`);
@@ -856,13 +927,39 @@ Se não conseguires extrair, responde:
         const comprovante = {
           referencia: resultado.referencia,
           valor: this.limparValor(resultado.valor),
-          fonte: 'texto'
+          fonte: 'texto',
+          tipo: resultado.tipo || 'desconhecido'
         };
         
-        console.log(`   ✅ ATACADO: Comprovante extraído: ${comprovante.referencia} - ${comprovante.valor}MT`);
+        console.log(`   ✅ ATACADO: Comprovante extraído: ${comprovante.referencia} - ${comprovante.valor}MT (${comprovante.tipo})`);
         return comprovante;
       } else {
         console.log(`   ❌ ATACADO: IA não conseguiu extrair dados do comprovante`);
+        
+        // TENTATIVA ALTERNATIVA: Extração manual para casos especiais
+        console.log(`   🔧 ATACADO: Tentando extração manual...`);
+        
+        // Caso especial: "Saldo + número" pode ser um comprovante
+        const matchSaldo = mensagem.match(/saldo\s*(\d+)/i);
+        if (matchSaldo) {
+          const numeroSaldo = matchSaldo[1];
+          console.log(`   🔍 ATACADO: Padrão "Saldo" detectado: ${numeroSaldo}`);
+          
+          // Tentar extrair valor da mensagem
+          const matchValor = mensagem.match(/(\d+(?:[.,]\d+)?)\s*(?:MT|meticais?|metical)/i);
+          const valor = matchValor ? matchValor[1] : '0';
+          
+          const comprovanteManual = {
+            referencia: numeroSaldo,
+            valor: this.limparValor(valor),
+            fonte: 'texto_manual',
+            tipo: 'saldo'
+          };
+          
+          console.log(`   ✅ ATACADO: Comprovante extraído manualmente: ${comprovanteManual.referencia} - ${comprovanteManual.valor}MT`);
+          return comprovanteManual;
+        }
+        
         return null;
       }
     } catch (parseError) {
@@ -1044,9 +1141,115 @@ Se não conseguires extrair, responde:
   }
 
   // === FUNÇÕES AUXILIARES (PLACEHOLDERS) ===
+  // === ANALISAR PEDIDOS ESPECÍFICOS (IMPLEMENTAÇÃO COMPLETA) ===
   async analisarPedidosEspecificos(mensagem, configGrupo) {
-    // Implementação simplificada - retorna null para não interferir
-    return null;
+    console.log(`   🎯 ATACADO: Analisando pedidos específicos na mensagem...`);
+    
+    if (!configGrupo || !configGrupo.tabela) {
+      console.log(`   ❌ ATACADO: Tabela do grupo não disponível`);
+      return null;
+    }
+    
+    // Extrair números da mensagem
+    const numeros = this.extrairTodosNumeros(mensagem);
+    if (numeros.length === 0) {
+      console.log(`   ❌ ATACADO: Nenhum número encontrado na mensagem`);
+      return null;
+    }
+    
+    console.log(`   📱 ATACADO: Números detectados: ${numeros.join(', ')}`);
+    
+    // Extrair preços da tabela
+    const precos = this.extrairPrecosTabela(configGrupo.tabela);
+    if (precos.length === 0) {
+      console.log(`   ❌ ATACADO: Nenhum preço encontrado na tabela`);
+      return null;
+    }
+    
+    console.log(`   💰 ATACADO: Preços disponíveis: ${precos.map(p => `${p.descricao}: ${p.preco}MT`).join(', ')}`);
+    
+    // Tentar encontrar pedidos específicos na mensagem
+    const pedidos = [];
+    let valorTotal = 0;
+    
+    // Padrões para detectar pedidos específicos
+    const padroes = [
+      /(\d+)\s*GB\s*para\s*(\d+)/gi,
+      /(\d+)\s*GB\s*(\d+)/gi,
+      /(\d+)\s*💫\s*(\d+)/gi,
+      /saldo\s*(\d+)\s*(\d+)/gi,
+      /(\d+)\s*MT\s*(\d+)/gi
+    ];
+    
+    for (const padrao of padroes) {
+      let match;
+      while ((match = padrao.exec(mensagem)) !== null) {
+        const quantidade = parseInt(match[1]);
+        const numero = match[2];
+        
+        // Verificar se o número é válido (9 dígitos)
+        if (/^8[0-9]{8}$/.test(numero.toString())) {
+          // Encontrar o preço correspondente
+          const preco = precos.find(p => p.quantidade === quantidade);
+          if (preco) {
+            pedidos.push({
+              quantidade: quantidade,
+              preco: preco.preco,
+              descricao: preco.descricao,
+              numero: numero,
+              tipo: preco.tipo
+            });
+            valorTotal += preco.preco;
+            console.log(`   ✅ ATACADO: Pedido detectado: ${preco.descricao} para ${numero} - ${preco.preco}MT`);
+          }
+        }
+      }
+    }
+    
+    // Se não encontrou padrões específicos, tentar detectar por contexto
+    if (pedidos.length === 0) {
+      console.log(`   🔍 ATACADO: Tentando detecção por contexto...`);
+      
+      // Verificar se a mensagem contém palavras-chave de pedidos
+      const palavrasChave = ['saldo', 'gb', 'megas', 'dados', 'internet'];
+      const temPalavrasChave = palavrasChave.some(palavra => 
+        mensagem.toLowerCase().includes(palavra)
+      );
+      
+      if (temPalavrasChave && numeros.length > 0) {
+        // Tentar associar números com preços disponíveis
+        for (const numero of numeros) {
+          // Para cada número, sugerir o pacote mais comum (ex: 1GB)
+          const pacotePadrao = precos.find(p => p.quantidade === 1 && p.tipo === 'gb');
+          if (pacotePadrao) {
+            pedidos.push({
+              quantidade: pacotePadrao.quantidade,
+              preco: pacotePadrao.preco,
+              descricao: pacotePadrao.descricao,
+              numero: numero,
+              tipo: pacotePadrao.tipo
+            });
+            valorTotal += pacotePadrao.preco;
+            console.log(`   🔍 ATACADO: Pedido sugerido por contexto: ${pacotePadrao.descricao} para ${numero} - ${pacotePadrao.preco}MT`);
+          }
+        }
+      }
+    }
+    
+    if (pedidos.length === 0) {
+      console.log(`   ❌ ATACADO: Nenhum pedido específico detectado`);
+      return null;
+    }
+    
+    console.log(`   🎯 ATACADO: Pedidos específicos detectados: ${pedidos.length}`);
+    console.log(`   💰 ATACADO: Valor total calculado: ${valorTotal}MT`);
+    
+    return {
+      pedidos: pedidos,
+      numeros: numeros,
+      valorTotal: valorTotal,
+      mensagem: mensagem
+    };
   }
 
   async analisarDivisaoAutomatica(valorPago, configGrupo) {
@@ -1100,7 +1303,7 @@ Se não conseguires extrair, responde:
   }
 
   getStatusDetalhado() {
-    return `🧠 *IA ATACADO v2.2 COMPLETA*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n✅ Processamento de imagens OTIMIZADO!\n✅ Processamento de comprovativos de TEXTO!\n✅ 2 tentativas com prompts diferentes\n✅ Correção automática de referências quebradas\n✅ Extração melhorada de JSON\n✅ Limpeza avançada de referências\n✅ Detecção de erros mais precisa\n✅ Mensagens de erro mais úteis\n✅ Suporte completo a comprovativos de texto\n✅ Análise inteligente de histórico\n\n💾 Mensagens: ${this.historicoMensagens.length}\n⏳ Comprovantes: ${Object.keys(this.comprovantesEmAberto).length}`;
+    return `🧠 *IA ATACADO v2.3 COMPLETA*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n✅ Processamento de imagens OTIMIZADO!\n✅ Processamento de comprovativos de TEXTO!\n✅ CÁLCULO AUTOMÁTICO DE PREÇOS!\n✅ 2 tentativas com prompts diferentes\n✅ Correção automática de referências quebradas\n✅ Extração melhorada de JSON\n✅ Limpeza avançada de referências\n✅ Detecção de erros mais precisa\n✅ Mensagens de erro mais úteis\n✅ Suporte completo a comprovativos de texto\n✅ Análise inteligente de histórico\n✅ Detecção de pedidos específicos\n✅ Extração melhorada de preços da tabela\n\n💾 Mensagens: ${this.historicoMensagens.length}\n⏳ Comprovantes: ${Object.keys(this.comprovantesEmAberto).length}`;
   }
 }
 
