@@ -11,411 +11,12 @@ class WhatsAppAIAtacado {
       this.limparComprovantesAntigos();
     }, 10 * 60 * 1000);
     
-    console.log('🧠 IA WhatsApp ATACADO MELHORADA - Processamento de imagens otimizado');
+    console.log('🧠 IA WhatsApp ATACADO inicializada - Sistema inteligente com cálculo automático de megas e processamento de imagens otimizado');
   }
 
-  // === PROCESSAMENTO DE IMAGEM MELHORADO ===
-  async processarImagem(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
-    console.log(`   📸 ATACADO: Processando imagem de ${remetente} com IA melhorada`);
-    
-    const temLegendaValida = legendaImagem && 
-                            typeof legendaImagem === 'string' && 
-                            legendaImagem.trim().length > 0;
-    
-    if (temLegendaValida) {
-      console.log(`   📝 ATACADO: Legenda detectada: "${legendaImagem.trim()}"`);
-    }
-
-    // PROMPT ULTRA ESPECÍFICO - Foco especial em E-MOLA
-    const promptMelhorado = `
-ANALISE esta imagem de comprovante M-Pesa/E-Mola de Moçambique.
-
-⚠️ ATENÇÃO CRÍTICA - REFERÊNCIAS QUEBRADAS EM MÚLTIPLAS LINHAS:
-
-🟡 FORMATO E-MOLA ESPECÍFICO - PADRÃO OBRIGATÓRIO:
-PP + 6 dígitos + . + 4 dígitos + . + mínimo 5 caracteres
-Exemplo: PP250820.1706.e9791O (PP + 250820 + . + 1706 + . + e9791O)
-
-⚠️ CRÍTICO: Referências E-Mola seguem padrão rígido:
-1. Começam com PP (2 letras)
-2. Seguido de 6 dígitos (data)
-3. Ponto (.)
-4. Seguido de 4 dígitos (hora)  
-5. Ponto (.)
-6. Seguido de 5+ caracteres alfanuméricos (código único)
-
-EXEMPLOS CORRETOS E-MOLA:
-- "PP250820.1706.e9791O" (PP + 6 dígitos + 4 dígitos + 6 caracteres)
-- "PP250821.1152.E58547" (PP + 6 dígitos + 4 dígitos + 6 caracteres)
-- "EP240815.1420.h45672" (EP + 6 dígitos + 4 dígitos + 6 caracteres)
-
-🚨 SE ENCONTRAR E-MOLA INCOMPLETO, PROCURE MAIS CARACTERES!
-Exemplo: Se você vê "PP250820.1706.e9791" mas na linha seguinte tem "O"
-RESULTADO CORRETO: "PP250820.1706.e9791O"
-
-⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
-
-🚨 PROBLEMA COMUM: E-Mola quebrado em linhas
-Se você vê na imagem:
-Linha 1: "PP250820.1706.e9791"
-OU quebrado:
-Linha 1: "PP250820.1706."
-Linha 2: "e9791"
-RESULTADO CORRETO: "PP250820.1706.e9791"
-
-REGRA E-MOLA: Capture TUDO até encontrar a terceira parte completa!
-- Primeira parte: letras + números (PP250820)
-- Segunda parte: números (1706) 
-- Terceira parte: letra + números (e9791) ← NÃO CORTE ESTA PARTE!
-
-🔵 M-PESA (SEM pontos):
-⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
-Se você vê:
-"CHK8H3PYK" + "pe" (em linhas separadas)
-RESULTADO: "CHK8H3PYKpe" (EXATO - não mude para maiúsculo!)
-
-🔍 INSTRUÇÕES DE BUSCA:
-1. Procure por "ID da transação" ou "Confirmado"
-2. Abaixo/ao lado, encontre o código
-3. Para E-Mola: SEMPRE tem 3 partes separadas por pontos
-4. Para M-Pesa: código alfanumérico sem pontos
-5. SE estiver quebrado em linhas, JUNTE TUDO!
-
-VALOR: Procure valor em MT (ex: "375.00MT")
-
-Responda no formato:
-Para E-Mola (SEMPRE com 3 partes, terceira parte 5+ chars e CASE ORIGINAL):
-{
-  "referencia": "PP250820.1706.e9791O",
-  "valor": "375",
-  "encontrado": true,
-  "tipo": "emola"
-}
-
-Para M-Pesa (CASE ORIGINAL):
-{
-  "referencia": "CHK8H3PYKpe",
-  "valor": "125",
-  "encontrado": true,
-  "tipo": "mpesa"
-}`;
-
-    try {
-      // PRIMEIRA TENTATIVA com prompt melhorado
-      let resposta = await this.openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: promptMelhorado },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${imagemBase64}`,
-                  detail: "high" // Máxima qualidade para melhor leitura
-                }
-              }
-            ]
-          }
-        ],
-        temperature: 0.1, // Mais preciso para primeira tentativa
-        max_tokens: 600 // Mais espaço para explicações detalhadas
-      });
-
-      console.log(`   🔍 ATACADO: Primeira tentativa - Resposta da IA: ${resposta.choices[0].message.content}`);
-      
-      let resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
-      
-      // SE A PRIMEIRA TENTATIVA FALHOU, FAZER SEGUNDA TENTATIVA
-      if (!resultado || !resultado.encontrado) {
-        console.log(`   🔄 ATACADO: Primeira tentativa falhou, tentando novamente com prompt alternativo...`);
-        
-        const promptAlternativo = `
-🚨 SEGUNDA TENTATIVA - FOCO ESPECIAL EM E-MOLA CORTADO!
-
-PROBLEMA IDENTIFICADO: Você está cortando referências E-Mola!
-
-🟡 FORMATO E-MOLA OBRIGATÓRIO:
-XX######.####.######
-SEMPRE 3 partes separadas por 2 pontos!
-
-EXEMPLOS DO QUE VOCÊ DEVE ENCONTRAR COMPLETO:
-✅ "PP250820.1706.e9791O" (CORRETO - terceira parte tem 6 chars)
-✅ "PP250821.1152.E58547" (CORRETO - terceira parte tem 6 chars)  
-❌ "PP250820.1706.e9791" (INCOMPLETO - terceira parte tem só 5 chars)
-❌ "PP250820.1706" (ERRADO - faltou a terceira parte toda)
-
-🔍 COMO VALIDAR E-MOLA:
-1. Conte os caracteres após o segundo ponto
-2. Se tiver menos de 6 caracteres, PROCURE MAIS na linha seguinte
-3. Junte tudo até formar a referência completa
-
-CENÁRIO QUEBRADO COMUM:
-"PP250820.1706.e9791" (linha 1) + "O" (linha 2) = "PP250820.1706.e9791O" ✅
-
-CENÁRIO QUEBRADO COMUM:
-Se você vê:
-"PP250820.1706." (linha 1)
-"e9791" (linha 2)
-RESULTADO: "PP250820.1706.e9791" ✅
-
-🔵 PARA M-PESA:
-Se quebrado: "CHK8H3PYK" + "PE" = "CHK8H3PYKPE"
-
-⚠️ NÃO CORTE E NÃO ALTERE MAIÚSCULAS/MINÚSCULAS! Capture EXATAMENTE como aparece!
-
-Para E-Mola (PADRÃO: XX######.####.##### com 5+ chars na terceira parte):
-{
-  "referencia": "PP250820.1706.e9791O",
-  "valor": "375",
-  "encontrado": true,
-  "tipo": "emola"
-}
-
-Para M-Pesa (sem pontos e CASE ORIGINAL):
-{
-  "referencia": "CHK8H3PYKpe",
-  "valor": "125",
-  "encontrado": true,
-  "tipo": "mpesa"
-}`;
-
-        resposta = await this.openai.chat.completions.create({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: promptAlternativo },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:image/jpeg;base64,${imagemBase64}`,
-                    detail: "high"
-                  }
-                }
-              ]
-            }
-          ],
-          temperature: 0.7, // Muito mais criativo na segunda tentativa
-          max_tokens: 500
-        });
-
-        console.log(`   🔍 ATACADO: Segunda tentativa - Resposta da IA: ${resposta.choices[0].message.content}`);
-        resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
-      }
-
-      // PROCESSAR RESULTADO
-      if (resultado && resultado.encontrado) {
-        const comprovante = {
-          referencia: this.limparReferencia(resultado.referencia),
-          valor: this.limparValor(resultado.valor),
-          fonte: 'imagem_melhorada',
-          confianca: resultado.confianca || 'media',
-          tipo: resultado.tipo || 'desconhecido'
-        };
-        
-        console.log(`   ✅ ATACADO: Dados extraídos com sucesso: ${comprovante.referencia} - ${comprovante.valor}MT (${comprovante.tipo}, confiança: ${comprovante.confianca})`);
-        
-        // VALIDAÇÃO RIGOROSA PARA E-MOLA
-        if (comprovante.tipo === 'emola') {
-          const pontosCount = (comprovante.referencia.match(/\./g) || []).length;
-          const partes = comprovante.referencia.split('.');
-          
-          console.log(`   🔍 ATACADO: Validando E-Mola: ${comprovante.referencia}`);
-          console.log(`   📊 ATACADO: Partes encontradas: ${JSON.stringify(partes)}`);
-          
-          // Validar estrutura básica
-          if (pontosCount !== 2) {
-            console.log(`   ❌ ATACADO: ERRO - E-Mola deve ter exatamente 2 pontos! Encontrados: ${pontosCount}`);
-          }
-          
-          if (partes.length !== 3) {
-            console.log(`   ❌ ATACADO: ERRO - E-Mola deve ter 3 partes! Encontradas: ${partes.length}`);
-          } else {
-            // Validar padrão específico: PP + 6 dígitos + 4 dígitos + 5+ caracteres
-            const parte1 = partes[0]; // PP250820
-            const parte2 = partes[1]; // 1706
-            const parte3 = partes[2]; // e9791O
-            
-            const prefixoOK = /^[A-Z]{2}/.test(parte1); // 2 letras no início
-            const dataOK = /^\d{6}$/.test(parte1.substring(2)); // 6 dígitos após as letras
-            const horaOK = /^\d{4}$/.test(parte2); // 4 dígitos
-            const codigoOK = parte3.length >= 5; // Mínimo 5 caracteres
-            
-            console.log(`   🔍 ATACADO: Prefixo (2 letras): ${prefixoOK} - "${parte1.substring(0,2)}"`);
-            console.log(`   🔍 ATACADO: Data (6 dígitos): ${dataOK} - "${parte1.substring(2)}"`);
-            console.log(`   🔍 ATACADO: Hora (4 dígitos): ${horaOK} - "${parte2}"`);
-            console.log(`   🔍 ATACADO: Código (5+ chars): ${codigoOK} - "${parte3}" (${parte3.length} chars)`);
-            
-            if (prefixoOK && dataOK && horaOK && codigoOK) {
-              console.log(`   ✅ ATACADO: E-Mola com padrão CORRETO!`);
-            } else {
-              console.log(`   ⚠️ ATACADO: E-Mola pode estar INCOMPLETO!`);
-              if (!codigoOK) {
-                console.log(`   🚨 ATACADO: Terceira parte muito curta (${parte3.length} chars) - pode ter sido cortada!`);
-              }
-            }
-          }
-        }
-        // Continuar com o processamento normal...
-        if (temLegendaValida) {
-          const numeroLegenda = this.extrairNumeroDeLegenda(legendaImagem);
-          
-          if (numeroLegenda && numeroLegenda.multiplos) {
-            return {
-              sucesso: false,
-              tipo: 'multiplos_numeros_nao_permitido',
-              numeros: numeroLegenda.numeros,
-              mensagem: 'Sistema atacado aceita apenas UM número por vez.'
-            };
-          }
-          
-          if (numeroLegenda) {
-            const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
-            
-            if (megasCalculados) {
-              const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLegenda}`;
-              console.log(`   ✅ ATACADO: PEDIDO COMPLETO (IMAGEM + LEGENDA): ${resultado}`);
-              return { 
-                sucesso: true, 
-                dadosCompletos: resultado,
-                tipo: 'numero_processado',
-                numero: numeroLegenda,
-                megas: megasCalculados.megas,
-                valorPago: comprovante.valor,
-                fonte: 'imagem_com_legenda_melhorada'
-              };
-            } else {
-              return {
-                sucesso: false,
-                tipo: 'valor_nao_encontrado_na_tabela',
-                valor: comprovante.valor,
-                mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis`
-              };
-            }
-          }
-        }
-        
-        // Processar comprovante sem número
-        const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
-        
-        if (megasCalculados) {
-          await this.processarComprovante(comprovante, remetente, timestamp);
-          
-          return { 
-            sucesso: true, 
-            tipo: 'comprovante_imagem_recebido',
-            referencia: comprovante.referencia,
-            valor: comprovante.valor,
-            megas: megasCalculados.megas,
-            mensagem: `✅ *COMPROVANTE PROCESSADO!*\n📋 *REF:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n📊 *MEGAS:* ${megasCalculados.megas}\n\n📱 Agora envie UM número para receber os megas.`
-          };
-        } else {
-          return {
-            sucesso: false,
-            tipo: 'valor_nao_encontrado_na_tabela',
-            valor: comprovante.valor,
-            mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis`
-          };
-        }
-        
-      } else {
-        console.log(`   ❌ ATACADO: Ambas as tentativas falharam em extrair dados da imagem`);
-        return {
-          sucesso: false,
-          tipo: 'imagem_nao_reconhecida_melhorada',
-          mensagem: `❌ *NÃO CONSEGUI LER A IMAGEM!*\n\n🔍 *Tentei 2 vezes com IA avançada*\n\n📸 *Possíveis problemas:*\n• Imagem muito escura/clara/borrada\n• Texto muito pequeno ou cortado\n• Comprovante incompleto\n• Formato não suportado\n\n💡 *Soluções:*\n• Tire uma foto mais clara e focada\n• Certifique-se que TODO o comprovante está visível\n• Aumente o brilho se estiver escuro\n• Ou envie o comprovante como texto copiado`
-        };
-      }
-      
-    } catch (error) {
-      console.error('❌ ATACADO: Erro ao processar imagem melhorada:', error);
-      return {
-        sucesso: false,
-        tipo: 'erro_processamento_imagem',
-        mensagem: `❌ *ERRO TÉCNICO NA IA!*\n\n🔧 *Detalhes:* ${error.message}\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto\n• Contate o suporte se persistir`
-      };
-    }
-  }
-
-  // === EXTRAÇÃO DE JSON MELHORADA ===
-  extrairJSONMelhorado(texto) {
-    console.log(`   🔍 ATACADO: Extraindo JSON melhorado de: ${texto}`);
-    
-    try {
-      // Tentativa 1: JSON direto
-      return JSON.parse(texto);
-    } catch (e) {
-      try {
-        // Tentativa 2: Remover markdown
-        let limpo = texto.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        return JSON.parse(limpo);
-      } catch (e2) {
-        try {
-          // Tentativa 3: Encontrar JSON no texto
-          const match = texto.match(/\{[\s\S]*\}/);
-          if (match) {
-            return JSON.parse(match[0]);
-          }
-        } catch (e3) {
-          try {
-            // Tentativa 4: Extrair manualmente usando regex
-            const refMatch = texto.match(/["']?referencia["']?\s*:\s*["']([^"']+)["']/i);
-            const valorMatch = texto.match(/["']?valor["']?\s*:\s*["']?([^"',}]+)["']?/i);
-            const encontradoMatch = texto.match(/["']?encontrado["']?\s*:\s*(true|false)/i);
-            const tipoMatch = texto.match(/["']?tipo["']?\s*:\s*["']([^"']+)["']/i);
-            
-            if (refMatch && valorMatch) {
-              return {
-                referencia: refMatch[1].trim(),
-                valor: valorMatch[1].trim(),
-                encontrado: encontradoMatch ? encontradoMatch[1] === 'true' : true,
-                tipo: tipoMatch ? tipoMatch[1] : 'desconhecido'
-              };
-            }
-          } catch (e4) {
-            console.error('❌ ATACADO: Todas as tentativas de parsing falharam:', e4);
-          }
-        }
-      }
-    }
-    
-    return { encontrado: false, motivo: 'parsing_failed' };
-  }
-
-  // === LIMPEZA DE REFERÊNCIA MELHORADA - MANTÉM CASE ORIGINAL ===
-  limparReferencia(referencia) {
-    if (!referencia) return '';
-    
-    let refLimpa = referencia.toString().trim();
-    
-    // DETECTAR se é E-Mola (contém pontos) ou M-Pesa
-    const eEMola = refLimpa.includes('.');
-    
-    if (eEMola) {
-      // PARA E-MOLA: Manter pontos E CASE ORIGINAL
-      refLimpa = refLimpa
-        .replace(/\s+/g, '') // Remove apenas espaços e quebras de linha
-        .replace(/[^\w.]/g, ''); // Remove caracteres especiais MAS MANTÉM pontos
-        // ❌ REMOVIDO: .toLowerCase() - MANTÉM CASE ORIGINAL!
-      
-      console.log(`   🟡 ATACADO: Referência E-Mola limpa (CASE ORIGINAL): "${referencia}" -> "${refLimpa}"`);
-    } else {
-      // PARA M-PESA: Remover caracteres especiais MAS MANTER CASE ORIGINAL
-      refLimpa = refLimpa
-        .replace(/\s+/g, '') // Remove espaços e quebras de linha
-        .replace(/[^\w]/g, ''); // Remove caracteres não alfanuméricos (incluindo pontos)
-        // ❌ REMOVIDO: .toUpperCase() - MANTÉM CASE ORIGINAL!
-      
-      console.log(`   🔵 ATACADO: Referência M-Pesa limpa (CASE ORIGINAL): "${referencia}" -> "${refLimpa}"`);
-    }
-    
-    return refLimpa;
-  }
-
-  // === FUNÇÃO AUXILIAR PARA LIMPEZA DE NÚMEROS (mantida do código original) ===
+  // === CÓDIGO ORIGINAL MANTIDO - PROCESSAMENTO DE TEXTO ===
+  
+  // === FUNÇÃO AUXILIAR PARA LIMPEZA DE NÚMEROS ===
   limparNumero(numero) {
     if (!numero || typeof numero !== 'string') {
       return numero;
@@ -434,7 +35,7 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
     return numero;
   }
 
-  // === EXTRAIR NÚMERO DE LEGENDA (mantida do código original) ===
+  // === EXTRAIR NÚMERO DE LEGENDA (CÓDIGO ORIGINAL) ===
   extrairNumeroDeLegenda(legendaImagem) {
     console.log(`   🔍 ATACADO: Analisando legenda da imagem: "${legendaImagem}"`);
     
@@ -448,12 +49,17 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
       .replace(/\s+/g, ' ')
       .trim();
     
+    console.log(`   📝 ATACADO: Legenda limpa: "${legendaLimpa}"`);
+    
     const regexNumeros = /(?:\+258\s*)?8[0-9]{8}/g;
     const numerosEncontrados = legendaLimpa.match(regexNumeros) || [];
     
     if (numerosEncontrados.length === 0) {
+      console.log(`   ❌ ATACADO: Nenhum número encontrado na legenda`);
       return null;
     }
+    
+    console.log(`   📱 ATACADO: Números na legenda: ${numerosEncontrados.join(', ')}`);
     
     if (numerosEncontrados.length === 1) {
       const numero = this.limparNumero(numerosEncontrados[0]);
@@ -469,6 +75,9 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
       const contextoAfter = legendaLimpa.substring(posicao + numero.length, posicao + numero.length + 30).toLowerCase();
       const contextoCompleto = (contextoBefore + contextoAfter).toLowerCase();
       
+      console.log(`   🔍 ATACADO: Analisando ${numero} na legenda...`);
+      console.log(`   📖 ATACADO: Contexto legenda: "${contextoCompleto}"`);
+      
       const indicadoresPagamento = [
         'para o', 'para número', 'beneficiário', 'destinatario',
         'taxa foi', 'transferiste'
@@ -481,19 +90,77 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
       if (!eNumeroPagamento) {
         const numeroLimpo = this.limparNumero(numero);
         numerosValidos.push(numeroLimpo);
+        console.log(`   ✅ ATACADO: Número da legenda aceito: ${numeroLimpo} (original: ${numero})`);
+      } else {
+        console.log(`   ❌ ATACADO: Número da legenda rejeitado: ${numero}`);
       }
     }
     
     if (numerosValidos.length === 1) {
       return numerosValidos[0];
     } else if (numerosValidos.length > 1) {
+      console.log(`   ❌ ATACADO: Múltiplos números válidos na legenda: ${numerosValidos.join(', ')}`);
       return { multiplos: true, numeros: numerosValidos };
     }
     
+    console.log(`   ❌ ATACADO: Nenhum número válido na legenda`);
     return null;
   }
 
-  // === CALCULAR MEGAS POR VALOR (mantida do código original) ===
+  // === EXTRAIR PREÇOS TABELA (CÓDIGO ORIGINAL) ===
+  extrairPrecosTabela(tabelaTexto) {
+    console.log(`   📋 Extraindo preços da tabela atacado...`);
+    
+    const precos = [];
+    const linhas = tabelaTexto.split('\n');
+    
+    for (const linha of linhas) {
+      const padroes = [
+        /(\d+)GB➜(\d+)MT/gi,
+        /📱\s*(\d+)GB\s*➜\s*(\d+)MT/gi,
+        /(\d+)GB\s*[-–—]\s*(\d+)MT/gi,
+        /📞\s*(\d+)\s*💫\s*(\d+)\s*MT/gi,
+        /(\d+)💫\s*(\d+)MT/gi
+      ];
+      
+      for (const padrao of padroes) {
+        let match;
+        while ((match = padrao.exec(linha)) !== null) {
+          const quantidade = parseInt(match[1]);
+          const preco = parseInt(match[2]);
+          
+          let tipo = 'gb';
+          let descricao = '';
+          
+          if (linha.includes('💫')) {
+            tipo = 'saldo';
+            descricao = `${quantidade} Saldo`;
+          } else if (linha.includes('GB')) {
+            tipo = 'gb';
+            descricao = `${quantidade}GB`;
+          }
+          
+          precos.push({
+            quantidade: quantidade,
+            preco: preco,
+            descricao: descricao,
+            tipo: tipo,
+            original: linha.trim()
+          });
+        }
+      }
+    }
+    
+    const precosUnicos = precos.filter((preco, index, self) => 
+      index === self.findIndex(p => p.preco === preco.preco && p.quantidade === preco.quantidade)
+    ).sort((a, b) => a.preco - b.preco);
+    
+    console.log(`   ✅ Preços extraídos: ${precosUnicos.length} pacotes encontrados`);
+    
+    return precosUnicos;
+  }
+
+  // === CALCULAR MEGAS POR VALOR (CÓDIGO ORIGINAL) ===
   calcularMegasPorValor(valorPago, configGrupo) {
     console.log(`   🧮 ATACADO: Calculando megas para valor ${valorPago}MT...`);
     
@@ -543,226 +210,7 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
     return null;
   }
 
-  // === EXTRAIR PREÇOS TABELA (mantida do código original) ===
-  extrairPrecosTabela(tabelaTexto) {
-    console.log(`   📋 Extraindo preços da tabela atacado...`);
-    
-    const precos = [];
-    const linhas = tabelaTexto.split('\n');
-    
-    for (const linha of linhas) {
-      const padroes = [
-        /(\d+)GB➜(\d+)MT/gi,
-        /📱\s*(\d+)GB\s*➜\s*(\d+)MT/gi,
-        /(\d+)GB\s*[-–—]\s*(\d+)MT/gi,
-        /📞\s*(\d+)\s*💫\s*(\d+)\s*MT/gi,
-        /(\d+)💫\s*(\d+)MT/gi
-      ];
-      
-      for (const padrao of padroes) {
-        let match;
-        while ((match = padrao.exec(linha)) !== null) {
-          const quantidade = parseInt(match[1]);
-          const preco = parseInt(match[2]);
-          
-          let tipo = 'gb';
-          let descricao = '';
-          
-          if (linha.includes('💫')) {
-            tipo = 'saldo';
-            descricao = `${quantidade} Saldo`;
-          } else if (linha.includes('GB')) {
-            tipo = 'gb';
-            descricao = `${quantidade}GB`;
-          }
-          
-          precos.push({
-            quantidade: quantidade,
-            preco: preco,
-            descricao: descricao,
-            tipo: tipo,
-            original: linha.trim()
-          });
-        }
-      }
-    }
-    
-    const precosUnicos = precos.filter((preco, index, self) => 
-      index === self.findIndex(p => p.preco === preco.preco && p.quantidade === preco.quantidade)
-    ).sort((a, b) => a.preco - b.preco);
-    
-    return precosUnicos;
-  }
-
-  // === LIMPAR VALOR MONETÁRIO (mantida do código original) ===
-  limparValor(valor) {
-    if (!valor) return '0';
-    
-    let valorStr = valor.toString();
-    valorStr = valorStr.replace(/\s*(MT|mt|meticais?|metical)\s*/gi, '');
-    valorStr = valorStr.trim();
-    
-    if (valorStr.includes(',') && valorStr.includes('.')) {
-      valorStr = valorStr.replace(/,/g, '');
-    } else if (valorStr.includes(',')) {
-      const parts = valorStr.split(',');
-      if (parts.length === 2 && parts[1].length <= 2) {
-        valorStr = valorStr.replace(',', '.');
-      } else {
-        valorStr = valorStr.replace(/,/g, '');
-      }
-    }
-    
-    const match = valorStr.match(/\d+\.?\d*/);
-    if (match) {
-      const numero = parseFloat(match[0]);
-      return numero.toString();
-    }
-    
-    const digitos = valorStr.replace(/[^\d]/g, '');
-    return digitos || '0';
-  }
-
-  // === RESTO DAS FUNÇÕES MANTIDAS DO CÓDIGO ORIGINAL ===
-  async processarMensagemBot(mensagem, remetente, tipoMensagem = 'texto', configGrupo = null, legendaImagem = null) {
-    const timestamp = Date.now();
-    
-    if (tipoMensagem === 'imagem') {
-      console.log(`\n🧠 IA ATACADO MELHORADA processando IMAGEM de ${remetente}`);
-      if (legendaImagem && legendaImagem.trim().length > 0) {
-        console.log(`📝 Com legenda: "${legendaImagem.substring(0, 100)}..."`);
-      }
-    } else {
-      console.log(`\n🧠 IA ATACADO processando TEXTO de ${remetente}: ${mensagem.substring(0, 50)}...`);
-    }
-    
-    this.adicionarAoHistorico(mensagem, remetente, timestamp, tipoMensagem);
-    
-    try {
-      if (tipoMensagem === 'imagem') {
-        return await this.processarImagem(mensagem, remetente, timestamp, configGrupo, legendaImagem);
-      } else {
-        return await this.processarTexto(mensagem, remetente, timestamp, configGrupo);
-      }
-    } catch (error) {
-      console.error('❌ ATACADO: Erro na IA:', error);
-      return { erro: true, mensagem: error.message };
-    }
-  }
-
-  // === PROCESSAR TEXTO COMPLETO (RESTAURADO E MELHORADO) ===
-  async processarTexto(mensagem, remetente, timestamp, configGrupo = null) {
-    console.log(`   📝 ATACADO: Analisando mensagem: "${mensagem}"`);
-    
-    // VERIFICAR se é apenas um número
-    const mensagemLimpa = mensagem.trim();
-    const apenasNumeroRegex = /^(?:\+258\s*)?8[0-9]{8}$/;
-    
-    if (apenasNumeroRegex.test(mensagemLimpa)) {
-      const numeroLimpo = this.limparNumero(mensagemLimpa);
-      console.log(`   📱 ATACADO: Detectado número isolado: ${numeroLimpo} (original: ${mensagemLimpa})`);
-      return await this.processarNumero(numeroLimpo, remetente, timestamp, configGrupo);
-    }
-    
-    // SEPARAR comprovante e número
-    const resultado = this.separarComprovanteENumero(mensagem);
-    
-    // Se encontrou múltiplos números, retornar erro
-    if (resultado.erro === 'multiplos_numeros') {
-      console.log(`   ❌ ATACADO: Múltiplos números não permitidos`);
-      return {
-        sucesso: false,
-        tipo: 'multiplos_numeros_nao_permitido',
-        numeros: resultado.numeros,
-        mensagem: 'Sistema atacado aceita apenas UM número por vez.'
-      };
-    }
-    
-    const { textoComprovante, numero } = resultado;
-    
-    // 1. Verificar se é um comprovante
-    let comprovante = null;
-    if (textoComprovante && textoComprovante.length > 10) {
-      comprovante = await this.analisarComprovante(textoComprovante);
-    }
-    
-    // 2. Se encontrou comprovante E número na mesma mensagem
-    if (comprovante && numero) {
-      console.log(`   🎯 ATACADO: COMPROVANTE + NÚMERO na mesma mensagem!`);
-      console.log(`   💰 ATACADO: Comprovante: ${comprovante.referencia} - ${comprovante.valor}MT`);
-      console.log(`   📱 ATACADO: Número: ${numero}`);
-      
-      // CALCULAR MEGAS AUTOMATICAMENTE
-      const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
-      
-      if (megasCalculados) {
-        const numeroLimpo = this.limparNumero(numero);
-        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLimpo}`;
-        console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO: ${resultado}`);
-        return { 
-          sucesso: true, 
-          dadosCompletos: resultado,
-          tipo: 'numero_processado',
-          numero: numeroLimpo,
-          megas: megasCalculados.megas,
-          valorPago: comprovante.valor
-        };
-      } else {
-        console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
-        return {
-          sucesso: false,
-          tipo: 'valor_nao_encontrado_na_tabela',
-          valor: comprovante.valor,
-          mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
-        };
-      }
-    }
-    
-    // 3. Se encontrou apenas número (sem comprovante)
-    if (numero && !comprovante) {
-      const numeroLimpo = this.limparNumero(numero);
-      console.log(`   📱 ATACADO: Apenas número detectado: ${numeroLimpo} (original: ${numero})`);
-      return await this.processarNumero(numeroLimpo, remetente, timestamp, configGrupo);
-    }
-    
-    // 4. Se encontrou apenas comprovante (sem número)
-    if (comprovante && !numero) {
-      console.log(`   💰 ATACADO: Apenas comprovante detectado: ${comprovante.referencia} - ${comprovante.valor}MT`);
-      
-      // VERIFICAR se o valor existe na tabela
-      const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
-      
-      if (megasCalculados) {
-        await this.processarComprovante(comprovante, remetente, timestamp);
-        
-        return { 
-          sucesso: true, 
-          tipo: 'comprovante_recebido',
-          referencia: comprovante.referencia,
-          valor: comprovante.valor,
-          megas: megasCalculados.megas,
-          mensagem: `✅ *COMPROVANTE PROCESSADO!*\n📋 *REF:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n📊 *MEGAS:* ${megasCalculados.megas}\n\n📱 Agora envie UM número para receber os megas.`
-        };
-      } else {
-        return {
-          sucesso: false,
-          tipo: 'valor_nao_encontrado_na_tabela',
-          valor: comprovante.valor,
-          mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
-        };
-      }
-    }
-    
-    // 5. Não reconheceu
-    console.log(`   ❓ ATACADO: Mensagem não reconhecida como comprovante ou número`);
-    return { 
-      sucesso: false, 
-      tipo: 'mensagem_nao_reconhecida',
-      mensagem: null 
-    };
-  }
-
-  // === EXTRAIR NÚMERO ÚNICO (RESTAURADO) ===
+  // === EXTRAIR NÚMERO ÚNICO (CÓDIGO ORIGINAL) ===
   extrairNumeroUnico(mensagem) {
     console.log(`   🔍 ATACADO: Extraindo número único da mensagem...`);
     
@@ -788,6 +236,10 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
       const contextoBefore = mensagem.substring(Math.max(0, posicao - 50), posicao).toLowerCase();
       const contextoAfter = mensagem.substring(posicao + numero.length, posicao + numero.length + 50).toLowerCase();
       const contextoCompleto = (contextoBefore + contextoAfter).toLowerCase();
+      
+      console.log(`   🔍 ATACADO: Analisando ${numero}...`);
+      console.log(`   📖 ATACADO: Contexto antes: "${contextoBefore}"`);
+      console.log(`   📖 ATACADO: Contexto depois: "${contextoAfter}"`);
       
       const indicadoresPagamento = [
         'transferiste', 'taxa foi', 'para o número', 'para número', 'para conta',
@@ -815,26 +267,32 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
       const contextoAposFinal = contextoAfter.trim();
       const estaIsoladoNoFinal = estaNofinal && (contextoAposFinal === '' || contextoAposFinal.length < 10);
       
+      console.log(`   📊 ATACADO: É pagamento: ${eNumeroPagamento}`);
+      console.log(`   📊 ATACADO: É destino: ${eNumeroDestino}`);
+      console.log(`   📊 ATACADO: Está no final (>70%): ${estaNofinal} (${percentualPosicao.toFixed(1)}%)`);
+      console.log(`   📊 ATACADO: Isolado no final: ${estaIsoladoNoFinal}`);
+      
       if (eNumeroDestino) {
         const numeroLimpo = this.limparNumero(numero);
         numerosValidos.push(numeroLimpo);
-        console.log(`   ✅ ATACADO: ACEITO por contexto de destino: ${numeroLimpo}`);
+        console.log(`   ✅ ATACADO: ACEITO por contexto de destino: ${numeroLimpo} (original: ${numero})`);
       } else if (eNumeroPagamento) {
         console.log(`   ❌ ATACADO: REJEITADO por ser pagamento: ${numero}`);
       } else if (estaIsoladoNoFinal) {
         const numeroLimpo = this.limparNumero(numero);
         numerosValidos.push(numeroLimpo);
-        console.log(`   ✅ ATACADO: ACEITO por estar isolado no final: ${numeroLimpo}`);
+        console.log(`   ✅ ATACADO: ACEITO por estar isolado no final: ${numeroLimpo} (original: ${numero})`);
       } else if (estaNofinal && !eNumeroPagamento) {
         const numeroLimpo = this.limparNumero(numero);
         numerosValidos.push(numeroLimpo);
-        console.log(`   ✅ ATACADO: ACEITO por estar no final: ${numeroLimpo}`);
+        console.log(`   ✅ ATACADO: ACEITO por estar no final: ${numeroLimpo} (original: ${numero})`);
       } else {
         console.log(`   ❌ ATACADO: REJEITADO por ser ambíguo: ${numero}`);
       }
     }
     
     const numerosUnicos = [...new Set(numerosValidos)];
+    console.log(`   📱 ATACADO: Números válidos após filtragem: ${numerosUnicos.join(', ')}`);
     
     if (numerosUnicos.length === 0) {
       console.log(`   ❌ ATACADO: Nenhum número válido encontrado`);
@@ -843,6 +301,7 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
     
     if (numerosUnicos.length > 1) {
       console.log(`   ❌ ATACADO: Múltiplos números VÁLIDOS detectados: ${numerosUnicos.join(', ')}`);
+      console.log(`   ⚠️ ATACADO: Sistema aceita apenas UM número por vez`);
       return { multiplos: true, numeros: numerosUnicos };
     }
     
@@ -851,7 +310,7 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
     return numeroFinal;
   }
 
-  // === SEPARAR COMPROVANTE E NÚMERO (RESTAURADO) ===
+  // === SEPARAR COMPROVANTE E NÚMERO (CÓDIGO ORIGINAL) ===
   separarComprovanteENumero(mensagem) {
     console.log(`   🔍 ATACADO: Separando comprovante e número...`);
     
@@ -872,6 +331,7 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
     }
     
     const numero = resultadoNumero;
+    
     let textoComprovante = mensagem;
     
     if (numero) {
@@ -883,639 +343,69 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
         new RegExp(`\\s*este\\s+número\\s*${numero}\\s*`, 'gi'),
         new RegExp(`\\s*número\\s*${numero}\\s*`, 'gi'),
         new RegExp(`\\s*numero\\s*${numero}\\s*`, 'gi'),
-        new RegExp(`\\s*${numero}\\s*const { OpenAI } = require("openai");
-
-class WhatsAppAIAtacado {
-  constructor(apiKey) {
-    this.openai = new OpenAI({ apiKey });
-    this.comprovantesEmAberto = {};
-    this.historicoMensagens = [];
-    this.maxHistorico = 100;
-    
-    setInterval(() => {
-      this.limparComprovantesAntigos();
-    }, 10 * 60 * 1000);
-    
-    console.log('🧠 IA WhatsApp ATACADO MELHORADA - Processamento de imagens otimizado');
-  }
-
-  // === PROCESSAMENTO DE IMAGEM MELHORADO ===
-  async processarImagem(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
-    console.log(`   📸 ATACADO: Processando imagem de ${remetente} com IA melhorada`);
-    
-    const temLegendaValida = legendaImagem && 
-                            typeof legendaImagem === 'string' && 
-                            legendaImagem.trim().length > 0;
-    
-    if (temLegendaValida) {
-      console.log(`   📝 ATACADO: Legenda detectada: "${legendaImagem.trim()}"`);
-    }
-
-    // PROMPT ULTRA ESPECÍFICO - Foco especial em E-MOLA
-    const promptMelhorado = `
-ANALISE esta imagem de comprovante M-Pesa/E-Mola de Moçambique.
-
-⚠️ ATENÇÃO CRÍTICA - REFERÊNCIAS QUEBRADAS EM MÚLTIPLAS LINHAS:
-
-🟡 FORMATO E-MOLA ESPECÍFICO - PADRÃO OBRIGATÓRIO:
-PP + 6 dígitos + . + 4 dígitos + . + mínimo 5 caracteres
-Exemplo: PP250820.1706.e9791O (PP + 250820 + . + 1706 + . + e9791O)
-
-⚠️ CRÍTICO: Referências E-Mola seguem padrão rígido:
-1. Começam com PP (2 letras)
-2. Seguido de 6 dígitos (data)
-3. Ponto (.)
-4. Seguido de 4 dígitos (hora)  
-5. Ponto (.)
-6. Seguido de 5+ caracteres alfanuméricos (código único)
-
-EXEMPLOS CORRETOS E-MOLA:
-- "PP250820.1706.e9791O" (PP + 6 dígitos + 4 dígitos + 6 caracteres)
-- "PP250821.1152.E58547" (PP + 6 dígitos + 4 dígitos + 6 caracteres)
-- "EP240815.1420.h45672" (EP + 6 dígitos + 4 dígitos + 6 caracteres)
-
-🚨 SE ENCONTRAR E-MOLA INCOMPLETO, PROCURE MAIS CARACTERES!
-Exemplo: Se você vê "PP250820.1706.e9791" mas na linha seguinte tem "O"
-RESULTADO CORRETO: "PP250820.1706.e9791O"
-
-⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
-
-🚨 PROBLEMA COMUM: E-Mola quebrado em linhas
-Se você vê na imagem:
-Linha 1: "PP250820.1706.e9791"
-OU quebrado:
-Linha 1: "PP250820.1706."
-Linha 2: "e9791"
-RESULTADO CORRETO: "PP250820.1706.e9791"
-
-REGRA E-MOLA: Capture TUDO até encontrar a terceira parte completa!
-- Primeira parte: letras + números (PP250820)
-- Segunda parte: números (1706) 
-- Terceira parte: letra + números (e9791) ← NÃO CORTE ESTA PARTE!
-
-🔵 M-PESA (SEM pontos):
-⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
-Se você vê:
-"CHK8H3PYK" + "pe" (em linhas separadas)
-RESULTADO: "CHK8H3PYKpe" (EXATO - não mude para maiúsculo!)
-
-🔍 INSTRUÇÕES DE BUSCA:
-1. Procure por "ID da transação" ou "Confirmado"
-2. Abaixo/ao lado, encontre o código
-3. Para E-Mola: SEMPRE tem 3 partes separadas por pontos
-4. Para M-Pesa: código alfanumérico sem pontos
-5. SE estiver quebrado em linhas, JUNTE TUDO!
-
-VALOR: Procure valor em MT (ex: "375.00MT")
-
-Responda no formato:
-Para E-Mola (SEMPRE com 3 partes, terceira parte 5+ chars e CASE ORIGINAL):
-{
-  "referencia": "PP250820.1706.e9791O",
-  "valor": "375",
-  "encontrado": true,
-  "tipo": "emola"
-}
-
-Para M-Pesa (CASE ORIGINAL):
-{
-  "referencia": "CHK8H3PYKpe",
-  "valor": "125",
-  "encontrado": true,
-  "tipo": "mpesa"
-}`;
-
-    try {
-      // PRIMEIRA TENTATIVA com prompt melhorado
-      let resposta = await this.openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: promptMelhorado },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${imagemBase64}`,
-                  detail: "high" // Máxima qualidade para melhor leitura
-                }
-              }
-            ]
-          }
-        ],
-        temperature: 0.1, // Mais preciso para primeira tentativa
-        max_tokens: 600 // Mais espaço para explicações detalhadas
-      });
-
-      console.log(`   🔍 ATACADO: Primeira tentativa - Resposta da IA: ${resposta.choices[0].message.content}`);
-      
-      let resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
-      
-      // SE A PRIMEIRA TENTATIVA FALHOU, FAZER SEGUNDA TENTATIVA
-      if (!resultado || !resultado.encontrado) {
-        console.log(`   🔄 ATACADO: Primeira tentativa falhou, tentando novamente com prompt alternativo...`);
-        
-        const promptAlternativo = `
-🚨 SEGUNDA TENTATIVA - FOCO ESPECIAL EM E-MOLA CORTADO!
-
-PROBLEMA IDENTIFICADO: Você está cortando referências E-Mola!
-
-🟡 FORMATO E-MOLA OBRIGATÓRIO:
-XX######.####.######
-SEMPRE 3 partes separadas por 2 pontos!
-
-EXEMPLOS DO QUE VOCÊ DEVE ENCONTRAR COMPLETO:
-✅ "PP250820.1706.e9791O" (CORRETO - terceira parte tem 6 chars)
-✅ "PP250821.1152.E58547" (CORRETO - terceira parte tem 6 chars)  
-❌ "PP250820.1706.e9791" (INCOMPLETO - terceira parte tem só 5 chars)
-❌ "PP250820.1706" (ERRADO - faltou a terceira parte toda)
-
-🔍 COMO VALIDAR E-MOLA:
-1. Conte os caracteres após o segundo ponto
-2. Se tiver menos de 6 caracteres, PROCURE MAIS na linha seguinte
-3. Junte tudo até formar a referência completa
-
-CENÁRIO QUEBRADO COMUM:
-"PP250820.1706.e9791" (linha 1) + "O" (linha 2) = "PP250820.1706.e9791O" ✅
-
-CENÁRIO QUEBRADO COMUM:
-Se você vê:
-"PP250820.1706." (linha 1)
-"e9791" (linha 2)
-RESULTADO: "PP250820.1706.e9791" ✅
-
-🔵 PARA M-PESA:
-Se quebrado: "CHK8H3PYK" + "PE" = "CHK8H3PYKPE"
-
-⚠️ NÃO CORTE E NÃO ALTERE MAIÚSCULAS/MINÚSCULAS! Capture EXATAMENTE como aparece!
-
-Para E-Mola (PADRÃO: XX######.####.##### com 5+ chars na terceira parte):
-{
-  "referencia": "PP250820.1706.e9791O",
-  "valor": "375",
-  "encontrado": true,
-  "tipo": "emola"
-}
-
-Para M-Pesa (sem pontos e CASE ORIGINAL):
-{
-  "referencia": "CHK8H3PYKpe",
-  "valor": "125",
-  "encontrado": true,
-  "tipo": "mpesa"
-}`;
-
-        resposta = await this.openai.chat.completions.create({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: promptAlternativo },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:image/jpeg;base64,${imagemBase64}`,
-                    detail: "high"
-                  }
-                }
-              ]
-            }
-          ],
-          temperature: 0.7, // Muito mais criativo na segunda tentativa
-          max_tokens: 500
-        });
-
-        console.log(`   🔍 ATACADO: Segunda tentativa - Resposta da IA: ${resposta.choices[0].message.content}`);
-        resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
-      }
-
-      // PROCESSAR RESULTADO
-      if (resultado && resultado.encontrado) {
-        const comprovante = {
-          referencia: this.limparReferencia(resultado.referencia),
-          valor: this.limparValor(resultado.valor),
-          fonte: 'imagem_melhorada',
-          confianca: resultado.confianca || 'media',
-          tipo: resultado.tipo || 'desconhecido'
-        };
-        
-        console.log(`   ✅ ATACADO: Dados extraídos com sucesso: ${comprovante.referencia} - ${comprovante.valor}MT (${comprovante.tipo}, confiança: ${comprovante.confianca})`);
-        
-        // VALIDAÇÃO RIGOROSA PARA E-MOLA
-        if (comprovante.tipo === 'emola') {
-          const pontosCount = (comprovante.referencia.match(/\./g) || []).length;
-          const partes = comprovante.referencia.split('.');
-          
-          console.log(`   🔍 ATACADO: Validando E-Mola: ${comprovante.referencia}`);
-          console.log(`   📊 ATACADO: Partes encontradas: ${JSON.stringify(partes)}`);
-          
-          // Validar estrutura básica
-          if (pontosCount !== 2) {
-            console.log(`   ❌ ATACADO: ERRO - E-Mola deve ter exatamente 2 pontos! Encontrados: ${pontosCount}`);
-          }
-          
-          if (partes.length !== 3) {
-            console.log(`   ❌ ATACADO: ERRO - E-Mola deve ter 3 partes! Encontradas: ${partes.length}`);
-          } else {
-            // Validar padrão específico: PP + 6 dígitos + 4 dígitos + 5+ caracteres
-            const parte1 = partes[0]; // PP250820
-            const parte2 = partes[1]; // 1706
-            const parte3 = partes[2]; // e9791O
-            
-            const prefixoOK = /^[A-Z]{2}/.test(parte1); // 2 letras no início
-            const dataOK = /^\d{6}$/.test(parte1.substring(2)); // 6 dígitos após as letras
-            const horaOK = /^\d{4}$/.test(parte2); // 4 dígitos
-            const codigoOK = parte3.length >= 5; // Mínimo 5 caracteres
-            
-            console.log(`   🔍 ATACADO: Prefixo (2 letras): ${prefixoOK} - "${parte1.substring(0,2)}"`);
-            console.log(`   🔍 ATACADO: Data (6 dígitos): ${dataOK} - "${parte1.substring(2)}"`);
-            console.log(`   🔍 ATACADO: Hora (4 dígitos): ${horaOK} - "${parte2}"`);
-            console.log(`   🔍 ATACADO: Código (5+ chars): ${codigoOK} - "${parte3}" (${parte3.length} chars)`);
-            
-            if (prefixoOK && dataOK && horaOK && codigoOK) {
-              console.log(`   ✅ ATACADO: E-Mola com padrão CORRETO!`);
-            } else {
-              console.log(`   ⚠️ ATACADO: E-Mola pode estar INCOMPLETO!`);
-              if (!codigoOK) {
-                console.log(`   🚨 ATACADO: Terceira parte muito curta (${parte3.length} chars) - pode ter sido cortada!`);
-              }
-            }
-          }
-        }
-        // Continuar com o processamento normal...
-        if (temLegendaValida) {
-          const numeroLegenda = this.extrairNumeroDeLegenda(legendaImagem);
-          
-          if (numeroLegenda && numeroLegenda.multiplos) {
-            return {
-              sucesso: false,
-              tipo: 'multiplos_numeros_nao_permitido',
-              numeros: numeroLegenda.numeros,
-              mensagem: 'Sistema atacado aceita apenas UM número por vez.'
-            };
-          }
-          
-          if (numeroLegenda) {
-            const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
-            
-            if (megasCalculados) {
-              const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLegenda}`;
-              console.log(`   ✅ ATACADO: PEDIDO COMPLETO (IMAGEM + LEGENDA): ${resultado}`);
-              return { 
-                sucesso: true, 
-                dadosCompletos: resultado,
-                tipo: 'numero_processado',
-                numero: numeroLegenda,
-                megas: megasCalculados.megas,
-                valorPago: comprovante.valor,
-                fonte: 'imagem_com_legenda_melhorada'
-              };
-            } else {
-              return {
-                sucesso: false,
-                tipo: 'valor_nao_encontrado_na_tabela',
-                valor: comprovante.valor,
-                mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis`
-              };
-            }
-          }
-        }
-        
-        // Processar comprovante sem número
-        const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
-        
-        if (megasCalculados) {
-          await this.processarComprovante(comprovante, remetente, timestamp);
-          
-          return { 
-            sucesso: true, 
-            tipo: 'comprovante_imagem_recebido',
-            referencia: comprovante.referencia,
-            valor: comprovante.valor,
-            megas: megasCalculados.megas,
-            mensagem: `✅ *COMPROVANTE PROCESSADO!*\n📋 *REF:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n📊 *MEGAS:* ${megasCalculados.megas}\n\n📱 Agora envie UM número para receber os megas.`
-          };
-        } else {
-          return {
-            sucesso: false,
-            tipo: 'valor_nao_encontrado_na_tabela',
-            valor: comprovante.valor,
-            mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis`
-          };
-        }
-        
-      } else {
-        console.log(`   ❌ ATACADO: Ambas as tentativas falharam em extrair dados da imagem`);
-        return {
-          sucesso: false,
-          tipo: 'imagem_nao_reconhecida_melhorada',
-          mensagem: `❌ *NÃO CONSEGUI LER A IMAGEM!*\n\n🔍 *Tentei 2 vezes com IA avançada*\n\n📸 *Possíveis problemas:*\n• Imagem muito escura/clara/borrada\n• Texto muito pequeno ou cortado\n• Comprovante incompleto\n• Formato não suportado\n\n💡 *Soluções:*\n• Tire uma foto mais clara e focada\n• Certifique-se que TODO o comprovante está visível\n• Aumente o brilho se estiver escuro\n• Ou envie o comprovante como texto copiado`
-        };
-      }
-      
-    } catch (error) {
-      console.error('❌ ATACADO: Erro ao processar imagem melhorada:', error);
-      return {
-        sucesso: false,
-        tipo: 'erro_processamento_imagem',
-        mensagem: `❌ *ERRO TÉCNICO NA IA!*\n\n🔧 *Detalhes:* ${error.message}\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto\n• Contate o suporte se persistir`
-      };
-    }
-  }
-
-  // === EXTRAÇÃO DE JSON MELHORADA ===
-  extrairJSONMelhorado(texto) {
-    console.log(`   🔍 ATACADO: Extraindo JSON melhorado de: ${texto}`);
-    
-    try {
-      // Tentativa 1: JSON direto
-      return JSON.parse(texto);
-    } catch (e) {
-      try {
-        // Tentativa 2: Remover markdown
-        let limpo = texto.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        return JSON.parse(limpo);
-      } catch (e2) {
-        try {
-          // Tentativa 3: Encontrar JSON no texto
-          const match = texto.match(/\{[\s\S]*\}/);
-          if (match) {
-            return JSON.parse(match[0]);
-          }
-        } catch (e3) {
-          try {
-            // Tentativa 4: Extrair manualmente usando regex
-            const refMatch = texto.match(/["']?referencia["']?\s*:\s*["']([^"']+)["']/i);
-            const valorMatch = texto.match(/["']?valor["']?\s*:\s*["']?([^"',}]+)["']?/i);
-            const encontradoMatch = texto.match(/["']?encontrado["']?\s*:\s*(true|false)/i);
-            const tipoMatch = texto.match(/["']?tipo["']?\s*:\s*["']([^"']+)["']/i);
-            
-            if (refMatch && valorMatch) {
-              return {
-                referencia: refMatch[1].trim(),
-                valor: valorMatch[1].trim(),
-                encontrado: encontradoMatch ? encontradoMatch[1] === 'true' : true,
-                tipo: tipoMatch ? tipoMatch[1] : 'desconhecido'
-              };
-            }
-          } catch (e4) {
-            console.error('❌ ATACADO: Todas as tentativas de parsing falharam:', e4);
-          }
-        }
-      }
-    }
-    
-    return { encontrado: false, motivo: 'parsing_failed' };
-  }
-
-  // === LIMPEZA DE REFERÊNCIA MELHORADA - MANTÉM CASE ORIGINAL ===
-  limparReferencia(referencia) {
-    if (!referencia) return '';
-    
-    let refLimpa = referencia.toString().trim();
-    
-    // DETECTAR se é E-Mola (contém pontos) ou M-Pesa
-    const eEMola = refLimpa.includes('.');
-    
-    if (eEMola) {
-      // PARA E-MOLA: Manter pontos E CASE ORIGINAL
-      refLimpa = refLimpa
-        .replace(/\s+/g, '') // Remove apenas espaços e quebras de linha
-        .replace(/[^\w.]/g, ''); // Remove caracteres especiais MAS MANTÉM pontos
-        // ❌ REMOVIDO: .toLowerCase() - MANTÉM CASE ORIGINAL!
-      
-      console.log(`   🟡 ATACADO: Referência E-Mola limpa (CASE ORIGINAL): "${referencia}" -> "${refLimpa}"`);
-    } else {
-      // PARA M-PESA: Remover caracteres especiais MAS MANTER CASE ORIGINAL
-      refLimpa = refLimpa
-        .replace(/\s+/g, '') // Remove espaços e quebras de linha
-        .replace(/[^\w]/g, ''); // Remove caracteres não alfanuméricos (incluindo pontos)
-        // ❌ REMOVIDO: .toUpperCase() - MANTÉM CASE ORIGINAL!
-      
-      console.log(`   🔵 ATACADO: Referência M-Pesa limpa (CASE ORIGINAL): "${referencia}" -> "${refLimpa}"`);
-    }
-    
-    return refLimpa;
-  }
-
-  // === FUNÇÃO AUXILIAR PARA LIMPEZA DE NÚMEROS (mantida do código original) ===
-  limparNumero(numero) {
-    if (!numero || typeof numero !== 'string') {
-      return numero;
-    }
-    
-    let numeroLimpo = numero
-      .replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '')
-      .replace(/^\+258\s*/, '')
-      .replace(/\s+/g, '')
-      .trim();
-    
-    if (/^8[0-9]{8}$/.test(numeroLimpo)) {
-      return numeroLimpo;
-    }
-    
-    return numero;
-  }
-
-  // === EXTRAIR NÚMERO DE LEGENDA (mantida do código original) ===
-  extrairNumeroDeLegenda(legendaImagem) {
-    console.log(`   🔍 ATACADO: Analisando legenda da imagem: "${legendaImagem}"`);
-    
-    if (!legendaImagem || typeof legendaImagem !== 'string' || legendaImagem.trim().length === 0) {
-      console.log(`   ❌ ATACADO: Legenda vazia ou inválida`);
-      return null;
-    }
-    
-    let legendaLimpa = legendaImagem
-      .replace(/[📱📲📞☎️🔢💳🎯🤖✅❌⏳💰📊💵📋⚡]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    const regexNumeros = /(?:\+258\s*)?8[0-9]{8}/g;
-    const numerosEncontrados = legendaLimpa.match(regexNumeros) || [];
-    
-    if (numerosEncontrados.length === 0) {
-      return null;
-    }
-    
-    if (numerosEncontrados.length === 1) {
-      const numero = this.limparNumero(numerosEncontrados[0]);
-      console.log(`   ✅ ATACADO: Número único na legenda aceito: ${numero}`);
-      return numero;
-    }
-    
-    const numerosValidos = [];
-    
-    for (const numero of numerosEncontrados) {
-      const posicao = legendaLimpa.indexOf(numero);
-      const contextoBefore = legendaLimpa.substring(Math.max(0, posicao - 30), posicao).toLowerCase();
-      const contextoAfter = legendaLimpa.substring(posicao + numero.length, posicao + numero.length + 30).toLowerCase();
-      const contextoCompleto = (contextoBefore + contextoAfter).toLowerCase();
-      
-      const indicadoresPagamento = [
-        'para o', 'para número', 'beneficiário', 'destinatario',
-        'taxa foi', 'transferiste'
-      ];
-      
-      const eNumeroPagamento = indicadoresPagamento.some(indicador => 
-        contextoCompleto.includes(indicador)
-      );
-      
-      if (!eNumeroPagamento) {
-        const numeroLimpo = this.limparNumero(numero);
-        numerosValidos.push(numeroLimpo);
-      }
-    }
-    
-    if (numerosValidos.length === 1) {
-      return numerosValidos[0];
-    } else if (numerosValidos.length > 1) {
-      return { multiplos: true, numeros: numerosValidos };
-    }
-    
-    return null;
-  }
-
-  // === CALCULAR MEGAS POR VALOR (mantida do código original) ===
-  calcularMegasPorValor(valorPago, configGrupo) {
-    console.log(`   🧮 ATACADO: Calculando megas para valor ${valorPago}MT...`);
-    
-    if (!configGrupo || !configGrupo.tabela) {
-      console.log(`   ❌ ATACADO: Tabela do grupo não disponível`);
-      return null;
-    }
-    
-    const precos = this.extrairPrecosTabela(configGrupo.tabela);
-    
-    if (precos.length === 0) {
-      console.log(`   ❌ ATACADO: Nenhum preço encontrado na tabela`);
-      return null;
-    }
-    
-    const valorNumerico = parseFloat(valorPago);
-    
-    const precoExato = precos.find(p => p.preco === valorNumerico);
-    if (precoExato) {
-      console.log(`   ✅ ATACADO: Preço exato encontrado: ${precoExato.descricao}`);
-      return {
-        megas: precoExato.descricao,
-        quantidade: precoExato.quantidade,
-        tipo: precoExato.tipo,
-        preco: precoExato.preco
-      };
-    }
-    
-    const tolerancia = 5;
-    const precoProximo = precos.find(p => 
-      Math.abs(p.preco - valorNumerico) <= tolerancia
-    );
-    
-    if (precoProximo) {
-      console.log(`   ⚡ ATACADO: Preço aproximado encontrado: ${precoProximo.descricao}`);
-      return {
-        megas: precoProximo.descricao,
-        quantidade: precoProximo.quantidade,
-        tipo: precoProximo.tipo,
-        preco: precoProximo.preco,
-        aproximado: true,
-        diferenca: Math.abs(precoProximo.preco - valorNumerico)
-      };
-    }
-    
-    console.log(`   ❌ ATACADO: Nenhum pacote encontrado para valor ${valorPago}MT`);
-    return null;
-  }
-
-  // === EXTRAIR PREÇOS TABELA (mantida do código original) ===
-  extrairPrecosTabela(tabelaTexto) {
-    console.log(`   📋 Extraindo preços da tabela atacado...`);
-    
-    const precos = [];
-    const linhas = tabelaTexto.split('\n');
-    
-    for (const linha of linhas) {
-      const padroes = [
-        /(\d+)GB➜(\d+)MT/gi,
-        /📱\s*(\d+)GB\s*➜\s*(\d+)MT/gi,
-        /(\d+)GB\s*[-–—]\s*(\d+)MT/gi,
-        /📞\s*(\d+)\s*💫\s*(\d+)\s*MT/gi,
-        /(\d+)💫\s*(\d+)MT/gi
+        new RegExp(`\\s*${numero}\\s*$`, 'gi'),
+        new RegExp(`^\\s*${numero}\\s*`, 'gi')
       ];
       
       for (const padrao of padroes) {
-        let match;
-        while ((match = padrao.exec(linha)) !== null) {
-          const quantidade = parseInt(match[1]);
-          const preco = parseInt(match[2]);
-          
-          let tipo = 'gb';
-          let descricao = '';
-          
-          if (linha.includes('💫')) {
-            tipo = 'saldo';
-            descricao = `${quantidade} Saldo`;
-          } else if (linha.includes('GB')) {
-            tipo = 'gb';
-            descricao = `${quantidade}GB`;
-          }
-          
-          precos.push({
-            quantidade: quantidade,
-            preco: preco,
-            descricao: descricao,
-            tipo: tipo,
-            original: linha.trim()
-          });
+        textoComprovante = textoComprovante.replace(padrao, ' ');
+      }
+    }
+    
+    textoComprovante = textoComprovante.replace(/\s+/g, ' ').trim();
+    
+    console.log(`   📄 ATACADO: Texto do comprovante: ${textoComprovante.substring(0, 50)}...`);
+    console.log(`   📱 ATACADO: Número extraído: ${numero || 'nenhum'}`);
+    
+    return {
+      textoComprovante: textoComprovante,
+      numero: numero
+    };
+  }
+
+  // === BUSCAR COMPROVANTE RECENTE NO HISTÓRICO (CÓDIGO ORIGINAL) ===
+  async buscarComprovanteRecenteNoHistorico(remetente, timestamp) {
+    console.log(`   🔍 ATACADO: Buscando comprovante recente no histórico...`);
+
+    const mensagensRecentes = this.historicoMensagens.filter(msg => {
+      const timeDiff = timestamp - msg.timestamp;
+      return msg.remetente === remetente && timeDiff <= 1800000;
+    });
+
+    if (mensagensRecentes.length === 0) {
+      console.log(`   ❌ ATACADO: Nenhuma mensagem recente de ${remetente} nos últimos 30 minutos`);
+      return null;
+    }
+
+    console.log(`   📊 ATACADO: Analisando ${mensagensRecentes.length} mensagens dos últimos 30 minutos...`);
+
+    for (let msg of mensagensRecentes.reverse()) {
+      if (msg.tipo === 'texto') {
+        console.log(`   🔍 ATACADO: Verificando mensagem: "${msg.mensagem.substring(0, 50)}..."`);
+        
+        const comprovante = await this.analisarComprovante(msg.mensagem);
+        if (comprovante) {
+          const tempoDecorrido = Math.floor((timestamp - msg.timestamp) / 60000);
+          console.log(`   ✅ ATACADO: Comprovante encontrado no histórico: ${comprovante.referencia} - ${comprovante.valor}MT (${tempoDecorrido} min atrás)`);
+          return comprovante;
         }
       }
     }
-    
-    const precosUnicos = precos.filter((preco, index, self) => 
-      index === self.findIndex(p => p.preco === preco.preco && p.quantidade === preco.quantidade)
-    ).sort((a, b) => a.preco - b.preco);
-    
-    return precosUnicos;
+
+    console.log(`   ❌ ATACADO: Comprovante não encontrado no histórico`);
+    return null;
   }
 
-  // === LIMPAR VALOR MONETÁRIO (mantida do código original) ===
-  limparValor(valor) {
-    if (!valor) return '0';
-    
-    let valorStr = valor.toString();
-    valorStr = valorStr.replace(/\s*(MT|mt|meticais?|metical)\s*/gi, '');
-    valorStr = valorStr.trim();
-    
-    if (valorStr.includes(',') && valorStr.includes('.')) {
-      valorStr = valorStr.replace(/,/g, '');
-    } else if (valorStr.includes(',')) {
-      const parts = valorStr.split(',');
-      if (parts.length === 2 && parts[1].length <= 2) {
-        valorStr = valorStr.replace(',', '.');
-      } else {
-        valorStr = valorStr.replace(/,/g, '');
-      }
-    }
-    
-    const match = valorStr.match(/\d+\.?\d*/);
-    if (match) {
-      const numero = parseFloat(match[0]);
-      return numero.toString();
-    }
-    
-    const digitos = valorStr.replace(/[^\d]/g, '');
-    return digitos || '0';
-  }
-
-  // === RESTO DAS FUNÇÕES MANTIDAS DO CÓDIGO ORIGINAL ===
+  // === FUNÇÃO PRINCIPAL PARA O BOT (CÓDIGO ORIGINAL) ===
   async processarMensagemBot(mensagem, remetente, tipoMensagem = 'texto', configGrupo = null, legendaImagem = null) {
     const timestamp = Date.now();
     
     if (tipoMensagem === 'imagem') {
-      console.log(`\n🧠 IA ATACADO MELHORADA processando IMAGEM de ${remetente}`);
+      console.log(`\n🧠 IA ATACADO processando IMAGEM de ${remetente}`);
       if (legendaImagem && legendaImagem.trim().length > 0) {
         console.log(`📝 Com legenda: "${legendaImagem.substring(0, 100)}..."`);
+      } else {
+        console.log(`📝 Sem legenda ou legenda vazia`);
       }
     } else {
       console.log(`\n🧠 IA ATACADO processando TEXTO de ${remetente}: ${mensagem.substring(0, 50)}...`);
@@ -1535,11 +425,10 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
     }
   }
 
-  // === PROCESSAR TEXTO COMPLETO (RESTAURADO E MELHORADO) ===
+  // === PROCESSAR TEXTO (CÓDIGO ORIGINAL) ===
   async processarTexto(mensagem, remetente, timestamp, configGrupo = null) {
     console.log(`   📝 ATACADO: Analisando mensagem: "${mensagem}"`);
     
-    // VERIFICAR se é apenas um número
     const mensagemLimpa = mensagem.trim();
     const apenasNumeroRegex = /^(?:\+258\s*)?8[0-9]{8}$/;
     
@@ -1549,10 +438,8 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
       return await this.processarNumero(numeroLimpo, remetente, timestamp, configGrupo);
     }
     
-    // SEPARAR comprovante e número
     const resultado = this.separarComprovanteENumero(mensagem);
     
-    // Se encontrou múltiplos números, retornar erro
     if (resultado.erro === 'multiplos_numeros') {
       console.log(`   ❌ ATACADO: Múltiplos números não permitidos`);
       return {
@@ -1565,19 +452,16 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
     
     const { textoComprovante, numero } = resultado;
     
-    // 1. Verificar se é um comprovante
     let comprovante = null;
     if (textoComprovante && textoComprovante.length > 10) {
       comprovante = await this.analisarComprovante(textoComprovante);
     }
     
-    // 2. Se encontrou comprovante E número na mesma mensagem
     if (comprovante && numero) {
       console.log(`   🎯 ATACADO: COMPROVANTE + NÚMERO na mesma mensagem!`);
       console.log(`   💰 ATACADO: Comprovante: ${comprovante.referencia} - ${comprovante.valor}MT`);
       console.log(`   📱 ATACADO: Número: ${numero}`);
       
-      // CALCULAR MEGAS AUTOMATICAMENTE
       const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
       
       if (megasCalculados) {
@@ -1603,18 +487,15 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
       }
     }
     
-    // 3. Se encontrou apenas número (sem comprovante)
     if (numero && !comprovante) {
       const numeroLimpo = this.limparNumero(numero);
       console.log(`   📱 ATACADO: Apenas número detectado: ${numeroLimpo} (original: ${numero})`);
       return await this.processarNumero(numeroLimpo, remetente, timestamp, configGrupo);
     }
     
-    // 4. Se encontrou apenas comprovante (sem número)
     if (comprovante && !numero) {
       console.log(`   💰 ATACADO: Apenas comprovante detectado: ${comprovante.referencia} - ${comprovante.valor}MT`);
       
-      // VERIFICAR se o valor existe na tabela
       const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
       
       if (megasCalculados) {
@@ -1626,7 +507,7 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
           referencia: comprovante.referencia,
           valor: comprovante.valor,
           megas: megasCalculados.megas,
-          mensagem: `✅ *COMPROVANTE PROCESSADO!*\n📋 *REF:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n📊 *MEGAS:* ${megasCalculados.megas}\n\n📱 Agora envie UM número para receber os megas.`
+          mensagem: `Comprovante recebido! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
         };
       } else {
         return {
@@ -1638,7 +519,6 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
       }
     }
     
-    // 5. Não reconheceu
     console.log(`   ❓ ATACADO: Mensagem não reconhecida como comprovante ou número`);
     return { 
       sucesso: false, 
@@ -1647,85 +527,259 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
     };
   }
 
-, 'gi'),
-        new RegExp(`^\\s*${numero}\\s*`, 'gi')
-      ];
+  // === PROCESSAR IMAGEM (OTIMIZADO) ===
+  async processarImagem(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
+    console.log(`   📸 ATACADO: Processando imagem de ${remetente}`);
+    
+    // VALIDAÇÃO DA IMAGEM
+    const validacao = this.validarImagem(imagemBase64);
+    if (!validacao.valida) {
+      console.log(`   ❌ ATACADO: Imagem inválida: ${validacao.erro}`);
       
-      for (const padrao of padroes) {
-        textoComprovante = textoComprovante.replace(padrao, ' ');
-      }
+      const mensagensErro = {
+        'imagem_nao_fornecida': `❌ *IMAGEM NÃO FORNECIDA!*\n\n📸 *O que aconteceu:*\n• Nenhuma imagem foi enviada\n• Erro no sistema de envio\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto`,
+        'imagem_muito_pequena': `❌ *IMAGEM MUITO PEQUENA!*\n\n📸 *O que aconteceu:*\n• A imagem está corrompida ou muito pequena\n• Formato não suportado\n\n💡 *Soluções:*\n• Tire uma nova foto do comprovante\n• Certifique-se que a imagem está nítida\n• Ou envie o comprovante como texto`,
+        'imagem_muito_grande': `❌ *IMAGEM MUITO GRANDE!*\n\n📸 *O que aconteceu:*\n• A imagem excede o tamanho máximo (10MB)\n• Pode estar em resolução muito alta\n\n💡 *Soluções:*\n• Reduza a qualidade da foto\n• Ou envie o comprovante como texto`,
+        'formato_base64_invalido': `❌ *FORMATO DE IMAGEM INVÁLIDO!*\n\n📸 *O que aconteceu:*\n• Formato de imagem não suportado\n• Imagem corrompida ou inválida\n\n💡 *Soluções:*\n• Use formato JPEG, PNG ou JPG\n• Tire uma nova foto do comprovante\n• Ou envie o comprovante como texto`,
+        'caracteres_invalidos': `❌ *IMAGEM CORROMPIDA!*\n\n📸 *O que aconteceu:*\n• A imagem contém caracteres inválidos\n• Pode estar corrompida durante o envio\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto`
+      };
+      
+      return {
+        sucesso: false,
+        tipo: 'imagem_invalida',
+        erro: validacao.erro,
+        mensagem: mensagensErro[validacao.erro] || `❌ *IMAGEM INVÁLIDA!*\n\n🔧 *Erro técnico:* ${validacao.erro}`
+      };
     }
     
-    textoComprovante = textoComprovante.replace(/\s+/g, ' ').trim();
+    // Validação melhorada da legenda
+    const temLegendaValida = legendaImagem && 
+                            typeof legendaImagem === 'string' && 
+                            legendaImagem.trim().length > 0 &&
+                            legendaImagem.trim() !== '';
     
-    console.log(`   📄 ATACADO: Texto do comprovante: ${textoComprovante.substring(0, 50)}...`);
-    console.log(`   📱 ATACADO: Número extraído: ${numero || 'nenhum'}`);
-    
-    return {
-      textoComprovante: textoComprovante,
-      numero: numero
-    };
-  }
-
-  // === ANALISAR COMPROVANTE MELHORADO ===
-  async analisarComprovante(mensagem) {
-    const temConfirmado = /^confirmado/i.test(mensagem.trim());
-    const temID = /^id\s/i.test(mensagem.trim());
-    
-    if (!temConfirmado && !temID) {
-      return null;
+    if (temLegendaValida) {
+      console.log(`   📝 ATACADO: Legenda detectada (${legendaImagem.trim().length} chars): "${legendaImagem.trim()}"`);
+    } else {
+      console.log(`   📝 ATACADO: Sem legenda válida`);
     }
-
+    
     const prompt = `
-Analisa esta mensagem de comprovante de pagamento M-Pesa ou E-Mola:
+Analisa esta imagem de comprovante de pagamento M-Pesa ou E-Mola de Moçambique.
 
-"${mensagem}"
+Procura por:
+1. Referência da transação (exemplos: CGC4GQ17W84, PP250712.2035.u31398, etc.)
+2. Valor transferido (em MT - Meticais)
 
-⚠️ INSTRUÇÕES ESPECÍFICAS:
-1. REFERÊNCIA M-Pesa: códigos como "CHL2H3Z94EU" (manter case original)
-2. REFERÊNCIA E-Mola: formato "PP######.####.#####" (manter pontos e case)
-3. VALOR: extrair valor transferido (ignorar taxas de 0.00MT)
-4. MANTER maiúsculas e minúsculas EXATAMENTE como aparecem
+ATENÇÃO: 
+- Procura por palavras como "Confirmado", "ID da transacao", "Transferiste"
+- O valor pode estar em formato "100.00MT", "100MT", "100,00MT"
+- A referência é geralmente um código alfanumérico
+- Se não conseguires ler, responde APENAS: {"encontrado": false}
 
-Responde APENAS no formato JSON:
+Responde APENAS no formato JSON válido:
 {
-  "referencia": "CHL2H3Z94EU",
-  "valor": "125",
+  "referencia": "CGC4GQ17W84",
+  "valor": "210",
   "encontrado": true
 }
 
-Se não conseguires extrair, responde:
+Se não conseguires ler a imagem ou extrair os dados:
 {"encontrado": false}
 `;
 
     try {
+      console.log(`   🤖 ATACADO: Enviando imagem para análise da IA...`);
+      
       const resposta = await this.openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: "Você é especialista em analisar comprovantes M-Pesa e E-Mola moçambicanos. Mantenha case original das referências." },
-          { role: "user", content: prompt }
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${imagemBase64}`,
+                  detail: "high"
+                }
+              }
+            ]
+          }
         ],
         temperature: 0.1,
-        max_tokens: 300
+        max_tokens: 300,
+        timeout: 30000 // 30 segundos timeout
       });
 
-      const resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
+      if (!resposta || !resposta.choices || !resposta.choices[0] || !resposta.choices[0].message) {
+        throw new Error('Resposta inválida da IA');
+      }
+
+      const conteudoIA = resposta.choices[0].message.content;
+      console.log(`   🔍 ATACADO: Resposta da IA para imagem: ${conteudoIA}`);
       
-      if (resultado.encontrado) {
+      if (!conteudoIA || typeof conteudoIA !== 'string') {
+        throw new Error('Conteúdo da IA inválido');
+      }
+      
+      const resultado = this.extrairJSON(conteudoIA);
+      console.log(`   ✅ ATACADO: JSON extraído da imagem:`, resultado);
+      
+      // VALIDAÇÃO DO RESULTADO
+      if (!resultado || typeof resultado !== 'object') {
+        throw new Error('Resultado da IA não é um objeto válido');
+      }
+      
+      if (resultado.encontrado === false) {
+        console.log(`   ❌ ATACADO: IA não conseguiu extrair dados da imagem`);
         return {
-          referencia: resultado.referencia, // Não limpar - manter original
-          valor: this.limparValor(resultado.valor),
-          fonte: 'texto'
+          sucesso: false,
+          tipo: 'imagem_nao_reconhecida',
+          mensagem: `❌ *NÃO CONSEGUI LER A IMAGEM!*\n\n📸 *Possíveis problemas:*\n• Imagem muito escura ou clara\n• Texto muito pequeno ou borrado\n• Comprovante cortado ou incompleto\n• Formato de imagem não suportado\n\n💡 *Soluções:*\n• Tire uma foto mais clara e focada\n• Certifique-se que todo o comprovante está visível\n• Ou envie o comprovante como texto`
         };
       }
-    } catch (parseError) {
-      console.error('❌ ATACADO: Erro ao analisar comprovante texto:', parseError);
+      
+      if (!resultado.referencia || !resultado.valor) {
+        throw new Error('Dados incompletos da IA - falta referência ou valor');
+      }
+      
+      const comprovante = {
+        referencia: resultado.referencia.toString().trim(),
+        valor: this.limparValor(resultado.valor.toString()),
+        fonte: 'imagem'
+      };
+      
+      // VALIDAÇÃO FINAL DOS DADOS
+      if (!comprovante.referencia || comprovante.referencia.length < 3) {
+        throw new Error('Referência muito curta ou inválida');
+      }
+      
+      if (!comprovante.valor || parseFloat(comprovante.valor) <= 0) {
+        throw new Error('Valor inválido ou zero');
+      }
+      
+      console.log(`   ✅ ATACADO: Dados extraídos da imagem: ${comprovante.referencia} - ${comprovante.valor}MT`);
+      
+      // VERIFICAR SE HÁ LEGENDA COM NÚMERO
+      if (temLegendaValida) {
+        console.log(`   🔍 ATACADO: ANALISANDO LEGENDA DA IMAGEM...`);
+        
+        // Usar função específica para legenda
+        const numeroLegenda = this.extrairNumeroDeLegenda(legendaImagem);
+        
+        // Se encontrou múltiplos números na legenda, retornar erro
+        if (numeroLegenda && numeroLegenda.multiplos) {
+          console.log(`   ❌ ATACADO: Múltiplos números na legenda não permitidos`);
+          return {
+            sucesso: false,
+            tipo: 'multiplos_numeros_nao_permitido',
+            numeros: numeroLegenda.numeros,
+            mensagem: '❌ *MÚLTIPLOS NÚMEROS DETECTADOS!*\n\n📱 *Números encontrados:* ' + numeroLegenda.numeros.join(', ') + '\n\n💡 *Sistema atacado aceita apenas UM número por vez.*\n\n📝 *Solução:* Envie apenas o número que vai receber os megas.'
+          };
+        }
+        
+        if (numeroLegenda) {
+          console.log(`   🎯 ATACADO: IMAGEM + NÚMERO NA LEGENDA DETECTADOS!`);
+          console.log(`   💰 ATACADO: Comprovante da imagem: ${comprovante.referencia} - ${comprovante.valor}MT`);
+          console.log(`   📱 ATACADO: Número da legenda: ${numeroLegenda}`);
+          
+          // CALCULAR MEGAS AUTOMATICAMENTE
+          const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+          
+          if (megasCalculados) {
+            const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLegenda}`;
+            console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${resultado}`);
+            return { 
+              sucesso: true, 
+              dadosCompletos: resultado,
+              tipo: 'numero_processado',
+              numero: numeroLegenda,
+              megas: megasCalculados.megas,
+              valorPago: comprovante.valor,
+              fonte: 'imagem_com_legenda'
+            };
+          } else {
+            console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
+            return {
+              sucesso: false,
+              tipo: 'valor_nao_encontrado_na_tabela',
+              valor: comprovante.valor,
+              mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
+            };
+          }
+        } else {
+          console.log(`   ❌ ATACADO: Nenhum número válido encontrado na legenda`);
+        }
+      } else {
+        console.log(`   ⚠️ ATACADO: Legenda não disponível ou vazia`);
+      }
+      
+      // Sem número na legenda - processar comprovante normalmente
+      // VERIFICAR se o valor existe na tabela
+      const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+      
+      if (megasCalculados) {
+        await this.processarComprovante(comprovante, remetente, timestamp);
+        
+        return { 
+          sucesso: true, 
+          tipo: 'comprovante_imagem_recebido',
+          referencia: comprovante.referencia,
+          valor: comprovante.valor,
+          megas: megasCalculados.megas,
+          mensagem: `✅ *COMPROVANTE PROCESSADO!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n📱 *MEGAS:* ${megasCalculados.megas}\n\n📱 *Agora envie UM número que vai receber os megas.*`
+        };
+      } else {
+        return {
+          sucesso: false,
+          tipo: 'valor_nao_encontrado_na_tabela',
+          valor: comprovante.valor,
+          mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
+        };
+      }
+      
+    } catch (error) {
+      console.error('❌ ATACADO: Erro ao processar imagem:', error);
+      
+      // TRATAMENTO ESPECÍFICO DE ERROS
+      if (error.message.includes('timeout') || error.message.includes('timeout')) {
+        return {
+          sucesso: false,
+          tipo: 'timeout_ia',
+          mensagem: `⏰ *TEMPO ESGOTADO!*\n\n🤖 *O que aconteceu:*\n• A IA demorou muito para analisar a imagem\n• Possível problema de conexão\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto\n• Verifique sua conexão com a internet`
+        };
+      }
+      
+      if (error.message.includes('rate limit') || error.message.includes('quota')) {
+        return {
+          sucesso: false,
+          tipo: 'limite_ia_excedido',
+          mensagem: `🚫 *LIMITE DE USO EXCEDIDO!*\n\n🤖 *O que aconteceu:*\n• Limite de uso da IA foi atingido\n• Muitas imagens processadas simultaneamente\n\n💡 *Soluções:*\n• Aguarde alguns minutos e tente novamente\n• Ou envie o comprovante como texto\n• Entre em contato com o administrador`
+        };
+      }
+      
+      if (error.message.includes('invalid image') || error.message.includes('format')) {
+        return {
+          sucesso: false,
+          tipo: 'formato_imagem_invalido',
+          mensagem: `❌ *FORMATO DE IMAGEM INVÁLIDO!*\n\n📸 *O que aconteceu:*\n• Formato de imagem não suportado\n• Imagem corrompida ou inválida\n\n💡 *Soluções:*\n• Use formato JPEG, PNG ou JPG\n• Tire uma nova foto do comprovante\n• Ou envie o comprovante como texto`
+        };
+      }
+      
+      // ERRO GENÉRICO
+      return {
+        sucesso: false,
+        tipo: 'erro_processamento_imagem',
+        mensagem: `❌ *ERRO AO PROCESSAR IMAGEM!*\n\n📸 *O que aconteceu:*\n• Erro técnico ao analisar a imagem\n• Problema de conexão com a IA\n• Erro interno do sistema\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto\n• Verifique se a imagem não está corrompida\n\n🔧 *Erro técnico:* ${error.message}`
+      };
     }
-
-    return null;
   }
 
-  // === PROCESSAR NÚMERO (RESTAURADO) ===
+
+
+  // === PROCESSAR NÚMERO (CÓDIGO ORIGINAL) ===
   async processarNumero(numero, remetente, timestamp, configGrupo = null) {
     console.log(`   🔢 ATACADO: Processando número ${numero} para ${remetente}`);
     
@@ -1750,6 +804,7 @@ Se não conseguires extrair, responde:
           origem: 'comprovante_em_aberto'
         };
       } else {
+        console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
         return {
           sucesso: false,
           tipo: 'valor_nao_encontrado_na_tabela',
@@ -1796,44 +851,116 @@ Se não conseguires extrair, responde:
     };
   }
 
-  // === BUSCAR COMPROVANTE RECENTE NO HISTÓRICO (RESTAURADO) ===
-  async buscarComprovanteRecenteNoHistorico(remetente, timestamp) {
-    console.log(`   🔍 ATACADO: Buscando comprovante recente no histórico...`);
-
-    const mensagensRecentes = this.historicoMensagens.filter(msg => {
-      const timeDiff = timestamp - msg.timestamp;
-      return msg.remetente === remetente && timeDiff <= 1800000; // 30 minutos
-    });
-
-    if (mensagensRecentes.length === 0) {
-      console.log(`   ❌ ATACADO: Nenhuma mensagem recente nos últimos 30 minutos`);
+  // === ANALISAR COMPROVANTE (CÓDIGO ORIGINAL) ===
+  async analisarComprovante(mensagem) {
+    const temConfirmado = /^confirmado/i.test(mensagem.trim());
+    const temID = /^id\s/i.test(mensagem.trim());
+    
+    if (!temConfirmado && !temID) {
       return null;
     }
 
-    console.log(`   📊 ATACADO: Analisando ${mensagensRecentes.length} mensagens dos últimos 30 minutos...`);
+    const prompt = `
+Analisa esta mensagem de comprovante de pagamento M-Pesa ou E-Mola:
 
-    for (let msg of mensagensRecentes.reverse()) {
-      if (msg.tipo === 'texto') {
-        const comprovante = await this.analisarComprovante(msg.mensagem);
-        if (comprovante) {
-          const tempoDecorrido = Math.floor((timestamp - msg.timestamp) / 60000);
-          console.log(`   ✅ ATACADO: Comprovante encontrado no histórico: ${comprovante.referencia} - ${comprovante.valor}MT (${tempoDecorrido} min atrás)`);
-          return comprovante;
-        }
+"${mensagem}"
+
+Extrai a referência da transação e o valor transferido.
+
+Responde APENAS no formato JSON:
+{
+  "referencia": "CGC4GQ17W84",
+  "valor": "210",
+  "encontrado": true
+}
+
+Se não conseguires extrair, responde:
+{"encontrado": false}
+`;
+
+    const resposta = await this.openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "Você é especialista em analisar comprovantes de pagamento moçambicanos M-Pesa e E-Mola." },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.1,
+      max_tokens: 200
+    });
+
+    try {
+      const resultado = this.extrairJSON(resposta.choices[0].message.content);
+      
+      if (resultado.encontrado) {
+        return {
+          referencia: resultado.referencia,
+          valor: this.limparValor(resultado.valor),
+          fonte: 'texto'
+        };
       }
+    } catch (parseError) {
+      console.error('❌ ATACADO: Erro ao parsear resposta da IA:', parseError);
     }
 
-    console.log(`   ❌ ATACADO: Comprovante não encontrado no histórico`);
     return null;
   }
 
-  adicionarAoHistorico(mensagem, remetente, timestamp, tipo) {
-    this.historicoMensagens.push({ mensagem, remetente, timestamp, tipo });
+  // === PROCESSAR COMPROVANTE (CÓDIGO ORIGINAL) ===
+  async processarComprovante(comprovante, remetente, timestamp) {
+    this.comprovantesEmAberto[remetente] = {
+      referencia: comprovante.referencia,
+      valor: comprovante.valor,
+      timestamp: timestamp,
+      fonte: comprovante.fonte
+    };
+
+    console.log(`   ⏳ ATACADO: Comprovante de ${remetente} guardado, aguardando número...`);
+  }
+
+  // === LIMPAR VALOR MONETÁRIO (CÓDIGO ORIGINAL) ===
+  limparValor(valor) {
+    if (!valor) return '0';
+    
+    let valorStr = valor.toString();
+    valorStr = valorStr.replace(/\s*(MT|mt|meticais?|metical)\s*/gi, '');
+    valorStr = valorStr.trim();
+    
+    if (valorStr.includes(',') && valorStr.includes('.')) {
+      valorStr = valorStr.replace(/,/g, '');
+    } else if (valorStr.includes(',')) {
+      const parts = valorStr.split(',');
+      if (parts.length === 2 && parts[1].length <= 2) {
+        valorStr = valorStr.replace(',', '.');
+      } else {
+        valorStr = valorStr.replace(/,/g, '');
+      }
+    }
+    
+    const match = valorStr.match(/\d+\.?\d*/);
+    if (match) {
+      const numero = parseFloat(match[0]);
+      return numero.toString();
+    }
+    
+    const digitos = valorStr.replace(/[^\d]/g, '');
+    return digitos || '0';
+  }
+
+  // === HISTÓRICO (CÓDIGO ORIGINAL) ===
+  adicionarAoHistorico(mensagem, remetente, timestamp, tipo = 'texto') {
+    this.historicoMensagens.push({
+      mensagem,
+      remetente,
+      timestamp,
+      tipo
+    });
+
     if (this.historicoMensagens.length > this.maxHistorico) {
       this.historicoMensagens = this.historicoMensagens.slice(-this.maxHistorico);
     }
   }
 
+  // === LIMPEZA (CÓDIGO ORIGINAL) ===
   limparComprovantesAntigos() {
     const agora = Date.now();
     const timeout = 45 * 60 * 1000;
@@ -1848,12 +975,48 @@ Se não conseguires extrair, responde:
     });
 
     if (removidos > 0) {
-      console.log(`🗑️ ATACADO: Removidos ${removidos} comprovantes antigos`);
+      console.log(`🗑️ ATACADO: Removidos ${removidos} comprovantes antigos (>45min)`);
     }
   }
 
+  // === STATUS (CÓDIGO ORIGINAL) ===
+  getStatus() {
+    return {
+      comprovantesEmAberto: Object.keys(this.comprovantesEmAberto).length,
+      mensagensNoHistorico: this.historicoMensagens.length,
+      detalhesComprovantes: this.comprovantesEmAberto
+    };
+  }
+
+  // === FUNÇÃO PARA COMANDOS ADMIN (CÓDIGO ORIGINAL) ===
   getStatusDetalhado() {
-    return `🧠 *IA ATACADO v2.1 MELHORADA*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n✅ Processamento de imagens OTIMIZADO!\n✅ 2 tentativas com prompts diferentes\n✅ Correção automática de referências quebradas\n✅ Extração melhorada de JSON\n✅ Limpeza avançada de referências\n✅ Detecção de erros mais precisa\n✅ Mensagens de erro mais úteis\n\n💾 Mensagens: ${this.historicoMensagens.length}\n⏳ Comprovantes: ${Object.keys(this.comprovantesEmAberto).length}`;
+    let status = `🧠 *STATUS DA IA ATACADO v2.2 CORRIGIDA*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    
+    status += `💾 Mensagens no histórico: ${this.historicoMensagens.length}\n`;
+    status += `⏳ Comprovantes em aberto: ${Object.keys(this.comprovantesEmAberto).length}\n\n`;
+    
+    if (Object.keys(this.comprovantesEmAberto).length > 0) {
+      status += `📋 *Comprovantes aguardando número:*\n`;
+      Object.entries(this.comprovantesEmAberto).forEach(([remetente, comp]) => {
+        const tempo = Math.floor((Date.now() - comp.timestamp) / 60000);
+        status += `• ${remetente.replace('@c.us', '')}: ${comp.referencia} - ${comp.valor}MT (${tempo}min)\n`;
+      });
+    }
+    
+    status += `\n🚀 *CORREÇÕES IMPLEMENTADAS:*\n`;
+    status += `✅ Código duplicado removido!\n`;
+    status += `✅ Função extrairJSONMelhorado eliminada!\n`;
+    status += `✅ Prompts duplicados corrigidos!\n`;
+    status += `✅ Processamento de imagens otimizado!\n`;
+    status += `✅ Validação robusta de imagens!\n`;
+    status += `✅ Tratamento de erros da IA melhorado!\n`;
+    status += `✅ Função extrairJSON mais robusta!\n`;
+    status += `✅ Mensagens de erro mais úteis!\n\n`;
+    status += `🎯 *PROCESSAMENTO DE TEXTO:* Mantido original (perfeito!)\n`;
+    status += `🔧 *PROCESSAMENTO DE IMAGENS:* Completamente corrigido e otimizado!\n`;
+    status += `🧹 *CÓDIGO:* Limpo e sem duplicações!\n`;
+    
+    return status;
   }
 }
 
