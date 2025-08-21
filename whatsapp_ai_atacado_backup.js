@@ -32,16 +32,28 @@ ANALISE esta imagem de comprovante M-Pesa/E-Mola de Moçambique.
 
 ⚠️ ATENÇÃO CRÍTICA - REFERÊNCIAS QUEBRADAS EM MÚLTIPLAS LINHAS:
 
-🟡 FORMATO E-MOLA ESPECÍFICO:
-Formato completo: XX######.####.###### (SEMPRE 3 partes separadas por pontos)
+🟡 FORMATO E-MOLA ESPECÍFICO - PADRÃO OBRIGATÓRIO:
+PP + 6 dígitos + . + 4 dígitos + . + mínimo 5 caracteres
+Exemplo: PP250820.1706.e9791O (PP + 250820 + . + 1706 + . + e9791O)
+
+⚠️ CRÍTICO: Referências E-Mola seguem padrão rígido:
+1. Começam com PP (2 letras)
+2. Seguido de 6 dígitos (data)
+3. Ponto (.)
+4. Seguido de 4 dígitos (hora)  
+5. Ponto (.)
+6. Seguido de 5+ caracteres alfanuméricos (código único)
+
+EXEMPLOS CORRETOS E-MOLA:
+- "PP250820.1706.e9791O" (PP + 6 dígitos + 4 dígitos + 6 caracteres)
+- "PP250821.1152.E58547" (PP + 6 dígitos + 4 dígitos + 6 caracteres)
+- "EP240815.1420.h45672" (EP + 6 dígitos + 4 dígitos + 6 caracteres)
+
+🚨 SE ENCONTRAR E-MOLA INCOMPLETO, PROCURE MAIS CARACTERES!
+Exemplo: Se você vê "PP250820.1706.e9791" mas na linha seguinte tem "O"
+RESULTADO CORRETO: "PP250820.1706.e9791O"
+
 ⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
-
-EXEMPLOS REAIS DE E-MOLA que você DEVE capturar EXATOS:
-- "PP250821.1152.E58547" (EXATO - com E maiúsculo!)
-- "EP240815.1420.h45672" (EXATO - com h minúsculo!)
-- "PP250820.1706.e9791" (EXATO - com e minúsculo!)
-
-🚨 NÃO ALTERE MAIÚSCULAS/MINÚSCULAS! O sistema é case-sensitive!
 
 🚨 PROBLEMA COMUM: E-Mola quebrado em linhas
 Se você vê na imagem:
@@ -72,9 +84,9 @@ RESULTADO: "CHK8H3PYKpe" (EXATO - não mude para maiúsculo!)
 VALOR: Procure valor em MT (ex: "375.00MT")
 
 Responda no formato:
-Para E-Mola (SEMPRE com 3 partes e CASE ORIGINAL):
+Para E-Mola (SEMPRE com 3 partes, terceira parte 5+ chars e CASE ORIGINAL):
 {
-  "referencia": "PP250821.1152.E58547",
+  "referencia": "PP250820.1706.e9791O",
   "valor": "375",
   "encontrado": true,
   "tipo": "emola"
@@ -129,16 +141,18 @@ XX######.####.######
 SEMPRE 3 partes separadas por 2 pontos!
 
 EXEMPLOS DO QUE VOCÊ DEVE ENCONTRAR COMPLETO:
-✅ "PP250820.1706.e9791" (CORRETO - com 3 partes)
-❌ "PP250820.1706.e979" (ERRADO - cortou o último dígito)
-❌ "PP250820.1706" (ERRADO - faltou a terceira parte)
+✅ "PP250820.1706.e9791O" (CORRETO - terceira parte tem 6 chars)
+✅ "PP250821.1152.E58547" (CORRETO - terceira parte tem 6 chars)  
+❌ "PP250820.1706.e9791" (INCOMPLETO - terceira parte tem só 5 chars)
+❌ "PP250820.1706" (ERRADO - faltou a terceira parte toda)
 
-🔍 COMO ENCONTRAR E-MOLA COMPLETO:
-1. Procure por texto que começa com 2 letras (PP, EP, etc.)
-2. Seguido de números e pontos
-3. CONTE os pontos: deve ter EXATAMENTE 2 pontos
-4. Terceira parte: pode ser letra+números (e9791, h45672, u31398)
-5. SE quebrado em linhas, JUNTE TUDO!
+🔍 COMO VALIDAR E-MOLA:
+1. Conte os caracteres após o segundo ponto
+2. Se tiver menos de 6 caracteres, PROCURE MAIS na linha seguinte
+3. Junte tudo até formar a referência completa
+
+CENÁRIO QUEBRADO COMUM:
+"PP250820.1706.e9791" (linha 1) + "O" (linha 2) = "PP250820.1706.e9791O" ✅
 
 CENÁRIO QUEBRADO COMUM:
 Se você vê:
@@ -151,9 +165,9 @@ Se quebrado: "CHK8H3PYK" + "PE" = "CHK8H3PYKPE"
 
 ⚠️ NÃO CORTE E NÃO ALTERE MAIÚSCULAS/MINÚSCULAS! Capture EXATAMENTE como aparece!
 
-Para E-Mola (SEMPRE 3 partes com pontos e CASE ORIGINAL):
+Para E-Mola (PADRÃO: XX######.####.##### com 5+ chars na terceira parte):
 {
-  "referencia": "PP250821.1152.E58547",
+  "referencia": "PP250820.1706.e9791O",
   "valor": "375",
   "encontrado": true,
   "tipo": "emola"
@@ -204,21 +218,45 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
         
         console.log(`   ✅ ATACADO: Dados extraídos com sucesso: ${comprovante.referencia} - ${comprovante.valor}MT (${comprovante.tipo}, confiança: ${comprovante.confianca})`);
         
-        // VALIDAÇÃO ADICIONAL PARA E-MOLA
+        // VALIDAÇÃO RIGOROSA PARA E-MOLA
         if (comprovante.tipo === 'emola') {
           const pontosCount = (comprovante.referencia.match(/\./g) || []).length;
+          const partes = comprovante.referencia.split('.');
+          
+          console.log(`   🔍 ATACADO: Validando E-Mola: ${comprovante.referencia}`);
+          console.log(`   📊 ATACADO: Partes encontradas: ${JSON.stringify(partes)}`);
+          
+          // Validar estrutura básica
           if (pontosCount !== 2) {
-            console.log(`   ⚠️ ATACADO: ERRO - Referência E-Mola deve ter exatamente 2 pontos! Encontrados: ${pontosCount}`);
-            console.log(`   🔧 ATACADO: Referência possivelmente incompleta: ${comprovante.referencia}`);
+            console.log(`   ❌ ATACADO: ERRO - E-Mola deve ter exatamente 2 pontos! Encontrados: ${pontosCount}`);
           }
           
-          // Verificar se tem as 3 partes
-          const partes = comprovante.referencia.split('.');
           if (partes.length !== 3) {
-            console.log(`   ⚠️ ATACADO: ERRO - E-Mola deve ter 3 partes! Encontradas: ${partes.length}`);
-            console.log(`   🔧 ATACADO: Partes: ${JSON.stringify(partes)}`);
+            console.log(`   ❌ ATACADO: ERRO - E-Mola deve ter 3 partes! Encontradas: ${partes.length}`);
           } else {
-            console.log(`   ✅ ATACADO: E-Mola com formato correto - 3 partes: ${partes.join(' | ')}`);
+            // Validar padrão específico: PP + 6 dígitos + 4 dígitos + 5+ caracteres
+            const parte1 = partes[0]; // PP250820
+            const parte2 = partes[1]; // 1706
+            const parte3 = partes[2]; // e9791O
+            
+            const prefixoOK = /^[A-Z]{2}/.test(parte1); // 2 letras no início
+            const dataOK = /^\d{6}$/.test(parte1.substring(2)); // 6 dígitos após as letras
+            const horaOK = /^\d{4}$/.test(parte2); // 4 dígitos
+            const codigoOK = parte3.length >= 5; // Mínimo 5 caracteres
+            
+            console.log(`   🔍 ATACADO: Prefixo (2 letras): ${prefixoOK} - "${parte1.substring(0,2)}"`);
+            console.log(`   🔍 ATACADO: Data (6 dígitos): ${dataOK} - "${parte1.substring(2)}"`);
+            console.log(`   🔍 ATACADO: Hora (4 dígitos): ${horaOK} - "${parte2}"`);
+            console.log(`   🔍 ATACADO: Código (5+ chars): ${codigoOK} - "${parte3}" (${parte3.length} chars)`);
+            
+            if (prefixoOK && dataOK && horaOK && codigoOK) {
+              console.log(`   ✅ ATACADO: E-Mola com padrão CORRETO!`);
+            } else {
+              console.log(`   ⚠️ ATACADO: E-Mola pode estar INCOMPLETO!`);
+              if (!codigoOK) {
+                console.log(`   🚨 ATACADO: Terceira parte muito curta (${parte3.length} chars) - pode ter sido cortada!`);
+              }
+            }
           }
         }
         // Continuar com o processamento normal...
