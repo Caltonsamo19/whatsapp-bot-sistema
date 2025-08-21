@@ -316,76 +316,6 @@ function converterMegasParaNumero(megas) {
     return megas;
 }
 
-// === FUNÇÃO PARA VALIDAR E LIMPAR REFERÊNCIAS ===
-function validarELimparReferencia(referencia) {
-    if (!referencia || typeof referencia !== 'string') {
-        console.log(`⚠️ Referência inválida: ${referencia}`);
-        return 'REF_INVALIDA';
-    }
-    
-    // Remover espaços extras e caracteres problemáticos
-    let refLimpa = referencia.trim();
-    
-    // Log da referência original
-    console.log(`🔍 Referência original: "${referencia}"`);
-    console.log(`🔍 Referência limpa: "${refLimpa}"`);
-    
-    // Verificar se a referência está muito curta (possivelmente quebrada)
-    if (refLimpa.length < 3) {
-        console.log(`⚠️ Referência muito curta (${refLimpa.length} chars): "${refLimpa}"`);
-        return 'REF_MUITO_CURTA';
-    }
-    
-    // Verificar se a referência contém caracteres suspeitos
-    const caracteresSuspeitos = /[^\w\-\.]/g;
-    if (caracteresSuspeitos.test(refLimpa)) {
-        console.log(`⚠️ Referência contém caracteres suspeitos: "${refLimpa}"`);
-        // Tentar limpar caracteres problemáticos
-        refLimpa = refLimpa.replace(caracteresSuspeitos, '');
-        console.log(`🔧 Referência após limpeza: "${refLimpa}"`);
-    }
-    
-    // Verificar se a referência está vazia após limpeza
-    if (!refLimpa || refLimpa.length === 0) {
-        console.log(`❌ Referência ficou vazia após limpeza`);
-        return 'REF_VAZIA';
-    }
-    
-    console.log(`✅ Referência válida: "${refLimpa}"`);
-    return refLimpa;
-}
-
-// === FUNÇÃO PARA PROCESSAR DADOS COMPLETOS COM VALIDAÇÃO ===
-function processarDadosCompletos(dadosCompletos) {
-    console.log(`🔍 Processando dados completos: "${dadosCompletos}"`);
-    
-    if (!dadosCompletos || typeof dadosCompletos !== 'string') {
-        console.log(`❌ Dados completos inválidos: ${dadosCompletos}`);
-        return { referencia: 'DADOS_INVALIDOS', megas: '0', numero: '0' };
-    }
-    
-    // Dividir os dados
-    const partes = dadosCompletos.split('|');
-    console.log(`🔍 Partes encontradas: ${partes.length} - ${JSON.stringify(partes)}`);
-    
-    if (partes.length < 3) {
-        console.log(`❌ Dados incompletos: esperado 3+ partes, encontrado ${partes.length}`);
-        return { referencia: 'DADOS_INCOMPLETOS', megas: '0', numero: '0' };
-    }
-    
-    // Extrair e validar cada parte
-    const referencia = validarELimparReferencia(partes[0]);
-    const megas = partes[1] || '0';
-    const numero = partes[2] || '0';
-    
-    console.log(`🔍 Dados processados:`);
-    console.log(`   📋 Referência: "${referencia}"`);
-    console.log(`   📊 Megas: "${megas}"`);
-    console.log(`   📱 Número: "${numero}"`);
-    
-    return { referencia, megas, numero };
-}
-
 function enviarViaWhatsAppTasker(linhaCompleta, grupoNome, autorMensagem) {
     const item = {
         conteudo: linhaCompleta,
@@ -598,85 +528,6 @@ async function logGrupoInfo(chatId, evento = 'detectado') {
     }
 }
 
-// === SISTEMA DE BACKUP DE TABELAS ===
-
-// Arquivo para armazenar backups
-const ARQUIVO_BACKUP_TABELAS = 'backup_tabelas_atacado.json';
-let backupsTabelas = [];
-
-// Carregar backups existentes
-async function carregarBackupsTabelas() {
-    try {
-        const data = await fs.readFile(ARQUIVO_BACKUP_TABELAS, 'utf8');
-        backupsTabelas = JSON.parse(data);
-        console.log('📋 Backups de tabelas carregados!');
-    } catch (error) {
-        console.log('📋 Criando novo sistema de backup de tabelas...');
-        backupsTabelas = [];
-    }
-}
-
-// Salvar backups
-async function salvarBackupsTabelas() {
-    try {
-        await fs.writeFile(ARQUIVO_BACKUP_TABELAS, JSON.stringify(backupsTabelas, null, 2));
-        console.log('💾 Backups de tabelas salvos!');
-    } catch (error) {
-        console.error('❌ Erro ao salvar backups:', error);
-    }
-}
-
-// Salvar backup de uma tabela/pagamento
-async function salvarBackupTabela(grupoId, tipo, valorAnterior, novoValor) {
-    const configGrupo = getConfiguracaoGrupo(grupoId);
-    if (!configGrupo) return;
-    
-    const backup = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        grupoId: grupoId,
-        grupoNome: configGrupo.nome,
-        tipo: tipo, // 'tabela' ou 'pagamento'
-        valorAnterior: valorAnterior,
-        novoValor: novoValor,
-        timestamp: Date.now(),
-        admin: 'Sistema'
-    };
-    
-    backupsTabelas.push(backup);
-    
-    // Manter apenas os últimos 50 backups
-    if (backupsTabelas.length > 50) {
-        backupsTabelas = backupsTabelas.slice(-50);
-    }
-    
-    await salvarBackupsTabelas();
-    console.log(`📋 Backup criado: ${tipo} para ${configGrupo.nome}`);
-}
-
-// Listar backups disponíveis
-async function listarBackupsTabelas() {
-    return backupsTabelas.sort((a, b) => b.timestamp - a.timestamp);
-}
-
-// Restaurar backup
-async function restaurarBackupTabela(backupId) {
-    const backup = backupsTabelas.find(b => b.id === backupId);
-    if (!backup) return null;
-    
-    const configGrupo = getConfiguracaoGrupo(backup.grupoId);
-    if (!configGrupo) return null;
-    
-    // Restaurar valor anterior
-    if (backup.tipo === 'tabela') {
-        CONFIGURACAO_GRUPOS[backup.grupoId].tabela = backup.valorAnterior;
-    } else if (backup.tipo === 'pagamento') {
-        CONFIGURACAO_GRUPOS[backup.grupoId].pagamento = backup.valorAnterior;
-    }
-    
-    console.log(`📋 Backup restaurado: ${backup.tipo} para ${configGrupo.nome}`);
-    return backup;
-}
-
 // === HISTÓRICO DE COMPRADORES ===
 
 async function carregarHistorico() {
@@ -802,7 +653,6 @@ client.on('ready', async () => {
     console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
     
     await carregarHistorico();
-    await carregarBackupsTabelas();
     
     console.log('\n🤖 Monitorando grupos ATACADO:');
     Object.keys(CONFIGURACAO_GRUPOS).forEach(grupoId => {
@@ -811,9 +661,6 @@ client.on('ready', async () => {
     });
     
     console.log('\n🔧 Comandos admin: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
-    console.log('📋 Comandos de tabela: .set_tabela .set_pagamento .ver_tabela .ver_pagamento .backup_tabelas .restaurar_tabela');
-    console.log('🧪 Comandos de teste: .teste .debug');
-    console.log('❓ Comando de ajuda: .ajuda ou .help');
 });
 
 client.on('group-join', async (notification) => {
@@ -894,228 +741,6 @@ client.on('message', async (message) => {
                 const statusIA = ia.getStatusDetalhado();
                 await message.reply(statusIA);
                 console.log(`🧠 Comando .ia executado`);
-                return;
-            }
-
-            // === COMANDO DE TESTE SIMPLES ===
-            if (comando === '.teste') {
-                console.log(`🧪 Comando de teste executado por: ${message.from}`);
-                console.log(`🔍 É admin? ${isAdmin}`);
-                console.log(`📱 Número: ${message.from}`);
-                console.log(`📝 Mensagem: ${message.body}`);
-                
-                await message.reply(
-                    `🧪 *COMANDO DE TESTE EXECUTADO!*\n\n` +
-                    `📱 Seu número: ${message.from}\n` +
-                    `🔍 É administrador: ${isAdmin ? '✅ SIM' : '❌ NÃO'}\n` +
-                    `📝 Mensagem enviada: ${message.body}\n\n` +
-                    `💡 Se não estiver funcionando, verifique:\n` +
-                    `• Se seu número está na lista de admins\n` +
-                    `• Se o bot está rodando\n` +
-                    `• Se há erros no console`
-                );
-                return;
-            }
-
-            // === COMANDO DE DEBUG ===
-            if (comando === '.debug') {
-                const numeroLimpo = message.from.replace('@c.us', '').replace('@g.us', '');
-                const adminCheck = isAdministrador(message.from);
-                const adminCheckLimpo = isAdministrador(numeroLimpo + '@c.us');
-                
-                console.log(`🔍 DEBUG - Número completo: ${message.from}`);
-                console.log(`🔍 DEBUG - Número limpo: ${numeroLimpo}`);
-                console.log(`🔍 DEBUG - Admin check completo: ${adminCheck}`);
-                console.log(`🔍 DEBUG - Admin check limpo: ${adminCheckLimpo}`);
-                console.log(`🔍 DEBUG - Lista admins: ${JSON.stringify(ADMINISTRADORES_GLOBAIS)}`);
-                
-                await message.reply(
-                    `🔍 *DEBUG EXECUTADO!*\n\n` +
-                    `📱 Número completo: \`${message.from}\`\n` +
-                    `📱 Número limpo: \`${numeroLimpo}\`\n` +
-                    `🔍 Admin check completo: ${adminCheck ? '✅ SIM' : '❌ NÃO'}\n` +
-                    `🔍 Admin check limpo: ${adminCheckLimpo ? '✅ SIM' : '❌ NÃO'}\n` +
-                    `📋 Lista de admins:\n${ADMINISTRADORES_GLOBAIS.map(admin => `• \`${admin}\``).join('\n')}\n\n` +
-                    `💡 Use este comando para diagnosticar problemas`
-                );
-                return;
-            }
-
-            // === COMANDOS PARA MODIFICAÇÃO DE TABELAS ===
-            if (comando.startsWith('.set_tabela ')) {
-                const novaTabela = message.body.replace('.set_tabela ', '');
-                
-                if (!message.from.endsWith('@g.us')) {
-                    await message.reply('❌ Use este comando em um grupo!');
-                    return;
-                }
-                
-                const configGrupo = getConfiguracaoGrupo(message.from);
-                if (!configGrupo) {
-                    await message.reply('❌ Este grupo não está configurado!');
-                    return;
-                }
-                
-                // Fazer backup da tabela anterior
-                const tabelaAnterior = configGrupo.tabela;
-                
-                // Atualizar a tabela
-                CONFIGURACAO_GRUPOS[message.from].tabela = novaTabela;
-                
-                // Salvar backup
-                await salvarBackupTabela(message.from, 'tabela', tabelaAnterior, novaTabela);
-                
-                await message.reply(
-                    `✅ *TABELA ATUALIZADA COM SUCESSO!*\n\n` +
-                    `🏢 Grupo: ${configGrupo.nome}\n` +
-                    `📋 Nova tabela aplicada\n\n` +
-                    `💡 Use *.ver_tabela* para visualizar\n` +
-                    `🔄 Sistema reiniciará em 30 segundos`
-                );
-                
-                console.log(`📋 Tabela atualizada para grupo ${configGrupo.nome}`);
-                
-                // Reiniciar sistema após 30 segundos
-                setTimeout(() => {
-                    console.log('🔄 Reiniciando sistema após atualização de tabela...');
-                    process.exit(0);
-                }, 30000);
-                
-                return;
-            }
-
-            if (comando.startsWith('.set_pagamento ')) {
-                const novoPagamento = message.body.replace('.set_pagamento ', '');
-                
-                if (!message.from.endsWith('@g.us')) {
-                    await message.reply('❌ Use este comando em um grupo!');
-                    return;
-                }
-                
-                const configGrupo = getConfiguracaoGrupo(message.from);
-                if (!configGrupo) {
-                    await message.reply('❌ Este grupo não está configurado!');
-                    return;
-                }
-                
-                // Fazer backup das formas de pagamento anteriores
-                const pagamentoAnterior = configGrupo.pagamento;
-                
-                // Atualizar formas de pagamento
-                CONFIGURACAO_GRUPOS[message.from].pagamento = novoPagamento;
-                
-                // Salvar backup
-                await salvarBackupTabela(message.from, 'pagamento', pagamentoAnterior, novoPagamento);
-                
-                await message.reply(
-                    `✅ *FORMAS DE PAGAMENTO ATUALIZADAS!*\n\n` +
-                    `🏢 Grupo: ${configGrupo.nome}\n` +
-                    `💳 Novas formas aplicadas\n\n` +
-                    `💡 Use *.ver_pagamento* para visualizar\n` +
-                    `🔄 Sistema reiniciará em 30 segundos`
-                );
-                
-                console.log(`💳 Formas de pagamento atualizadas para grupo ${configGrupo.nome}`);
-                
-                // Reiniciar sistema após 30 segundos
-                setTimeout(() => {
-                    console.log('🔄 Reiniciando sistema após atualização de pagamento...');
-                    process.exit(0);
-                }, 30000);
-                
-                return;
-            }
-
-            if (comando === '.ver_tabela') {
-                if (!message.from.endsWith('@g.us')) {
-                    await message.reply('❌ Use este comando em um grupo!');
-                    return;
-                }
-                
-                const configGrupo = getConfiguracaoGrupo(message.from);
-                if (!configGrupo) {
-                    await message.reply('❌ Este grupo não está configurado!');
-                    return;
-                }
-                
-                await message.reply(
-                    `📋 *TABELA ATUAL - ${configGrupo.nome}*\n\n` +
-                    `${configGrupo.tabela}\n\n` +
-                    `💡 Para modificar: *.set_tabela NOVA_TABELA*`
-                );
-                return;
-            }
-
-            if (comando === '.ver_pagamento') {
-                if (!message.from.endsWith('@g.us')) {
-                    await message.reply('❌ Use este comando em um grupo!');
-                    return;
-                }
-                
-                const configGrupo = getConfiguracaoGrupo(message.from);
-                if (!configGrupo) {
-                    await message.reply('❌ Este grupo não está configurado!');
-                    return;
-                }
-                
-                await message.reply(
-                    `💳 *FORMAS DE PAGAMENTO ATUAIS - ${configGrupo.nome}*\n\n` +
-                    `${configGrupo.pagamento}\n\n` +
-                    `💡 Para modificar: *.set_pagamento NOVAS_FORMAS*`
-                );
-                return;
-            }
-
-            if (comando === '.backup_tabelas') {
-                const backups = await listarBackupsTabelas();
-                
-                if (backups.length === 0) {
-                    await message.reply('📋 *Nenhum backup de tabela encontrado!*');
-                    return;
-                }
-                
-                let resposta = `📋 *BACKUPS DE TABELAS DISPONÍVEIS*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-                
-                backups.forEach((backup, index) => {
-                    const data = new Date(backup.timestamp).toLocaleString('pt-BR');
-                    resposta += `${index + 1}. 🏢 ${backup.grupoNome}\n`;
-                    resposta += `   📅 ${data}\n`;
-                    resposta += `   🔄 ${backup.tipo}\n`;
-                    resposta += `   🆔 \`${backup.id}\`\n\n`;
-                });
-                
-                resposta += `💡 Para restaurar: *.restaurar_tabela ID_BACKUP*`;
-                
-                await message.reply(resposta);
-                return;
-            }
-
-            if (comando.startsWith('.restaurar_tabela ')) {
-                const backupId = comando.replace('.restaurar_tabela ', '');
-                
-                try {
-                    const backup = await restaurarBackupTabela(backupId);
-                    
-                    if (backup) {
-                        await message.reply(
-                            `✅ *BACKUP RESTAURADO COM SUCESSO!*\n\n` +
-                            `🏢 Grupo: ${backup.grupoNome}\n` +
-                            `📋 Tipo: ${backup.tipo}\n` +
-                            `📅 Data: ${new Date(backup.timestamp).toLocaleString('pt-BR')}\n\n` +
-                            `🔄 Sistema reiniciará em 30 segundos`
-                        );
-                        
-                        // Reiniciar sistema após 30 segundos
-                        setTimeout(() => {
-                            console.log('🔄 Reiniciando sistema após restauração de backup...');
-                            process.exit(0);
-                        }, 30000);
-                    } else {
-                        await message.reply('❌ Backup não encontrado!');
-                    }
-                } catch (error) {
-                    await message.reply(`❌ Erro ao restaurar backup: ${error.message}`);
-                }
                 return;
             }
 
@@ -1292,118 +917,6 @@ client.on('message', async (message) => {
                 );
                 return;
             }
-
-            if (comando === '.ajuda' || comando === '.help') {
-                const resposta = `🤖 *COMANDOS ADMINISTRATIVOS DISPONÍVEIS*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                    `🧠 *SISTEMA:*\n` +
-                    `• .ia - Status da IA\n` +
-                    `• .stats - Estatísticas dos grupos\n` +
-                    `• .sheets - Status do Google Sheets\n` +
-                    `• .test_sheets - Teste de conectividade\n\n` +
-                    `📋 *GRUPOS:*\n` +
-                    `• .grupos - Lista de grupos detectados\n` +
-                    `• .grupo_atual - Informações do grupo atual\n` +
-                    `• .grupos_status - Status detalhado dos grupos\n\n` +
-                    `📊 *TABELAS E PREÇOS:*\n` +
-                    `• .ver_tabela - Ver tabela atual do grupo\n` +
-                    `• .ver_pagamento - Ver formas de pagamento\n` +
-                    `• .set_tabela NOVA_TABELA - Alterar tabela\n` +
-                    `• .set_pagamento NOVAS_FORMAS - Alterar pagamento\n` +
-                    `• .backup_tabelas - Listar backups disponíveis\n` +
-                    `• .restaurar_tabela ID - Restaurar backup\n\n` +
-                    `🧪 *TESTE E DEBUG:*\n` +
-                    `• .teste - Comando de teste simples\n` +
-                    `• .debug - Debug detalhado do sistema\n` +
-                    `• .teste_ref - Testar validação de referências\n\n` +
-                    `🧹 *LIMPEZA:*\n` +
-                    `• .clear_sheets - Limpar dados do Google Sheets\n` +
-                    `• .clear_grupo NOME - Limpar dados de um grupo\n\n` +
-                    `💡 *EXEMPLOS:*\n` +
-                    `• .set_tabela "NOVA TABELA AQUI"\n` +
-                    `• .set_pagamento "NOVAS FORMAS AQUI"\n` +
-                    `• .restaurar_tabela abc123def\n\n` +
-                    `📚 *COMANDO COMPLETO:*\n` +
-                    `• .comandos - Lista completa de todos os comandos`;
-                
-                await message.reply(resposta);
-                return;
-            }
-
-            // === COMANDO DE TESTE DE REFERÊNCIAS ===
-            if (comando === '.teste_ref') {
-                console.log(`🧪 Testando validação de referências...`);
-                
-                const testes = [
-                    'CHK8H3PYK|10GB|847675880',
-                    ' CHK8H3PYK | 10GB | 847675880 ',
-                    'CHK|10GB|847675880',
-                    'CHK8H3PYK!@#|10GB|847675880',
-                    'CHK8H3PYK|10GB',
-                    'CH|10GB|847675880'
-                ];
-                
-                let resposta = `🧪 *TESTE DE VALIDAÇÃO DE REFERÊNCIAS*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-                
-                for (let i = 0; i < testes.length; i++) {
-                    const teste = testes[i];
-                    const resultado = processarDadosCompletos(teste);
-                    
-                    resposta += `${i + 1}. 📋 "${teste}"\n`;
-                    resposta += `   ✅ Referência: "${resultado.referencia}"\n`;
-                    resposta += `   📊 Megas: "${resultado.megas}"\n`;
-                    resposta += `   📱 Número: "${resultado.numero}"\n\n`;
-                }
-                
-                resposta += `💡 *Sistema de validação ativo!*\n`;
-                resposta += `🔍 Referências quebradas são detectadas e corrigidas automaticamente.`;
-                
-                await message.reply(resposta);
-                return;
-            }
-
-            // === COMANDO COMPLETO DE COMANDOS ===
-            if (comando === '.comandos') {
-                const resposta = `📚 *LISTA COMPLETA DE COMANDOS ATACADO*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                    `🧠 *SISTEMA E IA:*\n` +
-                    `• .ia - Status detalhado da IA\n` +
-                    `• .stats - Estatísticas dos grupos\n` +
-                    `• .sheets - Status do Google Sheets\n` +
-                    `• .test_sheets - Teste de conectividade Google Sheets\n` +
-                    `• .test_grupo - Teste específico para grupo atual\n\n` +
-                    `📋 *GERENCIAMENTO DE GRUPOS:*\n` +
-                    `• .grupos - Lista de grupos detectados\n` +
-                    `• .grupo_atual - Informações do grupo atual\n` +
-                    `• .grupos_status - Status detalhado de todos os grupos\n\n` +
-                    `📊 *TABELAS E PREÇOS:*\n` +
-                    `• .ver_tabela - Ver tabela atual do grupo\n` +
-                    `• .ver_pagamento - Ver formas de pagamento\n` +
-                    `• .set_tabela "NOVA_TABELA" - Alterar tabela do grupo\n` +
-                    `• .set_pagamento "NOVAS_FORMAS" - Alterar formas de pagamento\n` +
-                    `• .backup_tabelas - Listar backups disponíveis\n` +
-                    `• .restaurar_tabela ID - Restaurar backup específico\n\n` +
-                    `🧪 *TESTE E DEBUG:*\n` +
-                    `• .teste - Comando de teste simples\n` +
-                    `• .debug - Debug detalhado do sistema\n` +
-                    `• .teste_ref - Testar validação de referências\n\n` +
-                    `🧹 *LIMPEZA E MANUTENÇÃO:*\n` +
-                    `• .clear_sheets - Limpar dados do Google Sheets\n` +
-                    `• .clear_grupo NOME - Limpar dados de um grupo específico\n\n` +
-                    `💡 *COMANDOS DE AJUDA:*\n` +
-                    `• .ajuda ou .help - Ajuda rápida\n` +
-                    `• .comandos - Esta lista completa\n\n` +
-                    `🔧 *EXEMPLOS DE USO:*\n` +
-                    `• .set_tabela "10GB➜125MT\\n20GB➜250MT"\n` +
-                    `• .set_pagamento "M-Pesa, E-Mola, Transferência"\n` +
-                    `• .restaurar_tabela abc123def456\n` +
-                    `• .clear_grupo "Nome do Grupo"\n\n` +
-                    `📱 *NOTAS IMPORTANTES:*\n` +
-                    `• Use comandos de tabela apenas em grupos\n` +
-                    `• Sistema reinicia após alterações de tabela\n` +
-                    `• Todos os comandos requerem permissão de admin`;
-                
-                await message.reply(resposta);
-                return;
-            }
         }
 
         // === DETECÇÃO DE GRUPOS NÃO CONFIGURADOS ===
@@ -1473,7 +986,7 @@ client.on('message', async (message) => {
                         
                     } else if (resultadoIA.tipo === 'numero_processado') {
                         const dadosCompletos = resultadoIA.dadosCompletos;
-                        const { referencia, megas, numero } = processarDadosCompletos(dadosCompletos);
+                        const [referencia, megas, numero] = dadosCompletos.split('|');
                         const nomeContato = message._data.notifyName || 'N/A';
                         const autorMensagem = message.author || 'Desconhecido';
                         
@@ -1564,7 +1077,7 @@ client.on('message', async (message) => {
                 
             } else if (resultadoIA.tipo === 'numero_processado') {
                 const dadosCompletos = resultadoIA.dadosCompletos;
-                const { referencia, megas, numero } = processarDadosCompletos(dadosCompletos);
+                const [referencia, megas, numero] = dadosCompletos.split('|');
                 const nomeContato = message._data.notifyName || 'N/A';
                 const autorMensagem = message.author || 'Desconhecido';
                 
@@ -1648,7 +1161,6 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('SIGINT', async () => {
     console.log('\n💾 Salvando antes de sair...');
     await salvarHistorico();
-    await salvarBackupsTabelas();
     
     // Salvar dados finais do Tasker
     if (dadosParaTasker.length > 0) {
@@ -1661,7 +1173,6 @@ process.on('SIGINT', async () => {
     console.log('📦 Sistema atacado: CÁLCULO AUTOMÁTICO DE MEGAS');
     console.log('📊 Google Sheets ATACADO: CONFIGURADO');
     console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
-    console.log('📋 Sistema de backup de tabelas: ATIVO');
     console.log(ia.getStatus());
     process.exit(0);
 
