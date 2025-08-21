@@ -526,27 +526,27 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
       
       console.log(`   🔍 ATACADO: Analisando linha: "${linhaLimpa}"`);
       
-      // Padrões melhorados para detectar preços
-      const padroes = [
-        // Padrão GB -> MT
-        /(\d+)\s*GB\s*[➜→→-–—]\s*(\d+)\s*MT/gi,
-        /📱\s*(\d+)\s*GB\s*[➜→→-–—]\s*(\d+)\s*MT/gi,
-        /(\d+)\s*GB\s*[➜→→-–—]\s*(\d+)/gi,
-        
-        // Padrão Saldo -> MT
-        /(\d+)\s*💫\s*(\d+)\s*MT/gi,
-        /📞\s*(\d+)\s*💫\s*(\d+)\s*MT/gi,
-        /(\d+)\s*💫\s*(\d+)/gi,
-        /saldo\s*(\d+)\s*[➜→→-–—]\s*(\d+)\s*MT/gi,
-        
-        // Padrão genérico número -> MT
-        /(\d+)\s*[➜→→-–—]\s*(\d+)\s*MT/gi,
-        /(\d+)\s*[➜→→-–—]\s*(\d+)/gi,
-        
-        // Padrão com emojis
-        /📱\s*(\d+)\s*[➜→→-–—]\s*(\d+)/gi,
-        /📞\s*(\d+)\s*[➜→→-–—]\s*(\d+)/gi
-      ];
+              // Padrões melhorados para detectar preços (versão segura)
+        const padroes = [
+          // Padrão GB -> MT (versão simplificada)
+          /(\d+)\s*GB\s*[➜→→\-–—]\s*(\d+)\s*MT/gi,
+          /📱\s*(\d+)\s*GB\s*[➜→→\-–—]\s*(\d+)\s*MT/gi,
+          /(\d+)\s*GB\s*[➜→→\-–—]\s*(\d+)/gi,
+          
+          // Padrão Saldo -> MT
+          /(\d+)\s*💫\s*(\d+)\s*MT/gi,
+          /📞\s*(\d+)\s*💫\s*(\d+)\s*MT/gi,
+          /(\d+)\s*💫\s*(\d+)/gi,
+          /saldo\s*(\d+)\s*[➜→→\-–—]\s*(\d+)\s*MT/gi,
+          
+          // Padrão genérico número -> MT
+          /(\d+)\s*[➜→→\-–—]\s*(\d+)\s*MT/gi,
+          /(\d+)\s*[➜→→\-–—]\s*(\d+)/gi,
+          
+          // Padrão com emojis
+          /📱\s*(\d+)\s*[➜→→\-–—]\s*(\d+)/gi,
+          /📞\s*(\d+)\s*[➜→→\-–—]\s*(\d+)/gi
+        ];
       
       for (const padrao of padroes) {
         let match;
