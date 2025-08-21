@@ -26,59 +26,66 @@ class WhatsAppAIAtacado {
       console.log(`   📝 ATACADO: Legenda detectada: "${legendaImagem.trim()}"`);
     }
 
-    // PROMPT ULTRA ESPECÍFICO - Foco em referências quebradas
+    // PROMPT ULTRA ESPECÍFICO - Foco especial em E-MOLA
     const promptMelhorado = `
 ANALISE esta imagem de comprovante M-Pesa/E-Mola de Moçambique.
 
-⚠️ ATENÇÃO CRÍTICA - REFERÊNCIAS QUEBRADAS:
-A referência da transação FREQUENTEMENTE está quebrada em múltiplas linhas!
+⚠️ ATENÇÃO CRÍTICA - REFERÊNCIAS QUEBRADAS EM MÚLTIPLAS LINHAS:
 
-EXEMPLO REAL que você DEVE encontrar:
-Se na imagem você vê:
-Linha 1: "CHK8H3PYK"
-Linha 2: "PE"
-RESULTADO CORRETO: "CHK8H3PYKPE" (juntando tudo!)
+🟡 FORMATO E-MOLA ESPECÍFICO:
+Formato completo: XX######.####.###### (SEMPRE 3 partes separadas por pontos)
+⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
 
-OUTRO EXEMPLO:
-Se na imagem você vê:
-Linha 1: "CHL5H3W177"  
-Linha 2: "ABC"
-RESULTADO CORRETO: "CHL5H3W177ABC"
+EXEMPLOS REAIS DE E-MOLA que você DEVE capturar EXATOS:
+- "PP250821.1152.E58547" (EXATO - com E maiúsculo!)
+- "EP240815.1420.h45672" (EXATO - com h minúsculo!)
+- "PP250820.1706.e9791" (EXATO - com e minúsculo!)
 
-🔍 INSTRUÇÕES ESPECÍFICAS:
-1. PROCURE por texto que pareça código de transação
-2. SE encontrar partes em linhas diferentes, JUNTE TODAS
-3. Referências M-Pesa podem ter 8-15 caracteres no total
-4. Referências E-Mola têm formato: XX######.####.######
+🚨 NÃO ALTERE MAIÚSCULAS/MINÚSCULAS! O sistema é case-sensitive!
 
-🔵 M-PESA: 
-- Exemplos completos: "CHK8H3PYKPE", "CHL5H3W177ABC", "CGC4GQ17W84XY"
-- SEMPRE junte todas as partes que encontrar!
+🚨 PROBLEMA COMUM: E-Mola quebrado em linhas
+Se você vê na imagem:
+Linha 1: "PP250820.1706.e9791"
+OU quebrado:
+Linha 1: "PP250820.1706."
+Linha 2: "e9791"
+RESULTADO CORRETO: "PP250820.1706.e9791"
 
-🟡 E-MOLA:
-- Exemplos: "PP250712.2035.u31398", "EP240815.1420.h45672"
-- Mantenha os pontos no lugar correto
+REGRA E-MOLA: Capture TUDO até encontrar a terceira parte completa!
+- Primeira parte: letras + números (PP250820)
+- Segunda parte: números (1706) 
+- Terceira parte: letra + números (e9791) ← NÃO CORTE ESTA PARTE!
 
-VALOR: Procure valor em MT (ex: "125.00MT", "375MT")
+🔵 M-PESA (SEM pontos):
+⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
+Se você vê:
+"CHK8H3PYK" + "pe" (em linhas separadas)
+RESULTADO: "CHK8H3PYKpe" (EXATO - não mude para maiúsculo!)
 
-⚠️ NÃO CORTE A REFERÊNCIA! Inclua TODAS as partes que encontrar!
+🔍 INSTRUÇÕES DE BUSCA:
+1. Procure por "ID da transação" ou "Confirmado"
+2. Abaixo/ao lado, encontre o código
+3. Para E-Mola: SEMPRE tem 3 partes separadas por pontos
+4. Para M-Pesa: código alfanumérico sem pontos
+5. SE estiver quebrado em linhas, JUNTE TUDO!
+
+VALOR: Procure valor em MT (ex: "375.00MT")
 
 Responda no formato:
+Para E-Mola (SEMPRE com 3 partes e CASE ORIGINAL):
 {
-  "referencia": "CHK8H3PYKPE",
-  "valor": "125",
-  "encontrado": true,
-  "confianca": "alta",
-  "tipo": "mpesa"
-}
-
-Para E-Mola:
-{
-  "referencia": "PP250712.2035.u31398",
+  "referencia": "PP250821.1152.E58547",
   "valor": "375",
   "encontrado": true,
-  "confianca": "alta",
   "tipo": "emola"
+}
+
+Para M-Pesa (CASE ORIGINAL):
+{
+  "referencia": "CHK8H3PYKpe",
+  "valor": "125",
+  "encontrado": true,
+  "tipo": "mpesa"
 }`;
 
     try {
@@ -113,48 +120,51 @@ Para E-Mola:
         console.log(`   🔄 ATACADO: Primeira tentativa falhou, tentando novamente com prompt alternativo...`);
         
         const promptAlternativo = `
-🚨 SEGUNDA TENTATIVA - FOCO TOTAL EM REFERÊNCIAS QUEBRADAS!
+🚨 SEGUNDA TENTATIVA - FOCO ESPECIAL EM E-MOLA CORTADO!
 
-PROBLEMA: A primeira tentativa pode ter cortado a referência!
+PROBLEMA IDENTIFICADO: Você está cortando referências E-Mola!
 
-Na imagem, procure por QUALQUER texto que pareça código:
-- Pode estar em 2, 3 ou mais linhas separadas
-- Junte TODAS as partes que encontrar
-- NÃO deixe nada para trás!
+🟡 FORMATO E-MOLA OBRIGATÓRIO:
+XX######.####.######
+SEMPRE 3 partes separadas por 2 pontos!
 
-EXEMPLO REAL DO QUE VOCÊ DEVE FAZER:
-Se você vê na tela:
-"CHK8H3PYK" (primeira linha)
-"PE" (segunda linha)  
-"123" (terceira linha - se houver)
+EXEMPLOS DO QUE VOCÊ DEVE ENCONTRAR COMPLETO:
+✅ "PP250820.1706.e9791" (CORRETO - com 3 partes)
+❌ "PP250820.1706.e979" (ERRADO - cortou o último dígito)
+❌ "PP250820.1706" (ERRADO - faltou a terceira parte)
 
-RESULTADO: "CHK8H3PYKPE123" (juntando TUDO!)
+🔍 COMO ENCONTRAR E-MOLA COMPLETO:
+1. Procure por texto que começa com 2 letras (PP, EP, etc.)
+2. Seguido de números e pontos
+3. CONTE os pontos: deve ter EXATAMENTE 2 pontos
+4. Terceira parte: pode ser letra+números (e9791, h45672, u31398)
+5. SE quebrado em linhas, JUNTE TUDO!
 
-🔍 DICAS PARA ENCONTRAR REFERÊNCIA COMPLETA:
-1. Olhe linha por linha na imagem
-2. Procure por códigos alfanuméricos
-3. Se encontrar múltiplas partes, JUNTE TODAS
-4. Referências M-Pesa podem ter até 15 caracteres
-5. Referências E-Mola mantêm os pontos
+CENÁRIO QUEBRADO COMUM:
+Se você vê:
+"PP250820.1706." (linha 1)
+"e9791" (linha 2)
+RESULTADO: "PP250820.1706.e9791" ✅
 
-⚠️ ESTE É O PROBLEMA PRINCIPAL: VOCÊ ESTÁ CORTANDO AS REFERÊNCIAS!
+🔵 PARA M-PESA:
+Se quebrado: "CHK8H3PYK" + "PE" = "CHK8H3PYKPE"
 
-TENTE NOVAMENTE e inclua TODA a referência que conseguir ver!
+⚠️ NÃO CORTE E NÃO ALTERE MAIÚSCULAS/MINÚSCULAS! Capture EXATAMENTE como aparece!
 
-Para M-Pesa (SEM pontos):
+Para E-Mola (SEMPRE 3 partes com pontos e CASE ORIGINAL):
 {
-  "referencia": "REFERENCIA_COMPLETA_AQUI",
-  "valor": "VALOR",
-  "encontrado": true,
-  "tipo": "mpesa"
-}
-
-Para E-Mola (COM pontos):
-{
-  "referencia": "PP250712.2035.u31398",
-  "valor": "VALOR", 
+  "referencia": "PP250821.1152.E58547",
+  "valor": "375",
   "encontrado": true,
   "tipo": "emola"
+}
+
+Para M-Pesa (sem pontos e CASE ORIGINAL):
+{
+  "referencia": "CHK8H3PYKpe",
+  "valor": "125",
+  "encontrado": true,
+  "tipo": "mpesa"
 }`;
 
         resposta = await this.openai.chat.completions.create({
@@ -195,9 +205,21 @@ Para E-Mola (COM pontos):
         console.log(`   ✅ ATACADO: Dados extraídos com sucesso: ${comprovante.referencia} - ${comprovante.valor}MT (${comprovante.tipo}, confiança: ${comprovante.confianca})`);
         
         // VALIDAÇÃO ADICIONAL PARA E-MOLA
-        if (comprovante.tipo === 'emola' && !comprovante.referencia.includes('.')) {
-          console.log(`   ⚠️ ATACADO: ATENÇÃO - Referência E-Mola sem pontos detectada: ${comprovante.referencia}`);
-          console.log(`   🔧 ATACADO: Pode ter havido erro na limpeza da referência E-Mola`);
+        if (comprovante.tipo === 'emola') {
+          const pontosCount = (comprovante.referencia.match(/\./g) || []).length;
+          if (pontosCount !== 2) {
+            console.log(`   ⚠️ ATACADO: ERRO - Referência E-Mola deve ter exatamente 2 pontos! Encontrados: ${pontosCount}`);
+            console.log(`   🔧 ATACADO: Referência possivelmente incompleta: ${comprovante.referencia}`);
+          }
+          
+          // Verificar se tem as 3 partes
+          const partes = comprovante.referencia.split('.');
+          if (partes.length !== 3) {
+            console.log(`   ⚠️ ATACADO: ERRO - E-Mola deve ter 3 partes! Encontradas: ${partes.length}`);
+            console.log(`   🔧 ATACADO: Partes: ${JSON.stringify(partes)}`);
+          } else {
+            console.log(`   ✅ ATACADO: E-Mola com formato correto - 3 partes: ${partes.join(' | ')}`);
+          }
         }
         // Continuar com o processamento normal...
         if (temLegendaValida) {
@@ -325,7 +347,7 @@ Para E-Mola (COM pontos):
     return { encontrado: false, motivo: 'parsing_failed' };
   }
 
-  // === LIMPEZA DE REFERÊNCIA MELHORADA ===
+  // === LIMPEZA DE REFERÊNCIA MELHORADA - MANTÉM CASE ORIGINAL ===
   limparReferencia(referencia) {
     if (!referencia) return '';
     
@@ -335,21 +357,21 @@ Para E-Mola (COM pontos):
     const eEMola = refLimpa.includes('.');
     
     if (eEMola) {
-      // PARA E-MOLA: Manter pontos e formato original
+      // PARA E-MOLA: Manter pontos E CASE ORIGINAL
       refLimpa = refLimpa
         .replace(/\s+/g, '') // Remove apenas espaços e quebras de linha
-        .replace(/[^\w.]/g, '') // Remove caracteres especiais MAS MANTÉM pontos
-        .toLowerCase(); // E-Mola geralmente é minúsculo
+        .replace(/[^\w.]/g, ''); // Remove caracteres especiais MAS MANTÉM pontos
+        // ❌ REMOVIDO: .toLowerCase() - MANTÉM CASE ORIGINAL!
       
-      console.log(`   🟡 ATACADO: Referência E-Mola limpa: "${referencia}" -> "${refLimpa}"`);
+      console.log(`   🟡 ATACADO: Referência E-Mola limpa (CASE ORIGINAL): "${referencia}" -> "${refLimpa}"`);
     } else {
-      // PARA M-PESA: Remover tudo exceto alfanuméricos
+      // PARA M-PESA: Remover caracteres especiais MAS MANTER CASE ORIGINAL
       refLimpa = refLimpa
         .replace(/\s+/g, '') // Remove espaços e quebras de linha
-        .replace(/[^\w]/g, '') // Remove caracteres não alfanuméricos (incluindo pontos)
-        .toUpperCase(); // M-Pesa geralmente é maiúsculo
+        .replace(/[^\w]/g, ''); // Remove caracteres não alfanuméricos (incluindo pontos)
+        // ❌ REMOVIDO: .toUpperCase() - MANTÉM CASE ORIGINAL!
       
-      console.log(`   🔵 ATACADO: Referência M-Pesa limpa: "${referencia}" -> "${refLimpa}"`);
+      console.log(`   🔵 ATACADO: Referência M-Pesa limpa (CASE ORIGINAL): "${referencia}" -> "${refLimpa}"`);
     }
     
     return refLimpa;
