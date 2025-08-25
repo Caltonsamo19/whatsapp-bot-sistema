@@ -1047,9 +1047,14 @@ client.on('message', async (message) => {
             return;
         }
 
+        const configGrupo = getConfiguracaoGrupo(message.from);
+        if (!configGrupo || message.fromMe) {
+            return;
+        }
+
         // ============================================================================
-        // NOVA LÓGICA: BOT DE DIVISÃO TEM PRIORIDADE
-        // Se o bot de divisão processar a mensagem, não passa para o bot original
+        // NOVA LÓGICA: BOT DE DIVISÃO TEM PRIORIDADE ABSOLUTA
+        // Processa ANTES da IA para aplicar filtros inteligentes
         // ============================================================================
         
         const remetente = message.author || message.from;
@@ -1073,11 +1078,6 @@ client.on('message', async (message) => {
             if (resultadoDivisao.resposta) {
                 return;
             }
-        }
-
-        const configGrupo = getConfiguracaoGrupo(message.from);
-        if (!configGrupo || message.fromMe) {
-            return;
         }
 
         // === MODERAÇÃO ===
