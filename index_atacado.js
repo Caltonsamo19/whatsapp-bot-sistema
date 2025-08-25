@@ -7,6 +7,9 @@ const axios = require('axios'); // npm install axios
 // === IMPORTAR A IA ATACADO ===
 const WhatsAppAIAtacado = require('./whatsapp_ai_atacado');
 
+// === IMPORTAR O BOT DE DIVISÃO ===
+const WhatsAppBotDivisao = require('./whatsapp_bot_divisao');
+
 // === CONFIGURAÇÃO GOOGLE SHEETS - BOT ATACADO (CONFIGURADA) ===
 const GOOGLE_SHEETS_CONFIG_ATACADO = {
     scriptUrl: process.env.GOOGLE_SHEETS_SCRIPT_URL_ATACADO || 'https://script.google.com/macros/s/AKfycbzdvM-IrH4a6gS53WZ0J-AGXY0duHfgv15DyxdqUm1BLEm3Z15T67qgstu6yPTedgOSCA/exec',
@@ -53,6 +56,12 @@ const client = new Client({
 require('dotenv').config();
 const ia = new WhatsAppAIAtacado(process.env.OPENAI_API_KEY);
 
+// === INICIALIZAR O BOT DE DIVISÃO ===
+const botDivisao = new WhatsAppBotDivisao();
+
+// Atualizar a configuração do bot de divisão
+botDivisao.CONFIGURACAO_GRUPOS = CONFIGURACAO_GRUPOS_DIVISAO;
+
 // Configuração para encaminhamento
 const ENCAMINHAMENTO_CONFIG = {
     grupoOrigem: '120363402160265624@g.us', // Grupo de atacado
@@ -97,6 +106,40 @@ const MODERACAO_CONFIG = {
         '258871112049@c.us', 
         '258852118624@c.us'
     ]
+};
+
+// === CONFIGURAÇÃO DOS GRUPOS PARA O BOT DE DIVISÃO ===
+// Esta configuração deve estar sincronizada com CONFIGURACAO_GRUPOS
+const CONFIGURACAO_GRUPOS_DIVISAO = {
+    '120363419652375064@g.us': {
+        nome: 'Net Fornecedor V',
+        precos: {
+            10240: 125,    // 10GB = 125MT
+            20480: 250,    // 20GB = 250MT
+            30720: 375,    // 30GB = 375MT
+            40960: 500,    // 40GB = 500MT
+            51200: 625,    // 50GB = 625MT
+            61440: 750,    // 60GB = 750MT
+            71680: 875,    // 70GB = 875MT
+            81920: 1000,   // 80GB = 1000MT
+            92160: 1125,   // 90GB = 1125MT
+            102400: 1250   // 100GB = 1250MT
+        }
+    },
+    '120363402160265624@g.us': {
+        nome: 'Treinamento IA',
+        precos: {
+            10240: 130,    // 10GB = 130MT
+            20480: 260,    // 20GB = 260MT
+            30720: 390,    // 30GB = 390MT
+            40960: 520,    // 40GB = 520MT
+            51200: 630,    // 50GB = 630MT
+            61440: 750,    // 60GB = 750MT
+            71680: 875,    // 70GB = 875MT
+            81920: 1000    // 80GB = 1000MT
+        }
+    }
+    // Only Saldo foi removido pois não precisa de divisão automática
 };
 
 // Configuração para cada grupo (ATACADO)
@@ -149,6 +192,36 @@ NOME: Vasco José Mahumane
 📞 10000 💫 8150 MT
 
 📩 Após o envio do valor, mande o compravativo no grupo e o respectivo número beneficiário.`,
+
+        pagamento: `FORMAS DE PAGAMENTO
+ 
+M-PESA❤: 840326152 
+E-MOLA🧡: 870059057 
+NOME: Vasco José Mahumane 
+
+📝 Após a transferência, mande:
+1️⃣ Comprovativo 
+2️⃣ UM número que vai receber`
+    },
+    '120363402160265624@g.us': {
+        nome: 'Treinamento IA',
+        tabela: `🚨PROMOÇÃO DE GIGABYTES🚨
+MAIS DE 40 GIGABYTES 12.5
+Oferecemos-lhe serviços extremamente rápido e seguro.🥳
+🛜📶 TABELA NORMAL🌐
+♨ GB's🛜 COMPLETOS🔥
+🌐 10GB  🔰   130MT💳
+🌐 20GB  🔰   260MT💳
+🌐 30GB  🔰   390MT💳
+🌐 40GB  🔰   520MT💳
+
+PACOTE VIP 12.5 24H
+🌐 50GB  🔰   630MT💳
+🌐 60GB  🔰   750MT💳
+🌐 70GB  🔰   875MT💳
+🌐 80GB  🔰 1000MT💳
+
+SINTAM-SE AVONTADE, EXPLOREM-NOS ENQUANTO PUDEREM!`,
 
         pagamento: `FORMAS DE PAGAMENTO
  
@@ -650,6 +723,7 @@ client.on('ready', async () => {
     console.log('🧠 IA WhatsApp ATACADO ativa!');
     console.log('📦 Sistema inteligente: Cálculo automático de megas!');
     console.log('📊 Google Sheets ATACADO configurado!');
+    console.log('🔄 Bot de Divisão ATIVO - Múltiplos números automático!');
     console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
     
     await carregarHistorico();
@@ -741,6 +815,42 @@ client.on('message', async (message) => {
                 const statusIA = ia.getStatusDetalhado();
                 await message.reply(statusIA);
                 console.log(`🧠 Comando .ia executado`);
+                return;
+            }
+
+            // NOVO COMANDO: Status do bot de divisão
+            if (comando === '.divisao') {
+                const status = botDivisao.getStatus();
+                const resposta = `🔄 *BOT DE DIVISÃO STATUS*\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                    `💾 Comprovativos memorizados: ${status.comprovantesMemorizados}\n` +
+                    `⚡ Divisões em processamento: ${status.processandoDivisoes}\n` +
+                    `🏢 Grupos configurados: ${status.gruposConfigurados}\n\n` +
+                    `✅ Sistema ativo e funcionando!`;
+                
+                await message.reply(resposta);
+                return;
+            }
+            
+            // NOVO COMANDO: Testar busca de pagamento
+            if (comando.startsWith('.test_busca ')) {
+                const parametros = comando.replace('.test_busca ', '').split(' ');
+                if (parametros.length >= 2) {
+                    const referencia = parametros[0];
+                    const valor = parseFloat(parametros[1]);
+                    
+                    console.log(`🧪 Testando busca: ${referencia} - ${valor}MT`);
+                    
+                    const resultado = await botDivisao.buscarPagamentoNaPlanilha(referencia, valor);
+                    
+                    const resposta = resultado ? 
+                        `✅ *PAGAMENTO ENCONTRADO*\n\n🔍 Referência: ${referencia}\n💰 Valor: ${valor}MT` :
+                        `❌ *PAGAMENTO NÃO ENCONTRADO*\n\n🔍 Referência: ${referencia}\n💰 Valor: ${valor}MT`;
+                    
+                    await message.reply(resposta);
+                } else {
+                    await message.reply('❌ Uso: .test_busca REFERENCIA VALOR\nExemplo: .test_busca CHP4H5DMI1S 375');
+                }
                 return;
             }
 
@@ -937,6 +1047,34 @@ client.on('message', async (message) => {
             return;
         }
 
+        // ============================================================================
+        // NOVA LÓGICA: BOT DE DIVISÃO TEM PRIORIDADE
+        // Se o bot de divisão processar a mensagem, não passa para o bot original
+        // ============================================================================
+        
+        const remetente = message.author || message.from;
+        const resultadoDivisao = await botDivisao.processarMensagem(message, remetente, message.from);
+        
+        if (resultadoDivisao) {
+            console.log('🔄 DIVISÃO: Mensagem processada pelo bot de divisão');
+            
+            // Se o bot de divisão retornou uma resposta, enviar
+            if (resultadoDivisao.resposta) {
+                await message.reply(resultadoDivisao.resposta);
+            }
+            
+            // Se foi processado com sucesso, não continuar para o bot original
+            if (resultadoDivisao.processado) {
+                console.log(`✅ DIVISÃO: ${resultadoDivisao.sucessos}/${resultadoDivisao.total} pedidos criados`);
+                return; // IMPORTANTE: Sair aqui, não processar no bot original
+            }
+            
+            // Se retornou uma resposta mas não foi processado, também sair
+            if (resultadoDivisao.resposta) {
+                return;
+            }
+        }
+
         const configGrupo = getConfiguracaoGrupo(message.from);
         if (!configGrupo || message.fromMe) {
             return;
@@ -972,6 +1110,30 @@ client.on('message', async (message) => {
                 }
                 
                 const resultadoIA = await ia.processarMensagemBot(media.data, remetente, 'imagem', configGrupo, legendaImagem);
+                
+                // === VERIFICAÇÃO ESPECIAL: SE A IA DETECTOU MÚLTIPLOS NÚMEROS ===
+                if (resultadoIA.tipo === 'multiplos_numeros_nao_permitido') {
+                    console.log('🔄 IA detectou múltiplos números em imagem, redirecionando para bot de divisão...');
+                    
+                    // Criar mensagem simulada com os números detectados
+                    const mensagemNumeros = resultadoIA.numeros.join('\n');
+                    const messageSimulada = {
+                        body: mensagemNumeros,
+                        reply: message.reply.bind(message)
+                    };
+                    
+                    const resultadoDivisaoImagem = await botDivisao.processarMensagem(
+                        messageSimulada, 
+                        remetente, 
+                        message.from
+                    );
+                    
+                    if (resultadoDivisaoImagem && resultadoDivisaoImagem.resposta) {
+                        await message.reply(resultadoDivisaoImagem.resposta);
+                    }
+                    
+                    return;
+                }
                 
                 if (resultadoIA.sucesso) {
                     
@@ -1113,11 +1275,25 @@ client.on('message', async (message) => {
             return;
             
         } else if (resultadoIA.tipo === 'multiplos_numeros_nao_permitido') {
-            await message.reply(
-                `📱 *${resultadoIA.numeros.length} números detectados*\n\n` +
-                `❌ Sistema atacado aceita apenas UM número por vez.\n\n` +
-                `📝 Envie apenas um número para receber o valor integral.`
+            console.log('🔄 IA detectou múltiplos números, redirecionando para bot de divisão...');
+            
+            const resultadoDivisaoTexto = await botDivisao.processarMensagem(
+                message, 
+                remetente, 
+                message.from
             );
+            
+            if (resultadoDivisaoTexto && resultadoDivisaoTexto.resposta) {
+                await message.reply(resultadoDivisaoTexto.resposta);
+            } else {
+                // Fallback para a mensagem original se o bot de divisão não processar
+                await message.reply(
+                    `📱 *${resultadoIA.numeros.length} números detectados*\n\n` +
+                    `❌ Sistema atacado aceita apenas UM número por vez.\n\n` +
+                    `📝 Envie apenas um número para receber o valor integral.`
+                );
+            }
+            
             return;
         }
 
