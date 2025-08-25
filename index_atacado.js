@@ -59,9 +59,6 @@ const ia = new WhatsAppAIAtacado(process.env.OPENAI_API_KEY);
 // === INICIALIZAR O BOT DE DIVISÃO ===
 const botDivisao = new WhatsAppBotDivisao();
 
-// Atualizar a configuração do bot de divisão
-botDivisao.CONFIGURACAO_GRUPOS = CONFIGURACAO_GRUPOS_DIVISAO;
-
 // Configuração para encaminhamento
 const ENCAMINHAMENTO_CONFIG = {
     grupoOrigem: '120363402160265624@g.us', // Grupo de atacado
@@ -141,6 +138,9 @@ const CONFIGURACAO_GRUPOS_DIVISAO = {
     }
     // Only Saldo foi removido pois não precisa de divisão automática
 };
+
+// Atualizar a configuração do bot de divisão
+botDivisao.CONFIGURACAO_GRUPOS = CONFIGURACAO_GRUPOS_DIVISAO;
 
 // Configuração para cada grupo (ATACADO)
 const CONFIGURACAO_GRUPOS = {
