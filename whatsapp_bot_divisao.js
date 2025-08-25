@@ -477,7 +477,7 @@ class WhatsAppBotDivisao {
             const dados = {
                 grupo_id: grupoId,
                 timestamp: timestamp,
-                transacao: dadosCompletos,
+                dados: dadosCompletos,
                 sender: "WhatsApp-Bot-Divisao",
                 message: `Pedido dividido: ${dadosCompletos}`
             };
