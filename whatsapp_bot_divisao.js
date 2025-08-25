@@ -105,10 +105,16 @@ class WhatsAppBotDivisao {
     
     // === EXTRAIR COMPROVATIVO ===
     extrairComprovativo(mensagem) {
-        const temConfirmado = /^confirmado/i.test(mensagem.trim());
-        const temID = /^id\s/i.test(mensagem.trim());
+        const mensagemLimpa = mensagem.trim();
+        console.log(`🔍 DIVISÃO: Verificando comprovativo em: "${mensagemLimpa.substring(0, 50)}..."`);
+        
+        const temConfirmado = /^confirmado/i.test(mensagemLimpa);
+        const temID = /^id\s/i.test(mensagemLimpa);
+        
+        console.log(`🔍 DIVISÃO: temConfirmado: ${temConfirmado}, temID: ${temID}`);
         
         if (!temConfirmado && !temID) {
+            console.log(`❌ DIVISÃO: Não é comprovativo (não começa com Confirmado ou ID)`);
             return null;
         }
         
@@ -148,10 +154,14 @@ class WhatsAppBotDivisao {
             }
         }
         
+        console.log(`🔍 DIVISÃO: Referência extraída: "${referencia}", Valor: ${valor}`);
+        
         if (referencia && valor) {
+            console.log(`✅ DIVISÃO: Comprovativo extraído com sucesso!`);
             return { referencia, valor };
         }
         
+        console.log(`❌ DIVISÃO: Falha na extração - Referência: ${referencia}, Valor: ${valor}`);
         return null;
     }
     
