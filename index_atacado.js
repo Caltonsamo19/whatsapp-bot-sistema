@@ -1102,7 +1102,6 @@ client.on('message', async (message) => {
                     throw new Error('Falha ao baixar imagem');
                 }
                 
-                const remetente = message.author || message.from;
                 const legendaImagem = message.body || null;
                 
                 if (legendaImagem) {
@@ -1218,7 +1217,6 @@ client.on('message', async (message) => {
         }
 
         // === PROCESSAMENTO COM IA ===
-        const remetente = message.author || message.from;
         const resultadoIA = await ia.processarMensagemBot(message.body, remetente, 'texto', configGrupo);
         
         if (resultadoIA.erro) {
