@@ -176,7 +176,37 @@ class WhatsAppBotDivisao {
         // Remover duplicatas
         const numerosUnicos = [...new Set(numerosLimpos)];
         
-        return numerosUnicos.length > 0 ? numerosUnicos : null;
+        // === FILTRAR NÚMEROS QUE NÃO SÃO PARA DIVISÃO ===
+        const numerosFiltrados = this.filtrarNumerosComprovante(numerosUnicos, mensagem);
+        
+        return numerosFiltrados.length > 0 ? numerosFiltrados : null;
+    }
+    
+    // === FILTRAR NÚMEROS DE COMPROVANTE ===
+    filtrarNumerosComprovante(numeros, mensagem) {
+        return numeros.filter(numero => {
+            // Números que aparecem em contextos de pagamento (M-Pesa/eMola) não são para divisão
+            const contextosPagamento = [
+                new RegExp(`para\\s+${numero}\\s*-`, 'i'),        // "para 840326152 - VASCO"
+                new RegExp(`para\\s+${numero}\\s*,`, 'i'),        // "para 840326152, nome"
+                new RegExp(`conta\\s+${numero}`, 'i'),            // "conta 840326152"
+                new RegExp(`M-Pesa.*${numero}`, 'i'),             // "M-Pesa ... 840326152"
+                new RegExp(`eMola.*${numero}`, 'i'),              // "eMola ... 840326152"
+                new RegExp(`${numero}.*VASCO`, 'i'),              // "840326152 - VASCO"
+                new RegExp(`${numero}.*Mahumane`, 'i'),           // números associados ao nome
+                new RegExp(`Transferiste.*para\\s+${numero}`, 'i') // "Transferiste ... para 840326152"
+            ];
+            
+            // Se o número aparece em contexto de pagamento, não é para divisão
+            for (const padrao of contextosPagamento) {
+                if (padrao.test(mensagem)) {
+                    console.log(`🚫 DIVISÃO: ${numero} ignorado (contexto de pagamento)`);
+                    return false;
+                }
+            }
+            
+            return true; // Número válido para divisão
+        });
     }
     
     // === LIMPAR NÚMERO ===
