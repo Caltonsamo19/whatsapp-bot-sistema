@@ -63,10 +63,19 @@ class WhatsAppBotDivisao {
                 return null; // Não responde ainda
             }
             
-            // 2. DETECTAR SE É APENAS MÚLTIPLOS NÚMEROS
+            // 2. DETECTAR MÚLTIPLOS NÚMEROS (para verificar se precisa processar)
             const numerosDetectados = this.extrairMultiplosNumeros(mensagem);
-            if (numerosDetectados && numerosDetectados.length > 1) {
+            
+            // 3. PRIORIDADE: COMPROVATIVO + MÚLTIPLOS NÚMEROS NA MESMA MENSAGEM
+            if (comprovativo && numerosDetectados && numerosDetectados.length > 1) {
+                console.log(`🎯 DIVISÃO: Comprovativo + múltiplos números na mesma mensagem!`);
                 console.log(`📱 DIVISÃO: ${numerosDetectados.length} números detectados: ${numerosDetectados.join(', ')}`);
+                return await this.processarDivisao(comprovativo, numerosDetectados, grupoId, message);
+            }
+            
+            // 4. CASO ALTERNATIVO: APENAS MÚLTIPLOS NÚMEROS (buscar comprovativo memorizado)
+            if (numerosDetectados && numerosDetectados.length > 1 && !comprovativo) {
+                console.log(`📱 DIVISÃO: ${numerosDetectados.length} números detectados sem comprovativo na mensagem`);
                 
                 // Procurar comprovativo memorizado
                 let comprovantivoAssociado = this.comprovantesMemorizados[remetente];
@@ -77,7 +86,7 @@ class WhatsAppBotDivisao {
                 }
                 
                 if (comprovantivoAssociado) {
-                    console.log(`✅ DIVISÃO: Comprovativo encontrado para divisão!`);
+                    console.log(`✅ DIVISÃO: Comprovativo memorizado encontrado para divisão!`);
                     return await this.processarDivisao(comprovantivoAssociado, numerosDetectados, grupoId, message);
                 } else {
                     console.log(`❌ DIVISÃO: Nenhum comprovativo encontrado para ${remetente}`);
@@ -85,12 +94,6 @@ class WhatsAppBotDivisao {
                         resposta: `📱 *${numerosDetectados.length} números detectados*\n\n❌ Não encontrei seu comprovativo nos últimos 30 minutos.\n\n🔍 Envie primeiro o comprovativo de pagamento.`
                     };
                 }
-            }
-            
-            // 3. DETECTAR COMPROVATIVO + MÚLTIPLOS NÚMEROS NA MESMA MENSAGEM
-            if (comprovativo && numerosDetectados && numerosDetectados.length > 1) {
-                console.log(`🎯 DIVISÃO: Comprovativo + múltiplos números na mesma mensagem!`);
-                return await this.processarDivisao(comprovativo, numerosDetectados, grupoId, message);
             }
             
             return null; // Não é caso para divisão
