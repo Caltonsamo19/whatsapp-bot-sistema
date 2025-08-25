@@ -533,7 +533,11 @@ class WhatsAppBotDivisao {
             
             console.log(`💰 DIVISÃO: Resposta recebida:`, response.data);
             
-            if (!response.data || !response.data.success) {
+            // Verificar se foi sucesso - pode ser objeto {success: true} ou string "Sucesso!"
+            const isSuccess = (response.data && response.data.success) || 
+                             (typeof response.data === 'string' && response.data.includes('Sucesso'));
+            
+            if (!response.data || !isSuccess) {
                 const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
                 throw new Error(`Erro ao salvar pagamento: ${responseText}`);
             }
