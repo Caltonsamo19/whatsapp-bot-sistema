@@ -369,6 +369,8 @@ class WhatsAppBotDivisao {
                 }
             });
             
+            console.log(`🔍 DIVISÃO: Resposta da busca:`, JSON.stringify(response.data));
+            
             if (response.data && response.data.encontrado) {
                 console.log(`✅ DIVISÃO: Pagamento encontrado!`);
                 return true;
