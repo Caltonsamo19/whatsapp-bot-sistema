@@ -468,52 +468,79 @@ class WhatsAppBotDivisao {
     
     // === ENVIAR PARA PLANILHA DE PEDIDOS ===
     async enviarParaPlanilhaPedidos(referencia, megas, numero, grupoId) {
-        const timestamp = new Date().toLocaleString('pt-BR');
-        const dadosCompletos = `${referencia}|${megas}|${numero}|${timestamp}`;
-        
-        const dados = {
-            grupo_id: grupoId,
-            timestamp: timestamp,
-            transacao: dadosCompletos,
-            sender: "WhatsApp-Bot-Divisao",
-            message: `Pedido dividido: ${dadosCompletos}`
-        };
-        
-        const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
-            timeout: 10000,
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (!response.data || !response.data.includes('Sucesso')) {
-            throw new Error(`Erro ao salvar pedido: ${response.data}`);
+        try {
+            console.log(`📋 DIVISÃO: Enviando pedido ${referencia}|${megas}|${numero}`);
+            
+            const timestamp = new Date().toLocaleString('pt-BR');
+            const dadosCompletos = `${referencia}|${megas}|${numero}|${timestamp}`;
+            
+            const dados = {
+                grupo_id: grupoId,
+                timestamp: timestamp,
+                transacao: dadosCompletos,
+                sender: "WhatsApp-Bot-Divisao",
+                message: `Pedido dividido: ${dadosCompletos}`
+            };
+            
+            console.log(`📋 DIVISÃO: URL PEDIDOS: ${this.SCRIPTS_CONFIG.PEDIDOS}`);
+            console.log(`📋 DIVISÃO: Dados:`, JSON.stringify(dados));
+            
+            const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
+                timeout: 10000,
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            console.log(`📋 DIVISÃO: Resposta recebida:`, response.data);
+            
+            const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+            if (!response.data || !responseText.includes('Sucesso')) {
+                throw new Error(`Erro ao salvar pedido: ${responseText}`);
+            }
+            
+            console.log(`✅ DIVISÃO: Pedido salvo com sucesso - ${referencia}|${megas}|${numero}`);
+            
+        } catch (error) {
+            console.error(`❌ DIVISÃO: Erro ao enviar pedido:`, error.message);
+            throw error;
         }
-        
-        console.log(`📋 DIVISÃO: Pedido salvo - ${referencia}|${megas}|${numero}`);
     }
     
     // === ENVIAR PARA PLANILHA DE PAGAMENTOS ===
     async enviarParaPlanilhaPagamentos(referencia, valor, numero, grupoId) {
-        const timestamp = new Date().toLocaleString('pt-BR');
-        const dadosCompletos = `${referencia}|${valor}|${numero}|${timestamp}`;
-        
-        const dados = {
-            grupo_id: grupoId,
-            timestamp: timestamp,
-            transacao: dadosCompletos,
-            sender: "WhatsApp-Bot-Divisao",
-            message: `Pagamento dividido: ${dadosCompletos}`
-        };
-        
-        const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, dados, {
-            timeout: 10000,
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (!response.data || !response.data.includes('Sucesso')) {
-            throw new Error(`Erro ao salvar pagamento: ${response.data}`);
+        try {
+            console.log(`💰 DIVISÃO: Enviando pagamento ${referencia}|${valor}|${numero}`);
+            
+            const timestamp = new Date().toLocaleString('pt-BR');
+            const dadosCompletos = `${referencia}|${valor}|${numero}|${timestamp}`;
+            
+            const dados = {
+                grupo_id: grupoId,
+                timestamp: timestamp,
+                transacao: dadosCompletos,
+                sender: "WhatsApp-Bot-Divisao",
+                message: `Pagamento dividido: ${dadosCompletos}`
+            };
+            
+            console.log(`💰 DIVISÃO: URL PAGAMENTOS: ${this.SCRIPTS_CONFIG.PAGAMENTOS}`);
+            console.log(`💰 DIVISÃO: Dados:`, JSON.stringify(dados));
+            
+            const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, dados, {
+                timeout: 10000,
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            console.log(`💰 DIVISÃO: Resposta recebida:`, response.data);
+            
+            if (!response.data || !response.data.includes('Sucesso')) {
+                throw new Error(`Erro ao salvar pagamento: ${response.data}`);
+            }
+            
+            console.log(`✅ DIVISÃO: Pagamento salvo com sucesso - ${referencia}|${valor}|${numero}`);
+            
+        } catch (error) {
+            console.error(`❌ DIVISÃO: Erro ao enviar pagamento:`, error.message);
+            throw error;
         }
-        
-        console.log(`💰 DIVISÃO: Pagamento salvo - ${referencia}|${valor}|${numero}`);
     }
     
     // === LIMPEZA DE DADOS ANTIGOS ===
