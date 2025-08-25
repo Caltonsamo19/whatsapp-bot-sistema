@@ -120,7 +120,10 @@ class WhatsAppAIAtacado {
         /📱\s*(\d+)GB\s*➜\s*(\d+)MT/gi,
         /(\d+)GB\s*[-–—]\s*(\d+)MT/gi,
         /📞\s*(\d+)\s*💫\s*(\d+)\s*MT/gi,
-        /(\d+)💫\s*(\d+)MT/gi
+        /(\d+)💫\s*(\d+)MT/gi,
+        /🌐\s*(\d+)GB\s*🔰\s*(\d+)MT💳/gi,  // 🌐 10GB  🔰   130MT💳
+        /(\d+)GB\s*🔰\s*(\d+)MT/gi,         // 10GB  🔰   130MT
+        /🌐.*?(\d+)GB.*?(\d+)MT/gi          // Padrão flexível para 🌐
       ];
       
       for (const padrao of padroes) {
