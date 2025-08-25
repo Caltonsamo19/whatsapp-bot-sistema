@@ -1,9 +1,20 @@
 const axios = require('axios');
+const WhatsAppAIAtacado = require('./whatsapp_ai_atacado');
 
 class WhatsAppBotDivisao {
     constructor() {
         this.comprovantesMemorizados = {};
         this.processandoDivisoes = new Set();
+        
+        // Inicializar IA usando variável de ambiente (mesma do servidor)
+        const openaiApiKey = process.env.OPENAI_API_KEY;
+        if (openaiApiKey) {
+            this.ia = new WhatsAppAIAtacado(openaiApiKey);
+            console.log('🧠 IA integrada ao bot de divisão usando .env!');
+        } else {
+            this.ia = null;
+            console.log('⚠️ IA não disponível - OPENAI_API_KEY não encontrada no .env');
+        }
         
         // URLs dos Google Apps Scripts existentes
         this.SCRIPTS_CONFIG = {
@@ -42,7 +53,7 @@ class WhatsAppBotDivisao {
     // === FUNÇÃO PRINCIPAL - PROCESSAR MENSAGEM ===
     async processarMensagem(message, remetente, grupoId) {
         try {
-            const mensagem = message.body.trim();
+            let mensagem = message.body ? message.body.trim() : '';
             
             // Só processa grupos configurados
             if (!this.CONFIGURACAO_GRUPOS[grupoId]) {
@@ -50,6 +61,26 @@ class WhatsAppBotDivisao {
             }
             
             console.log(`\n🔍 DIVISÃO: Analisando mensagem de ${remetente}`);
+            
+            // VERIFICAR SE TEM IMAGEM COM COMPROVATIVO
+            if (message.hasMedia && (message.type === 'image' || message.type === 'document')) {
+                console.log(`📷 DIVISÃO: Mensagem contém mídia do tipo: ${message.type}`);
+                try {
+                    const textoImagem = await this.extrairTextoDeImagem(message);
+                    if (textoImagem) {
+                        console.log(`📄 DIVISÃO: Texto extraído da imagem: "${textoImagem.substring(0, 100)}..."`);
+                        mensagem = textoImagem + ' ' + mensagem; // Combinar texto da imagem com texto da mensagem
+                    } else {
+                        // Se tem imagem mas não conseguiu extrair texto, orientar o usuário
+                        console.log('💡 DIVISÃO: Imagem detectada mas texto não extraído');
+                        return {
+                            resposta: `📷 *COMPROVATIVO EM IMAGEM DETECTADO*\n\n🧠 Tentei processar com IA avançada mas não consegui extrair os dados.\n\n💡 *Para melhor resultado:*\n• Tire uma foto mais clara e focada\n• Certifique-se que TODO o comprovativo está visível\n• Ou copie e cole o texto do comprovativo\n\n🔍 Exemplo: Confirmado ABC123 - Transferiste 250MT`
+                        };
+                    }
+                } catch (error) {
+                    console.error('❌ DIVISÃO: Erro ao extrair texto da imagem:', error);
+                }
+            }
             
             // 1. DETECTAR SE É COMPROVATIVO SEM NÚMEROS
             const comprovativo = this.extrairComprovativo(mensagem);
@@ -569,6 +600,51 @@ class WhatsAppBotDivisao {
         }
     }
     
+    // === EXTRAIR TEXTO DE IMAGEM COM IA ===
+    async extrairTextoDeImagem(message) {
+        try {
+            console.log('📷 DIVISÃO: Iniciando extração de texto da imagem com IA...');
+            
+            // Verificar se IA está disponível
+            if (!this.ia) {
+                console.log('❌ DIVISÃO: IA não disponível para processar imagens');
+                return null;
+            }
+            
+            // Baixar a mídia
+            const media = await message.downloadMedia();
+            if (!media) {
+                console.log('❌ DIVISÃO: Não foi possível baixar a mídia');
+                return null;
+            }
+            
+            console.log(`📷 DIVISÃO: Mídia baixada - Tipo: ${media.mimetype}, Tamanho: ${media.data.length} bytes`);
+            
+            // Verificar se é imagem
+            if (!media.mimetype || !media.mimetype.startsWith('image/')) {
+                console.log('❌ DIVISÃO: Arquivo não é uma imagem válida');
+                return null;
+            }
+            
+            // Usar a IA avançada para extrair comprovativo da imagem
+            const resultadoIA = await this.ia.processarImagem(media.data, 'usuario_divisao', Date.now(), null, message.body || '');
+            
+            if (resultadoIA && resultadoIA.sucesso && resultadoIA.referencia) {
+                console.log(`✅ DIVISÃO: IA extraiu comprovativo: ${resultadoIA.referencia} - ${resultadoIA.valor}MT`);
+                // Simular texto de comprovativo para o sistema existente
+                const textoSimulado = `Confirmado ${resultadoIA.referencia} - Transferiste ${resultadoIA.valor}MT`;
+                return textoSimulado;
+            } else {
+                console.log('❌ DIVISÃO: IA não conseguiu extrair comprovativo da imagem');
+                return null;
+            }
+            
+        } catch (error) {
+            console.error('❌ DIVISÃO: Erro ao usar IA para extrair texto da imagem:', error);
+            return null;
+        }
+    }
+
     // === STATUS DO BOT ===
     getStatus() {
         return {
