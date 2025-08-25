@@ -494,8 +494,8 @@ class WhatsAppBotDivisao {
             
             console.log(`📋 DIVISÃO: Resposta recebida:`, response.data);
             
-            const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-            if (!response.data || !responseText.includes('Sucesso')) {
+            if (!response.data || !response.data.success) {
+                const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
                 throw new Error(`Erro ao salvar pedido: ${responseText}`);
             }
             
@@ -533,8 +533,9 @@ class WhatsAppBotDivisao {
             
             console.log(`💰 DIVISÃO: Resposta recebida:`, response.data);
             
-            if (!response.data || !response.data.includes('Sucesso')) {
-                throw new Error(`Erro ao salvar pagamento: ${response.data}`);
+            if (!response.data || !response.data.success) {
+                const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+                throw new Error(`Erro ao salvar pagamento: ${responseText}`);
             }
             
             console.log(`✅ DIVISÃO: Pagamento salvo com sucesso - ${referencia}|${valor}|${numero}`);
