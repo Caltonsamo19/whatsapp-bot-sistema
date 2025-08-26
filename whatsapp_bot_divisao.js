@@ -645,7 +645,7 @@ class WhatsAppBotDivisao {
             console.log(`🔍 DIVISÃO: Resultado completo da IA:`, JSON.stringify(resultadoIA, null, 2));
             
             if (resultadoIA && resultadoIA.sucesso) {
-                // Se a IA já processou tudo (comprovativo + número), retornar resultado direto
+                // Se a IA já processou tudo (comprovativo + número único), retornar resultado direto
                 if (resultadoIA.dadosCompletos) {
                     console.log(`✅ DIVISÃO: IA processou TUDO: ${resultadoIA.dadosCompletos}`);
                     return { processadoCompleto: true, resultado: resultadoIA };
@@ -659,11 +659,96 @@ class WhatsAppBotDivisao {
                 }
             }
             
+            // CASO ESPECIAL: IA rejeitou múltiplos números, mas nós queremos processá-los!
+            if (resultadoIA && !resultadoIA.sucesso && resultadoIA.tipo === 'multiplos_numeros_nao_permitido') {
+                console.log('🎯 DIVISÃO: IA detectou múltiplos números - extraindo só comprovativo!');
+                console.log(`📱 DIVISÃO: Múltiplos números detectados: ${resultadoIA.numeros.join(', ')}`);
+                
+                // Extrair apenas o comprovativo usando prompt personalizado para divisão
+                const comprovantivoIA = await this.extrairApenasComprovativo(media.data);
+                
+                if (comprovantivoIA && comprovantivoIA.referencia && comprovantivoIA.valor) {
+                    console.log(`✅ DIVISÃO: Comprovativo extraído: ${comprovantivoIA.referencia} - ${comprovantivoIA.valor}MT`);
+                    
+                    // Simular texto com comprovativo + múltiplos números
+                    const textoSimulado = `Confirmado ${comprovantivoIA.referencia} - Transferiste ${comprovantivoIA.valor}MT ${resultadoIA.numeros.join(' ')}`;
+                    return textoSimulado;
+                }
+            }
+            
             console.log('❌ DIVISÃO: IA não conseguiu extrair comprovativo da imagem');
             return null;
             
         } catch (error) {
             console.error('❌ DIVISÃO: Erro ao usar IA para extrair texto da imagem:', error);
+            return null;
+        }
+    }
+
+    // === EXTRAIR APENAS COMPROVATIVO (SEM NÚMEROS) ===
+    async extrairApenasComprovativo(imagemBase64) {
+        if (!this.ia) return null;
+        
+        try {
+            console.log('🔍 DIVISÃO: Extraindo apenas comprovativo da imagem...');
+            
+            const prompt = `Analise esta imagem de comprovante M-Pesa/E-Mola de Moçambique.
+
+FOQUE APENAS no comprovante - IGNORE todos os números de telefone.
+
+Extraia:
+- Referência da transação (ID da transação)
+- Valor transferido em MT
+
+⚠️ CRÍTICO: Mantenha maiúsculas e minúsculas EXATAMENTE como aparecem!
+
+Responda APENAS no formato JSON:
+{
+  "referencia": "CHP2H5LBZAS",
+  "valor": "250",
+  "encontrado": true,
+  "tipo": "mpesa"
+}
+
+Se não conseguir extrair:
+{"encontrado": false}`;
+
+            const response = await this.ia.openai.chat.completions.create({
+                model: "gpt-4o",
+                messages: [
+                    {
+                        role: "user",
+                        content: [
+                            { type: "text", text: prompt },
+                            {
+                                type: "image_url",
+                                image_url: {
+                                    url: `data:image/jpeg;base64,${imagemBase64}`,
+                                    detail: "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                temperature: 0.1,
+                max_tokens: 300
+            });
+            
+            console.log(`🔍 DIVISÃO: Resposta da IA (só comprovativo): ${response.choices[0].message.content}`);
+            
+            const resultado = this.ia.extrairJSONMelhorado(response.choices[0].message.content);
+            
+            if (resultado && resultado.encontrado) {
+                return {
+                    referencia: resultado.referencia,
+                    valor: this.ia.limparValor(resultado.valor)
+                };
+            }
+            
+            return null;
+            
+        } catch (error) {
+            console.error('❌ DIVISÃO: Erro ao extrair comprovativo:', error);
             return null;
         }
     }
