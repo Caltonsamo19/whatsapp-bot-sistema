@@ -552,8 +552,10 @@ ANALISE esta imagem de comprovante M-Pesa/E-Mola de Moçambique com MÁXIMA PREC
 2. "1" (UM) vs "I" (letra i maiúscula) vs "l" (L minúsculo): 1 tem base serifs, I tem serifs superior/inferior, l é reto
 3. "5" (CINCO) vs "S" (letra S): 5 tem ângulos retos, S é curvo
 4. "6" (SEIS) vs "G" (letra G): 6 é mais fechado, G tem abertura horizontal
-5. "8" (OITO) vs "B" (letra B): 8 tem duas curvas, B tem linhas retas verticais
+5. "8" (OITO) vs "B" (letra B): ⚠️ CRÍTICO! 8 tem dois círculos/ovais EMPILHADOS, B tem linha vertical RETA à esquerda + duas saliências arredondadas
 6. "2" (DOIS) vs "Z" (letra Z): 2 tem curva, Z tem apenas ângulos
+7. "3" (TRÊS) vs "E" (letra E): 3 tem curvas, E tem linhas retas horizontais
+8. "4" (QUATRO) vs "A" (letra A): 4 tem linha horizontal no meio, A tem pico triangular no topo
 
 🔍 MÉTODO DE VALIDAÇÃO CHARACTER-BY-CHARACTER:
 - EXAMINE cada caractere individualmente
@@ -593,11 +595,14 @@ EXEMPLOS CRÍTICOS DE CONFUSÃO:
 6. SE estiver quebrado em linhas, JUNTE TUDO!
 7. ⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
 
-🎯 TÉCNICA DE VERIFICAÇÃO:
-- Se há dúvida entre 0/O: em códigos alfanuméricos, 0 é mais comum em posições numéricas
-- Se há dúvida entre 1/I/l: em códigos, 1 é mais comum que I ou l
-- Se há dúvida entre 5/S: em códigos, números são mais comuns que letras similares
+🎯 TÉCNICA DE VERIFICAÇÃO ULTRA-PRECISA:
+- Se há dúvida entre 0/O: 0 é mais comum em códigos de transação, observe se é oval vertical
+- Se há dúvida entre 1/I/l: 1 é mais comum em códigos, observe serifs na base
+- Se há dúvida entre 5/S: 5 tem ângulos retos definidos, S é completamente curvo
+- ⚠️ CRÍTICO 8/B: 8 parece "boneco de neve" (dois círculos empilhados), B parece "P com duas barrigas"
+- Se há dúvida entre 6/G: 6 é completamente fechado, G tem "boca aberta" à direita
 - CONTEXTO: datas/horas sempre usam números (0-9)
+- REGRA DE OURO: Em referências de pagamento, NÚMEROS são 90% mais prováveis que letras similares
 
 VALOR: Procure valor em MT (ex: "375.00MT", "125MT")
 
@@ -646,8 +651,8 @@ Para M-Pesa (sem pontos e CASE ORIGINAL):
 ❌ G: tem abertura horizontal direita
 
 "8" (OITO) vs "B" (letra B):
-✅ 8: duas formas ovais empilhadas
-❌ B: linha vertical reta com duas saliências
+✅ 8: parece "boneco de neve" - dois círculos/ovais perfeitamente empilhados
+❌ B: tem linha vertical RETA à esquerda + duas "barrigas" arredondadas (parece P duplo)
 
 ⚠️ REGRA DE OURO: Em códigos de transação, NÚMEROS são 10x mais comuns que letras similares!
 
@@ -913,8 +918,10 @@ Para M-Pesa:
             .replace(/l/g, '1')    // l -> 1
             .replace(/S/g, '5')    // S -> 5
             .replace(/G/g, '6')    // G -> 6
-            .replace(/B/g, '8')    // B -> 8
-            .replace(/Z/g, '2');   // Z -> 2
+            .replace(/B/g, '8')    // B -> 8 ⚠️ CRÍTICO!
+            .replace(/Z/g, '2')    // Z -> 2
+            .replace(/E/g, '3')    // E -> 3
+            .replace(/A/g, '4');   // A -> 4
           
           if (data !== dataCorrigida) {
             correcoes.push(`Data: ${data} → ${dataCorrigida}`);
@@ -931,8 +938,10 @@ Para M-Pesa:
             .replace(/l/g, '1')    // l -> 1
             .replace(/S/g, '5')    // S -> 5
             .replace(/G/g, '6')    // G -> 6
-            .replace(/B/g, '8')    // B -> 8
-            .replace(/Z/g, '2');   // Z -> 2
+            .replace(/B/g, '8')    // B -> 8 ⚠️ CRÍTICO!
+            .replace(/Z/g, '2')    // Z -> 2
+            .replace(/E/g, '3')    // E -> 3
+            .replace(/A/g, '4');   // A -> 4
           
           if (parte2 !== horaCorrigida) {
             correcoes.push(`Hora: ${parte2} → ${horaCorrigida}`);
@@ -945,13 +954,15 @@ Para M-Pesa:
         // Aplicar correções baseadas em contexto - mais conservador
         const parte3Corrigida = parte3
           .replace(/O(?=[0-9])/g, '0')    // O seguido de número -> 0
-          .replace(/(?<=[0-9])O/g, '0')   // O precedido de número -> 0
+          .replace(/(?<=[0-9])O$/g, '0')  // O precedido de número no final -> 0
           .replace(/I(?=[0-9])/g, '1')    // I seguido de número -> 1
           .replace(/(?<=[0-9])I/g, '1')   // I precedido de número -> 1
           .replace(/l(?=[0-9])/g, '1')    // l seguido de número -> 1
           .replace(/(?<=[0-9])l/g, '1')   // l precedido de número -> 1
           .replace(/S(?=[0-9])/g, '5')    // S seguido de número -> 5
-          .replace(/(?<=[0-9])S/g, '5');  // S precedido de número -> 5
+          .replace(/(?<=[0-9])S/g, '5')   // S precedido de número -> 5
+          .replace(/B(?=[0-9])/g, '8')    // B seguido de número -> 8 ⚠️ CRÍTICO!
+          .replace(/(?<=[0-9])B/g, '8');  // B precedido de número -> 8
         
         if (parte3 !== parte3Corrigida) {
           correcoes.push(`Código: ${parte3} → ${parte3Corrigida}`);
@@ -974,7 +985,14 @@ Para M-Pesa:
         .replace(/l(?=[0-9])/g, '1')    // l seguido de número -> 1
         .replace(/(?<=[0-9])l/g, '1')   // l precedido de número -> 1
         .replace(/S(?=[0-9])/g, '5')    // S seguido de número -> 5
-        .replace(/(?<=[0-9])S$/g, '5'); // S no final precedido de número -> 5
+        .replace(/(?<=[0-9])S$/g, '5')  // S no final precedido de número -> 5
+        .replace(/B(?=[0-9])/g, '8')    // B seguido de número -> 8 ⚠️ CRÍTICO!
+        .replace(/(?<=[0-9])B$/g, '8')  // B no final precedido de número -> 8
+        .replace(/(?<=[0-9])B(?=[A-Z])/g, '8')  // B entre número e letra -> 8
+        .replace(/(?<=[A-Z])B(?=[0-9])/g, '8')  // B entre letra e número -> 8 
+        .replace(/G(?=[0-9])/g, '6')    // G seguido de número -> 6
+        .replace(/E(?=[0-9])/g, '3')    // E seguido de número -> 3
+        .replace(/A(?=[0-9])/g, '4');   // A seguido de número -> 4
       
       if (original !== corrigida) {
         correcoes.push(`M-Pesa: ${original} → ${corrigida}`);

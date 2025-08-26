@@ -349,6 +349,78 @@ class WhatsAppBotDivisao {
         return null;
     }
     
+    // === EXTRAIR ESPECIFICAÇÕES DO CLIENTE ===
+    extrairEspecificacoes(mensagem, numeros) {
+        console.log(`🔍 DIVISÃO: Extraindo especificações da mensagem`);
+        
+        // Padrões para detectar especificações de GB (mais específicos)
+        const padroes = [
+            /^(\d+)\s*gb\s*$/gi,       // Linha só com "10gb"
+            /^(\d+)\s*GB\s*$/gi,       // Linha só com "10GB"
+            /(\d+)\s*gb\s+(\d{9})/gi,  // "10gb 852118624" na mesma linha
+            /(\d{9})\s+(\d+)\s*gb/gi,  // "852118624 10gb" na mesma linha
+            /(\d+)\s*GB\s+(\d{9})/gi,  // "10GB 852118624" na mesma linha
+            /(\d{9})\s+(\d+)\s*GB/gi   // "852118624 10GB" na mesma linha
+        ];
+        
+        const especificacoes = {};
+        const linhas = mensagem.split('\n').map(linha => linha.trim());
+        
+        // Primeira passagem: identificar especificações na mesma linha
+        for (const padrao of padroes.slice(2)) { // Pular os dois primeiros (só GB)
+            let match;
+            while ((match = padrao.exec(mensagem)) !== null) {
+                let gb, numero;
+                
+                // Determinar qual é GB e qual é número baseado no tamanho
+                if (match[1].length === 9) {
+                    // match[1] é número, match[2] é GB
+                    numero = match[1];
+                    gb = parseInt(match[2]);
+                } else {
+                    // match[1] é GB, match[2] é número
+                    gb = parseInt(match[1]);
+                    numero = match[2];
+                }
+                
+                // Verificar se o número está na nossa lista
+                if (numeros.includes(numero)) {
+                    especificacoes[numero] = gb * 1024; // Converter para MB
+                    console.log(`   📋 Especificação encontrada: ${numero} → ${gb}GB (mesma linha)`);
+                }
+            }
+        }
+        
+        // Segunda passagem: especificações em linhas separadas
+        for (let i = 0; i < linhas.length; i++) {
+            const linha = linhas[i];
+            
+            // Verificar se a linha contém só GB
+            const matchGb = linha.match(/^(\d+)\s*gb\s*$/i);
+            if (matchGb) {
+                const gb = parseInt(matchGb[1]);
+                
+                // Procurar números nas próximas linhas
+                for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
+                    const linhaNumero = linhas[j];
+                    const matchNumero = linhaNumero.match(/^(\d{9})$/);
+                    
+                    if (matchNumero) {
+                        const numero = matchNumero[1];
+                        if (numeros.includes(numero) && !especificacoes[numero]) {
+                            especificacoes[numero] = gb * 1024;
+                            console.log(`   📋 Especificação encontrada: ${numero} → ${gb}GB (linhas separadas)`);
+                            break; // Primeira correspondência apenas
+                        }
+                    }
+                }
+            }
+        }
+        
+        console.log(`   📊 Total de especificações: ${Object.keys(especificacoes).length}`);
+        return especificacoes;
+    }
+
     // === PROCESSAR DIVISÃO ===
     async processarDivisao(comprovativo, numeros, grupoId, message) {
         const chaveProcessamento = `${comprovativo.referencia}_${numeros.join('_')}`;
@@ -378,8 +450,13 @@ class WhatsAppBotDivisao {
             
             console.log(`✅ DIVISÃO: Pagamento confirmado!`);
             
-            // 2. CALCULAR DIVISÃO
-            const divisao = this.calcularDivisaoPorPrioridade(comprovativo.valor, numeros, grupoId);
+            // 2. EXTRAIR ESPECIFICAÇÕES DO CLIENTE
+            const especificacoes = this.extrairEspecificacoes(message.body || '', numeros);
+            
+            // 3. CALCULAR DIVISÃO (usar especificações se disponíveis)
+            const divisao = Object.keys(especificacoes).length > 0 
+                ? this.calcularDivisaoComEspecificacoes(comprovativo.valor, numeros, grupoId, especificacoes)
+                : this.calcularDivisaoPorPrioridade(comprovativo.valor, numeros, grupoId);
             
             if (!divisao || divisao.length === 0) {
                 return {
@@ -394,10 +471,17 @@ class WhatsAppBotDivisao {
             }
             
             // 4. ENVIAR MENSAGEM INFORMATIVA
+            const temEspecificacoes = Object.keys(especificacoes).length > 0;
+            
             let mensagemResposta = `🔄 *MÚLTIPLOS NÚMEROS DETECTADOS!*\n\n`;
             mensagemResposta += `💰 **${comprovativo.referencia}** - ${comprovativo.valor}MT\n`;
             mensagemResposta += `📱 **${numeros.length} números** serão processados\n\n`;
-            mensagemResposta += `⚡ **Divisão automática:**\n`;
+            
+            if (temEspecificacoes) {
+                mensagemResposta += `🎯 **Divisão conforme especificado:**\n`;
+            } else {
+                mensagemResposta += `⚡ **Divisão automática:**\n`;
+            }
             
             divisao.forEach((item, i) => {
                 mensagemResposta += `   • ${item.numero}: ${item.megasTexto} (${item.valorMT}MT)\n`;
@@ -490,6 +574,71 @@ class WhatsAppBotDivisao {
         }
     }
     
+    // === CALCULAR DIVISÃO COM ESPECIFICAÇÕES DO CLIENTE ===
+    calcularDivisaoComEspecificacoes(valorTotal, numeros, grupoId, especificacoes) {
+        console.log(`🎯 DIVISÃO: Calculando COM especificações do cliente`);
+        
+        const configGrupo = this.CONFIGURACAO_GRUPOS[grupoId];
+        if (!configGrupo) {
+            console.error(`❌ DIVISÃO: Grupo ${grupoId} não configurado`);
+            return null;
+        }
+        
+        const resultado = [];
+        let valorUsado = 0;
+        let megasUsados = 0;
+        
+        // Processar cada número com sua especificação
+        for (let i = 0; i < numeros.length; i++) {
+            const numero = numeros[i];
+            const megasEspecificados = especificacoes[numero];
+            
+            if (!megasEspecificados) {
+                console.error(`❌ DIVISÃO: Número ${numero} sem especificação encontrada`);
+                return null;
+            }
+            
+            // Encontrar preço correspondente aos megas especificados
+            let valorMT = null;
+            let megasTexto = '';
+            
+            for (const [megas, preco] of Object.entries(configGrupo.precos)) {
+                if (parseInt(megas) === megasEspecificados) {
+                    valorMT = preco;
+                    megasTexto = `${megasEspecificados / 1024}GB`;
+                    break;
+                }
+            }
+            
+            if (valorMT === null) {
+                console.error(`❌ DIVISÃO: Não encontrou preço para ${megasEspecificados}MB (${megasEspecificados/1024}GB)`);
+                return null;
+            }
+            
+            resultado.push({
+                numero: numero,
+                megas: megasEspecificados,
+                megasTexto: megasTexto,
+                valorMT: valorMT
+            });
+            
+            valorUsado += valorMT;
+            megasUsados += megasEspecificados;
+            
+            console.log(`   📋 ${numero}: ${megasTexto} (${valorMT}MT) - especificado pelo cliente`);
+        }
+        
+        // Verificar se o total confere
+        if (valorUsado !== valorTotal) {
+            console.error(`❌ DIVISÃO: Especificações totalizam ${valorUsado}MT mas comprovativo tem ${valorTotal}MT`);
+            console.error(`   💡 SUGESTÃO: Verifique se as especificações estão corretas`);
+            return null;
+        }
+        
+        console.log(`✅ DIVISÃO: Especificações conferem! Total: ${valorUsado}MT (${megasUsados/1024}GB)`);
+        return resultado;
+    }
+
     // === CALCULAR DIVISÃO POR PRIORIDADE ===
     calcularDivisaoPorPrioridade(valorTotal, numeros, grupoId) {
         try {

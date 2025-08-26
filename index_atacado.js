@@ -776,7 +776,7 @@ client.on('ready', async () => {
     });
     
     console.log('\n🔧 Comandos admin globais: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
-    console.log('🔧 Comandos admin de grupo: .f (fechar) .a (abrir) .atenção (mencionar todos)');
+    console.log('🔧 Comandos admin de grupo: .f (fechar) .a (abrir) .atenção (mencionar todos) .silencio (ultra-discreto)');
 });
 
 client.on('group-join', async (notification) => {
@@ -1119,6 +1119,14 @@ client.on('message', async (message) => {
                         const chat = await client.getChatById(message.from);
                         const participants = await chat.participants;
                         
+                        // Primeiro, apagar a mensagem do comando discretamente
+                        try {
+                            await message.delete(true);
+                            console.log(`🗑️ Mensagem do comando .atenção apagada discretamente`);
+                        } catch (deleteError) {
+                            console.log(`⚠️ Não foi possível apagar a mensagem do comando (pode não ter permissão)`);
+                        }
+                        
                         // Criar lista de menções
                         let mencoes = [];
                         let textoMencoes = '';
@@ -1134,15 +1142,75 @@ client.on('message', async (message) => {
                         
                         const mensagemAtencao = `🚨 *ATENÇÃO GERAL* 🚨\n\n${textoMencoes}\n\n📢 Mensagem importante para todos os membros do grupo!`;
                         
-                        await chat.sendMessage(mensagemAtencao, {
+                        // Enviar mensagem mencionando todos
+                        const mensagemEnviada = await chat.sendMessage(mensagemAtencao, {
                             mentions: mencoes
                         });
                         
                         console.log(`📢 Comando .atenção executado no grupo ${chat.name} - ${participants.length} membros mencionados`);
                         
+                        // Opcional: Apagar a mensagem de menção após alguns segundos
+                        setTimeout(async () => {
+                            try {
+                                await mensagemEnviada.delete(true);
+                                console.log(`🗑️ Mensagem de menção apagada após 10 segundos`);
+                            } catch (autoDeleteError) {
+                                console.log(`⚠️ Não foi possível auto-apagar a mensagem de menção`);
+                            }
+                        }, 10000); // 10 segundos
+                        
                     } catch (error) {
                         console.error('❌ Erro ao executar comando atenção:', error);
                         await message.reply('❌ *Erro ao mencionar membros*\n\nVerifique se o bot tem permissões adequadas.');
+                    }
+                    return;
+                }
+                
+                // COMANDO: .silencio (Mencionar todos de forma ultra-discreta)
+                if (comando === '.silencio' || comando === '.silêncio') {
+                    try {
+                        const chat = await client.getChatById(message.from);
+                        const participants = await chat.participants;
+                        
+                        // Apagar a mensagem do comando imediatamente
+                        try {
+                            await message.delete(true);
+                        } catch (deleteError) {
+                            console.log(`⚠️ Não foi possível apagar comando .silencio`);
+                        }
+                        
+                        // Criar lista de menções (sem texto visível)
+                        let mencoes = [];
+                        
+                        for (const participant of participants) {
+                            // Não mencionar o próprio bot
+                            if (participant.id._serialized !== client.info.wid._serialized) {
+                                mencoes.push(participant.id._serialized);
+                            }
+                        }
+                        
+                        // Mensagem mínima apenas com menções invisíveis
+                        const mensagemSilenciosa = `📢`; // Apenas um emoji
+                        
+                        // Enviar e apagar rapidamente (3 segundos)
+                        const mensagemEnviada = await chat.sendMessage(mensagemSilenciosa, {
+                            mentions: mencoes
+                        });
+                        
+                        console.log(`🤫 Comando .silencio executado - ${participants.length} membros notificados discretamente`);
+                        
+                        // Apagar a mensagem após 3 segundos
+                        setTimeout(async () => {
+                            try {
+                                await mensagemEnviada.delete(true);
+                                console.log(`🗑️ Mensagem silenciosa apagada`);
+                            } catch (autoDeleteError) {
+                                console.log(`⚠️ Não foi possível auto-apagar mensagem silenciosa`);
+                            }
+                        }, 3000); // 3 segundos apenas
+                        
+                    } catch (error) {
+                        console.error('❌ Erro ao executar comando silencio:', error);
                     }
                     return;
                 }
@@ -1166,7 +1234,7 @@ client.on('message', async (message) => {
                 }
                 
                 // Verificar se tentou usar comando admin sem ser admin
-                const comandosAdmin = ['.f', '.a', '.atenção', '.atencao'];
+                const comandosAdmin = ['.f', '.a', '.atenção', '.atencao', '.silencio', '.silêncio'];
                 
                 if (comandosAdmin.includes(comando)) {
                     const autorMensagem = message.author || message.from;
