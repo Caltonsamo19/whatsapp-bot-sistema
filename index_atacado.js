@@ -1032,8 +1032,13 @@ client.on('message', async (message) => {
 
         // === COMANDOS ADMINISTRATIVOS DE GRUPO ===
         if (message.from.endsWith('@g.us')) {
-            const isAdminGlobal = isAdministrador(message.from);
-            const isAdminDoGrupo = await isAdminGrupo(message.from, message.author || message.from);
+            const autorMensagem = message.author || message.from;
+            const isAdminGlobal = isAdministrador(autorMensagem);
+            const isAdminDoGrupo = await isAdminGrupo(message.from, autorMensagem);
+            
+            console.log(`🔍 ADMIN CHECK: Usuário ${autorMensagem} no grupo ${message.from}`);
+            console.log(`   🌍 Admin Global: ${isAdminGlobal} (lista: ${ADMINISTRADORES_GLOBAIS.join(', ')})`);
+            console.log(`   🏢 Admin do Grupo: ${isAdminDoGrupo}`);
             
             // Só admins globais OU admins do grupo podem usar estes comandos
             if (isAdminGlobal || isAdminDoGrupo) {
@@ -1101,12 +1106,21 @@ client.on('message', async (message) => {
                     return;
                 }
             } else {
+                // COMANDO TEMPORÁRIO PARA DESCOBRIR O NÚMERO DO USUÁRIO
+                const comando = message.body.toLowerCase().trim();
+                if (comando === '.meunum') {
+                    const autorMensagem = message.author || message.from;
+                    await message.reply(`📱 *SEU NÚMERO:* \`${autorMensagem}\`\n\n🔧 Este será adicionado à lista de administradores globais.`);
+                    console.log(`📱 NÚMERO DO USUÁRIO PARA ADICIONAR AOS ADMINS: ${autorMensagem}`);
+                    return;
+                }
+                
                 // Verificar se tentou usar comando admin sem ser admin
                 const comandosAdmin = ['.f', '.a', '.atenção', '.atencao'];
-                const comando = message.body.toLowerCase().trim();
                 
                 if (comandosAdmin.includes(comando)) {
-                    await message.reply('🚫 *ACESSO NEGADO*\n\nApenas administradores podem usar este comando.');
+                    const autorMensagem = message.author || message.from;
+                    await message.reply(`🚫 *ACESSO NEGADO*\n\nApenas administradores podem usar este comando.\n\n📱 Seu número: \`${autorMensagem}\`\n💡 Digite \`.meunum\` para ver seu número completo.`);
                     return;
                 }
             }
