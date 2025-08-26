@@ -40,9 +40,11 @@ class WhatsAppBotDivisao {
                 },
                 // NÚMEROS DE PAGAMENTO DO GRUPO (NUNCA devem receber megas)
                 numerosPagamento: [
-                    '870059057',  // Número eMola do grupo
-                    '840326152',  // Número M-Pesa do VASCO  
-                    '877777777'   // Adicionar outros números de pagamento do grupo aqui
+                    '870059057',   // Número eMola do grupo
+                    '840326152',   // Número M-Pesa do VASCO
+                    '884032615',   // Versão truncada que aparece nos logs
+                    '258840326152', // Versão completa com prefixo
+                    '877777777'    // Adicionar outros números de pagamento do grupo aqui
                 ]
             }
             // Adicionar outros grupos conforme necessário
@@ -279,6 +281,12 @@ class WhatsAppBotDivisao {
             
             console.log(`🔍 DIVISÃO: ${numero} - posição ${percentualPosicao.toFixed(1)}% da mensagem`);
             
+            // Se o número está no início da mensagem (<30%), é provavelmente número de pagamento
+            if (percentualPosicao < 30) {
+                console.log(`🚫 DIVISÃO: ${numero} REJEITADO (está no início da mensagem - possível número de pagamento)`);
+                return false;
+            }
+            
             // Se o número está no final da mensagem (>70%), é provavelmente para divisão
             if (percentualPosicao > 70) {
                 console.log(`✅ DIVISÃO: ${numero} ACEITO (está no final da mensagem)`);
@@ -287,11 +295,17 @@ class WhatsAppBotDivisao {
             
             // 3. VERIFICAR CONTEXTOS ESPECÍFICOS DE PAGAMENTO
             const contextosPagamentoEspecificos = [
-                new RegExp(`para\\s+conta\\s+${numero}`, 'i'),           // "para conta 870059057"
-                new RegExp(`conta\\s+${numero}`, 'i'),                    // "conta 870059057"
-                new RegExp(`para\\s+${numero}\\s*,\\s*nome`, 'i'),       // "para 870059057, nome:"
-                new RegExp(`Transferiste.*para\\s+${numero}\\s*-`, 'i'), // "Transferiste ... para 840326152 - VASCO"
-                new RegExp(`${numero}\\s*,\\s*nome:`, 'i'),              // "870059057, nome: vasco"
+                new RegExp(`para\\s+conta\\s+${numero}`, 'i'),                    // "para conta 870059057"
+                new RegExp(`conta\\s+${numero}`, 'i'),                            // "conta 870059057"
+                new RegExp(`para\\s+${numero}\\s*,\\s*nome`, 'i'),               // "para 870059057, nome:"
+                new RegExp(`Transferiste.*para\\s+${numero}\\s*-`, 'i'),         // "Transferiste ... para 840326152 - VASCO"
+                new RegExp(`${numero}\\s*,\\s*nome:`, 'i'),                      // "870059057, nome: vasco"
+                new RegExp(`para\\s+${numero}\\s*-\\s*[A-Z]`, 'i'),              // "para 840326152 - VASCO"
+                new RegExp(`para\\s+258${numero}\\s*-`, 'i'),                    // "para 258840326152 - VASCO"
+                new RegExp(`MT.*para\\s+${numero}`, 'i'),                        // "750.00MT ... para 840326152"
+                new RegExp(`taxa.*para\\s+${numero}`, 'i'),                      // "taxa foi ... para 840326152"
+                new RegExp(`${numero}\\s*-\\s*[A-Z]{2,}`, 'i'),                  // "840326152 - VASCO"
+                new RegExp(`258${numero}\\s*-\\s*[A-Z]{2,}`, 'i'),               // "258840326152 - VASCO"
             ];
             
             // Se o número aparece em contexto ESPECÍFICO de pagamento, não é para divisão
