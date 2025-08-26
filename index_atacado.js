@@ -87,7 +87,8 @@ let gruposLogados = new Set();
 const ADMINISTRADORES_GLOBAIS = [
     '258861645968@c.us',
     '258871112049@c.us', 
-    '258852118624@c.us'
+    '258852118624@c.us',
+    '23450974470333@lid'  // Calton Samo - ID interno WhatsApp
 ];
 
 // === CONFIGURAÇÃO DE MODERAÇÃO ===
@@ -489,12 +490,12 @@ function extrairNumeroReal(message) {
 }
 
 function isAdministrador(numero) {
-    // Se já está no formato correto, verificar direto
+    // Verificar direto na lista (inclui IDs internos agora)
     if (ADMINISTRADORES_GLOBAIS.includes(numero)) {
         return true;
     }
     
-    // Tentar extrair apenas os dígitos do número
+    // Tentar extrair apenas os dígitos do número para números tradicionais
     const digitos = numero.replace(/\D/g, '');
     if (digitos.length >= 9) {
         const numeroLimpo = digitos.slice(-9); // Pegar últimos 9 dígitos
@@ -1073,13 +1074,11 @@ client.on('message', async (message) => {
         // === COMANDOS ADMINISTRATIVOS DE GRUPO ===
         if (message.from.endsWith('@g.us')) {
             const autorMensagem = message.author || message.from;
-            const numeroReal = extrairNumeroReal(message);
-            const isAdminGlobal = isAdministrador(numeroReal);
+            const isAdminGlobal = isAdministrador(autorMensagem);
             const isAdminDoGrupo = await isAdminGrupo(message.from, autorMensagem);
             
             console.log(`🔍 ADMIN CHECK: Usuário ${autorMensagem} no grupo ${message.from}`);
-            console.log(`   📱 Número real extraído: ${numeroReal}`);
-            console.log(`   🌍 Admin Global: ${isAdminGlobal} (lista: ${ADMINISTRADORES_GLOBAIS.join(', ')})`);
+            console.log(`   🌍 Admin Global: ${isAdminGlobal} (verificando: ${autorMensagem})`);
             console.log(`   🏢 Admin do Grupo: ${isAdminDoGrupo}`);
             
             // Só admins globais OU admins do grupo podem usar estes comandos
@@ -1152,20 +1151,17 @@ client.on('message', async (message) => {
                 const comando = message.body.toLowerCase().trim();
                 if (comando === '.meunum') {
                     const autorMensagem = message.author || message.from;
-                    const numeroReal = extrairNumeroReal(message);
-                    const isAdmin = isAdministrador(numeroReal);
+                    const isAdmin = isAdministrador(autorMensagem);
                     
                     await message.reply(`📱 *INFORMAÇÕES DO USUÁRIO:*\n\n` +
                         `🆔 ID WhatsApp: \`${autorMensagem}\`\n` +
-                        `📞 Número Real: \`${numeroReal}\`\n` +
-                        `👤 Admin Status: ${isAdmin ? '✅ É ADMIN' : '❌ NÃO É ADMIN'}\n\n` +
-                        `📋 Nome/Contato: ${message._data?.notifyName || 'N/A'}`);
+                        `👤 Admin Status: ${isAdmin ? '✅ É ADMIN' : '❌ NÃO É ADMIN'}\n` +
+                        `📋 Nome/Contato: ${message._data?.notifyName || 'N/A'}\n\n` +
+                        `📋 Lista de admins: ${ADMINISTRADORES_GLOBAIS.join(', ')}`);
                     
-                    console.log(`📱 DEBUG USUÁRIO:`);
+                    console.log(`📱 DEBUG USUÁRIO SIMPLES:`);
                     console.log(`   ID WhatsApp: ${autorMensagem}`);
-                    console.log(`   Número Real: ${numeroReal}`);
                     console.log(`   É Admin: ${isAdmin}`);
-                    console.log(`   NotifyName: ${message._data?.notifyName || 'N/A'}`);
                     return;
                 }
                 
