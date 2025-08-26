@@ -113,14 +113,20 @@ class WhatsAppBotDivisao {
             // 2. DETECTAR MÚLTIPLOS NÚMEROS (para verificar se precisa processar)
             const numerosDetectados = this.extrairMultiplosNumeros(mensagem, grupoId);
             
-            // 3. PRIORIDADE: COMPROVATIVO + MÚLTIPLOS NÚMEROS NA MESMA MENSAGEM
+            // 3. VERIFICAR SE É APENAS 1 NÚMERO - NÃO PROCESSAR DIVISÃO
+            if (numerosDetectados && numerosDetectados.length === 1) {
+                console.log(`👤 DIVISÃO: Apenas 1 número detectado (${numerosDetectados[0]}) - deixando para o sistema normal`);
+                return null; // Deixar o sistema normal processar
+            }
+            
+            // 4. PRIORIDADE: COMPROVATIVO + MÚLTIPLOS NÚMEROS NA MESMA MENSAGEM
             if (comprovativo && numerosDetectados && numerosDetectados.length > 1) {
                 console.log(`🎯 DIVISÃO: Comprovativo + múltiplos números na mesma mensagem!`);
                 console.log(`📱 DIVISÃO: ${numerosDetectados.length} números detectados: ${numerosDetectados.join(', ')}`);
                 return await this.processarDivisao(comprovativo, numerosDetectados, grupoId, message);
             }
             
-            // 4. CASO ALTERNATIVO: APENAS MÚLTIPLOS NÚMEROS (buscar comprovativo memorizado)
+            // 5. CASO ALTERNATIVO: APENAS MÚLTIPLOS NÚMEROS (buscar comprovativo memorizado)
             if (numerosDetectados && numerosDetectados.length > 1 && !comprovativo) {
                 console.log(`📱 DIVISÃO: ${numerosDetectados.length} números detectados sem comprovativo na mensagem`);
                 
