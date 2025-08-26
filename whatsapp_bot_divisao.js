@@ -37,7 +37,13 @@ class WhatsAppBotDivisao {
                     81920: 1000,   // 80GB = 1000MT
                     92160: 1125,   // 90GB = 1125MT
                     102400: 1250   // 100GB = 1250MT
-                }
+                },
+                // NÚMEROS DE PAGAMENTO DO GRUPO (NUNCA devem receber megas)
+                numerosPagamento: [
+                    '870059057',  // Número eMola do grupo
+                    '840326152',  // Número M-Pesa do VASCO  
+                    '877777777'   // Adicionar outros números de pagamento do grupo aqui
+                ]
             }
             // Adicionar outros grupos conforme necessário
         };
@@ -103,7 +109,7 @@ class WhatsAppBotDivisao {
             }
             
             // 2. DETECTAR MÚLTIPLOS NÚMEROS (para verificar se precisa processar)
-            const numerosDetectados = this.extrairMultiplosNumeros(mensagem);
+            const numerosDetectados = this.extrairMultiplosNumeros(mensagem, grupoId);
             
             // 3. PRIORIDADE: COMPROVATIVO + MÚLTIPLOS NÚMEROS NA MESMA MENSAGEM
             if (comprovativo && numerosDetectados && numerosDetectados.length > 1) {
@@ -152,24 +158,42 @@ class WhatsAppBotDivisao {
         
         const temConfirmado = /^confirmado/i.test(mensagemLimpa);
         const temID = /^id\s/i.test(mensagemLimpa);
+        const temEmola = /e-?mola|emola/i.test(mensagemLimpa);
+        const temTransferencia = /transferencia\s+realizada/i.test(mensagemLimpa);
+        const temRecibo = /recibo\s+de\s+transferencia/i.test(mensagemLimpa);
         
-        console.log(`🔍 DIVISÃO: temConfirmado: ${temConfirmado}, temID: ${temID}`);
+        console.log(`🔍 DIVISÃO: temConfirmado: ${temConfirmado}, temID: ${temID}, temEmola: ${temEmola}, temTransferencia: ${temTransferencia}, temRecibo: ${temRecibo}`);
         
-        if (!temConfirmado && !temID) {
-            console.log(`❌ DIVISÃO: Não é comprovativo (não começa com Confirmado ou ID)`);
+        if (!temConfirmado && !temID && !temEmola && !temTransferencia && !temRecibo) {
+            console.log(`❌ DIVISÃO: Não é comprovativo reconhecido`);
             return null;
         }
         
-        // Patterns para extrair referência e valor
+        // Patterns para extrair referência e valor (M-Pesa e eMola)
         const patternsRef = [
+            // M-Pesa
             /Confirmado\s+([A-Z0-9]+)/i,
-            /ID da transacao\s*:?\s*([A-Z0-9]+\.[A-Z0-9]+\.[A-Z0-9]+)/i,
-            /ID da transacao\s*:?\s*([A-Z0-9]+\.[A-Z0-9]+)/i,
-            /ID da transacao\s*:?\s*([A-Z0-9]+)/i
+            // eMola - Padrões com pontos (incluindo ponto final)
+            /ID da transacao\s+([A-Z0-9]+\.[A-Z0-9]+\.[A-Z0-9]+)\.?\s/i,
+            /ID da transacao\s*:?\s*([A-Z0-9]+\.[A-Z0-9]+\.[A-Z0-9]+)\.?/i,
+            /ID da transacao\s*:?\s*([A-Z0-9]+\.[A-Z0-9]+)\.?/i,
+            /ID da transacao\s*:?\s*([A-Z0-9]+)\.?/i,
+            /Referencia\s*:?\s*([A-Z0-9]+\.[A-Z0-9]+\.[A-Z0-9]+)\.?/i,
+            /Referencia\s*:?\s*([A-Z0-9]+)\.?/i,
+            /Codigo\s*:?\s*([A-Z0-9]+\.[A-Z0-9]+\.[A-Z0-9]+)\.?/i,
+            /Codigo\s*:?\s*([A-Z0-9]+)\.?/i,
+            /ID\s*:?\s*([A-Z0-9]+\.[A-Z0-9]+\.[A-Z0-9]+)\.?/i,
+            /Numero da transacao\s*:?\s*([A-Z0-9]+\.[A-Z0-9]+\.[A-Z0-9]+)\.?/i
         ];
         
         const patternsValor = [
+            // M-Pesa
             /Transferiste\s+(\d+(?:[.,]\d+)?)MT/i,
+            // eMola
+            /Valor\s*:?\s*(\d+(?:[.,]\d+)?)MT/i,
+            /Montante\s*:?\s*(\d+(?:[.,]\d+)?)MT/i,
+            /Total\s*:?\s*(\d+(?:[.,]\d+)?)MT/i,
+            // Genérico
             /(\d+(?:[.,]\d+)?)\s*MT/i
         ];
         
@@ -215,7 +239,7 @@ class WhatsAppBotDivisao {
     }
     
     // === EXTRAIR MÚLTIPLOS NÚMEROS ===
-    extrairMultiplosNumeros(mensagem) {
+    extrairMultiplosNumeros(mensagem, grupoId = null) {
         const regex = /(?:\+258\s*)?8[0-9]{8}/g;
         const matches = mensagem.match(regex) || [];
         
@@ -229,42 +253,56 @@ class WhatsAppBotDivisao {
         const numerosUnicos = [...new Set(numerosLimpos)];
         
         // === FILTRAR NÚMEROS QUE NÃO SÃO PARA DIVISÃO ===
-        const numerosFiltrados = this.filtrarNumerosComprovante(numerosUnicos, mensagem);
+        const numerosFiltrados = this.filtrarNumerosComprovante(numerosUnicos, mensagem, grupoId);
         
         return numerosFiltrados.length > 0 ? numerosFiltrados : null;
     }
     
     // === FILTRAR NÚMEROS DE COMPROVANTE ===
-    filtrarNumerosComprovante(numeros, mensagem) {
+    filtrarNumerosComprovante(numeros, mensagem, grupoId = null) {
         return numeros.filter(numero => {
-            // Verificar posição do número na mensagem
+            console.log(`🔍 DIVISÃO: Analisando ${numero}...`);
+            
+            // 1. VERIFICAR SE É NÚMERO DE PAGAMENTO DO GRUPO
+            if (grupoId && this.CONFIGURACAO_GRUPOS[grupoId] && this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento) {
+                const numerosPagamento = this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento;
+                if (numerosPagamento.includes(numero)) {
+                    console.log(`🚫 DIVISÃO: ${numero} REJEITADO (é número de pagamento do grupo)`);
+                    return false;
+                }
+            }
+            
+            // 2. VERIFICAR POSIÇÃO NA MENSAGEM
             const posicaoNumero = mensagem.indexOf(numero);
             const comprimentoMensagem = mensagem.length;
             const percentualPosicao = (posicaoNumero / comprimentoMensagem) * 100;
             
-            console.log(`🔍 DIVISÃO: Analisando ${numero} - posição ${percentualPosicao.toFixed(1)}% da mensagem`);
+            console.log(`🔍 DIVISÃO: ${numero} - posição ${percentualPosicao.toFixed(1)}% da mensagem`);
             
             // Se o número está no final da mensagem (>70%), é provavelmente para divisão
             if (percentualPosicao > 70) {
-                console.log(`✅ DIVISÃO: ${numero} aceito (está no final da mensagem)`);
+                console.log(`✅ DIVISÃO: ${numero} ACEITO (está no final da mensagem)`);
                 return true;
             }
             
-            // Números que aparecem em contextos ESPECÍFICOS de pagamento
+            // 3. VERIFICAR CONTEXTOS ESPECÍFICOS DE PAGAMENTO
             const contextosPagamentoEspecificos = [
-                new RegExp(`para\\s+${numero}\\s*-\\s*[A-Z]`, 'i'),     // "para 840326152 - VASCO"
+                new RegExp(`para\\s+conta\\s+${numero}`, 'i'),           // "para conta 870059057"
+                new RegExp(`conta\\s+${numero}`, 'i'),                    // "conta 870059057"
+                new RegExp(`para\\s+${numero}\\s*,\\s*nome`, 'i'),       // "para 870059057, nome:"
                 new RegExp(`Transferiste.*para\\s+${numero}\\s*-`, 'i'), // "Transferiste ... para 840326152 - VASCO"
+                new RegExp(`${numero}\\s*,\\s*nome:`, 'i'),              // "870059057, nome: vasco"
             ];
             
             // Se o número aparece em contexto ESPECÍFICO de pagamento, não é para divisão
             for (const padrao of contextosPagamentoEspecificos) {
                 if (padrao.test(mensagem)) {
-                    console.log(`🚫 DIVISÃO: ${numero} ignorado (contexto específico de pagamento)`);
+                    console.log(`🚫 DIVISÃO: ${numero} REJEITADO (contexto específico de pagamento)`);
                     return false;
                 }
             }
             
-            console.log(`✅ DIVISÃO: ${numero} aceito (não está em contexto de pagamento)`);
+            console.log(`✅ DIVISÃO: ${numero} ACEITO (não está em contexto de pagamento)`);
             return true; // Número válido para divisão
         });
     }
@@ -826,12 +864,39 @@ Se não conseguir extrair:
         return tabela;
     }
 
+    // === ADICIONAR NÚMERO DE PAGAMENTO ===
+    adicionarNumeroPagamento(grupoId, numero) {
+        if (!this.CONFIGURACAO_GRUPOS[grupoId]) {
+            console.log(`❌ DIVISÃO: Grupo ${grupoId} não existe`);
+            return false;
+        }
+        
+        if (!this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento) {
+            this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento = [];
+        }
+        
+        const numeroLimpo = this.limparNumero(numero);
+        if (!this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento.includes(numeroLimpo)) {
+            this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento.push(numeroLimpo);
+            console.log(`✅ DIVISÃO: Número de pagamento ${numeroLimpo} adicionado ao grupo ${this.CONFIGURACAO_GRUPOS[grupoId].nome}`);
+            return true;
+        } else {
+            console.log(`⚠️ DIVISÃO: Número ${numeroLimpo} já está na lista de pagamentos`);
+            return false;
+        }
+    }
+
     // === STATUS DO BOT ===
     getStatus() {
         return {
             comprovantesMemorizados: Object.keys(this.comprovantesMemorizados).length,
             processandoDivisoes: this.processandoDivisoes.size,
-            gruposConfigurados: Object.keys(this.CONFIGURACAO_GRUPOS).length
+            gruposConfigurados: Object.keys(this.CONFIGURACAO_GRUPOS).length,
+            numerosPagamento: Object.keys(this.CONFIGURACAO_GRUPOS).reduce((acc, grupoId) => {
+                const config = this.CONFIGURACAO_GRUPOS[grupoId];
+                acc[config.nome] = config.numerosPagamento || [];
+                return acc;
+            }, {})
         };
     }
 }
