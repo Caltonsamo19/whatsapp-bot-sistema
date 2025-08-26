@@ -237,26 +237,34 @@ class WhatsAppBotDivisao {
     // === FILTRAR NÚMEROS DE COMPROVANTE ===
     filtrarNumerosComprovante(numeros, mensagem) {
         return numeros.filter(numero => {
-            // Números que aparecem em contextos de pagamento (M-Pesa/eMola) não são para divisão
-            const contextosPagamento = [
-                new RegExp(`para\\s+${numero}\\s*-`, 'i'),        // "para 840326152 - VASCO"
-                new RegExp(`para\\s+${numero}\\s*,`, 'i'),        // "para 840326152, nome"
-                new RegExp(`conta\\s+${numero}`, 'i'),            // "conta 840326152"
-                new RegExp(`M-Pesa.*${numero}`, 'i'),             // "M-Pesa ... 840326152"
-                new RegExp(`eMola.*${numero}`, 'i'),              // "eMola ... 840326152"
-                new RegExp(`${numero}.*VASCO`, 'i'),              // "840326152 - VASCO"
-                new RegExp(`${numero}.*Mahumane`, 'i'),           // números associados ao nome
-                new RegExp(`Transferiste.*para\\s+${numero}`, 'i') // "Transferiste ... para 840326152"
+            // Verificar posição do número na mensagem
+            const posicaoNumero = mensagem.indexOf(numero);
+            const comprimentoMensagem = mensagem.length;
+            const percentualPosicao = (posicaoNumero / comprimentoMensagem) * 100;
+            
+            console.log(`🔍 DIVISÃO: Analisando ${numero} - posição ${percentualPosicao.toFixed(1)}% da mensagem`);
+            
+            // Se o número está no final da mensagem (>70%), é provavelmente para divisão
+            if (percentualPosicao > 70) {
+                console.log(`✅ DIVISÃO: ${numero} aceito (está no final da mensagem)`);
+                return true;
+            }
+            
+            // Números que aparecem em contextos ESPECÍFICOS de pagamento
+            const contextosPagamentoEspecificos = [
+                new RegExp(`para\\s+${numero}\\s*-\\s*[A-Z]`, 'i'),     // "para 840326152 - VASCO"
+                new RegExp(`Transferiste.*para\\s+${numero}\\s*-`, 'i'), // "Transferiste ... para 840326152 - VASCO"
             ];
             
-            // Se o número aparece em contexto de pagamento, não é para divisão
-            for (const padrao of contextosPagamento) {
+            // Se o número aparece em contexto ESPECÍFICO de pagamento, não é para divisão
+            for (const padrao of contextosPagamentoEspecificos) {
                 if (padrao.test(mensagem)) {
-                    console.log(`🚫 DIVISÃO: ${numero} ignorado (contexto de pagamento)`);
+                    console.log(`🚫 DIVISÃO: ${numero} ignorado (contexto específico de pagamento)`);
                     return false;
                 }
             }
             
+            console.log(`✅ DIVISÃO: ${numero} aceito (não está em contexto de pagamento)`);
             return true; // Número válido para divisão
         });
     }
@@ -527,8 +535,9 @@ class WhatsAppBotDivisao {
             console.log(`📋 DIVISÃO: Dados:`, JSON.stringify(dados));
             
             const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
-                timeout: 10000,
-                headers: { 'Content-Type': 'application/json' }
+                timeout: 20000, // Aumentado para 20 segundos
+                headers: { 'Content-Type': 'application/json' },
+                retry: 2 // Tentar novamente se falhar
             });
             
             console.log(`📋 DIVISÃO: Resposta recebida:`, response.data);
@@ -542,6 +551,27 @@ class WhatsAppBotDivisao {
             
         } catch (error) {
             console.error(`❌ DIVISÃO: Erro ao enviar pedido:`, error.message);
+            
+            // Se foi timeout, tentar novamente
+            if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+                console.log(`🔄 DIVISÃO: Tentando reenviar pedido após timeout...`);
+                try {
+                    const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
+                        timeout: 30000, // 30 segundos na segunda tentativa
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    console.log(`✅ DIVISÃO: Pedido enviado na segunda tentativa:`, response.data);
+                    
+                    if (response.data && response.data.success) {
+                        console.log(`✅ DIVISÃO: Pedido salvo com sucesso na segunda tentativa - ${referencia}|${megas}|${numero}`);
+                        return;
+                    }
+                } catch (retryError) {
+                    console.error(`❌ DIVISÃO: Segunda tentativa também falhou:`, retryError.message);
+                }
+            }
+            
             throw error;
         }
     }
@@ -566,8 +596,9 @@ class WhatsAppBotDivisao {
             console.log(`💰 DIVISÃO: Dados:`, JSON.stringify(dados));
             
             const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, dados, {
-                timeout: 10000,
-                headers: { 'Content-Type': 'application/json' }
+                timeout: 20000, // Aumentado para 20 segundos  
+                headers: { 'Content-Type': 'application/json' },
+                retry: 2 // Tentar novamente se falhar
             });
             
             console.log(`💰 DIVISÃO: Resposta recebida:`, response.data);
@@ -585,6 +616,30 @@ class WhatsAppBotDivisao {
             
         } catch (error) {
             console.error(`❌ DIVISÃO: Erro ao enviar pagamento:`, error.message);
+            
+            // Se foi timeout, tentar novamente
+            if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+                console.log(`🔄 DIVISÃO: Tentando reenviar pagamento após timeout...`);
+                try {
+                    const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, dados, {
+                        timeout: 30000, // 30 segundos na segunda tentativa
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    console.log(`✅ DIVISÃO: Pagamento enviado na segunda tentativa:`, response.data);
+                    
+                    const isSuccess = (response.data && response.data.success) || 
+                                     (typeof response.data === 'string' && response.data.includes('Sucesso'));
+                    
+                    if (isSuccess) {
+                        console.log(`✅ DIVISÃO: Pagamento salvo com sucesso na segunda tentativa - ${referencia}|${valor}|${numero}`);
+                        return;
+                    }
+                } catch (retryError) {
+                    console.error(`❌ DIVISÃO: Segunda tentativa de pagamento também falhou:`, retryError.message);
+                }
+            }
+            
             throw error;
         }
     }
