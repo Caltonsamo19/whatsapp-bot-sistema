@@ -353,71 +353,58 @@ class WhatsAppBotDivisao {
     extrairEspecificacoes(mensagem, numeros) {
         console.log(`🔍 DIVISÃO: Extraindo especificações da mensagem`);
         
-        // Padrões para detectar especificações de GB (mais específicos)
-        const padroes = [
-            /^(\d+)\s*gb\s*$/gi,       // Linha só com "10gb"
-            /^(\d+)\s*GB\s*$/gi,       // Linha só com "10GB"
-            /(\d+)\s*gb\s+(\d{9})/gi,  // "10gb 852118624" na mesma linha
-            /(\d{9})\s+(\d+)\s*gb/gi,  // "852118624 10gb" na mesma linha
-            /(\d+)\s*GB\s+(\d{9})/gi,  // "10GB 852118624" na mesma linha
-            /(\d{9})\s+(\d+)\s*GB/gi   // "852118624 10GB" na mesma linha
-        ];
-        
         const especificacoes = {};
-        const linhas = mensagem.split('\n').map(linha => linha.trim());
+        const linhas = mensagem.split('\n').map(linha => linha.trim()).filter(linha => linha.length > 0);
         
-        // Primeira passagem: identificar especificações na mesma linha
-        for (const padrao of padroes.slice(2)) { // Pular os dois primeiros (só GB)
-            let match;
-            while ((match = padrao.exec(mensagem)) !== null) {
-                let gb, numero;
-                
-                // Determinar qual é GB e qual é número baseado no tamanho
-                if (match[1].length === 9) {
-                    // match[1] é número, match[2] é GB
-                    numero = match[1];
-                    gb = parseInt(match[2]);
-                } else {
-                    // match[1] é GB, match[2] é número
-                    gb = parseInt(match[1]);
-                    numero = match[2];
-                }
-                
-                // Verificar se o número está na nossa lista
-                if (numeros.includes(numero)) {
-                    especificacoes[numero] = gb * 1024; // Converter para MB
-                    console.log(`   📋 Especificação encontrada: ${numero} → ${gb}GB (mesma linha)`);
-                }
-            }
-        }
+        console.log(`   📄 Processando ${linhas.length} linhas da mensagem`);
         
-        // Segunda passagem: especificações em linhas separadas
+        // Processar linha por linha para encontrar padrões
         for (let i = 0; i < linhas.length; i++) {
             const linha = linhas[i];
+            console.log(`   🔍 Linha ${i + 1}: "${linha}"`);
             
-            // Verificar se a linha contém só GB
-            const matchGb = linha.match(/^(\d+)\s*gb\s*$/i);
-            if (matchGb) {
-                const gb = parseInt(matchGb[1]);
+            // Padrão 1: GB e número na mesma linha (ex: "10gb 852118624")
+            const sameLinha = linha.match(/(\d+)\s*gb\s+(\d{9})/i);
+            if (sameLinha) {
+                const gb = parseInt(sameLinha[1]);
+                const numero = sameLinha[2];
                 
-                // Procurar números nas próximas linhas
-                for (let j = i + 1; j < Math.min(i + 5, linhas.length); j++) {
-                    const linhaNumero = linhas[j];
-                    const matchNumero = linhaNumero.match(/^(\d{9})$/);
+                if (numeros.includes(numero) && !especificacoes[numero]) {
+                    especificacoes[numero] = gb * 1024;
+                    console.log(`   ✅ Padrão mesma linha: ${numero} → ${gb}GB`);
+                }
+                continue; // Pular para próxima linha
+            }
+            
+            // Padrão 2: Linha só com GB (ex: "10gb")
+            const somenteGb = linha.match(/^(\d+)\s*gb\s*$/i);
+            if (somenteGb) {
+                const gb = parseInt(somenteGb[1]);
+                console.log(`   🔍 GB detectado: ${gb}GB - procurando próximo número`);
+                
+                // Procurar o PRÓXIMO número que ainda não tem especificação
+                for (let j = i + 1; j < linhas.length; j++) {
+                    const linhaSeguinte = linhas[j];
+                    const numeroMatch = linhaSeguinte.match(/^(\d{9})$/);
                     
-                    if (matchNumero) {
-                        const numero = matchNumero[1];
+                    if (numeroMatch) {
+                        const numero = numeroMatch[1];
                         if (numeros.includes(numero) && !especificacoes[numero]) {
                             especificacoes[numero] = gb * 1024;
-                            console.log(`   📋 Especificação encontrada: ${numero} → ${gb}GB (linhas separadas)`);
-                            break; // Primeira correspondência apenas
+                            console.log(`   ✅ Padrão separado: ${numero} → ${gb}GB`);
+                            break; // Parar na primeira correspondência
                         }
                     }
                 }
+                continue; // Pular para próxima linha
             }
         }
         
-        console.log(`   📊 Total de especificações: ${Object.keys(especificacoes).length}`);
+        console.log(`   📊 Especificações finais extraídas:`);
+        Object.entries(especificacoes).forEach(([numero, megas]) => {
+            console.log(`      • ${numero}: ${megas/1024}GB`);
+        });
+        
         return especificacoes;
     }
 
