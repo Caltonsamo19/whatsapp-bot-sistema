@@ -66,10 +66,18 @@ class WhatsAppBotDivisao {
             if (message.hasMedia && (message.type === 'image' || message.type === 'document')) {
                 console.log(`📷 DIVISÃO: Mensagem contém mídia do tipo: ${message.type}`);
                 try {
-                    const textoImagem = await this.extrairTextoDeImagem(message);
-                    if (textoImagem) {
-                        console.log(`📄 DIVISÃO: Texto extraído da imagem: "${textoImagem.substring(0, 100)}..."`);
-                        mensagem = textoImagem + ' ' + mensagem; // Combinar texto da imagem com texto da mensagem
+                    const resultadoImagem = await this.extrairTextoDeImagem(message, grupoId);
+                    
+                    // Se a IA já processou tudo completamente, retornar resultado direto
+                    if (resultadoImagem && resultadoImagem.processadoCompleto) {
+                        console.log('🎯 DIVISÃO: IA processou imagem + número completamente!');
+                        return resultadoImagem.resultado;
+                    }
+                    
+                    // Se extraiu texto do comprovativo, continuar processamento normal
+                    if (resultadoImagem && typeof resultadoImagem === 'string') {
+                        console.log(`📄 DIVISÃO: Texto extraído da imagem: "${resultadoImagem.substring(0, 100)}..."`);
+                        mensagem = resultadoImagem + ' ' + mensagem; // Combinar texto da imagem com texto da mensagem
                     } else {
                         // Se tem imagem mas não conseguiu extrair texto, orientar o usuário
                         console.log('💡 DIVISÃO: Imagem detectada mas texto não extraído');
@@ -601,7 +609,7 @@ class WhatsAppBotDivisao {
     }
     
     // === EXTRAIR TEXTO DE IMAGEM COM IA ===
-    async extrairTextoDeImagem(message) {
+    async extrairTextoDeImagem(message, grupoId) {
         try {
             console.log('📷 DIVISÃO: Iniciando extração de texto da imagem com IA...');
             
@@ -626,23 +634,56 @@ class WhatsAppBotDivisao {
                 return null;
             }
             
-            // Usar a IA avançada para extrair comprovativo da imagem
-            const resultadoIA = await this.ia.processarImagem(media.data, 'usuario_divisao', Date.now(), null, message.body || '');
+            // Criar configuração de grupo para a IA (usando dados do bot de divisão)
+            const configGrupoParaIA = this.CONFIGURACAO_GRUPOS[grupoId] ? {
+                tabela: this.gerarTabelaTextoParaIA(grupoId)
+            } : null;
             
-            if (resultadoIA && resultadoIA.sucesso && resultadoIA.referencia) {
-                console.log(`✅ DIVISÃO: IA extraiu comprovativo: ${resultadoIA.referencia} - ${resultadoIA.valor}MT`);
-                // Simular texto de comprovativo para o sistema existente
-                const textoSimulado = `Confirmado ${resultadoIA.referencia} - Transferiste ${resultadoIA.valor}MT`;
-                return textoSimulado;
-            } else {
-                console.log('❌ DIVISÃO: IA não conseguiu extrair comprovativo da imagem');
-                return null;
+            // Usar a IA avançada para extrair comprovativo da imagem
+            const resultadoIA = await this.ia.processarImagem(media.data, 'usuario_divisao', Date.now(), configGrupoParaIA, message.body || '');
+            
+            console.log(`🔍 DIVISÃO: Resultado completo da IA:`, JSON.stringify(resultadoIA, null, 2));
+            
+            if (resultadoIA && resultadoIA.sucesso) {
+                // Se a IA já processou tudo (comprovativo + número), retornar resultado direto
+                if (resultadoIA.dadosCompletos) {
+                    console.log(`✅ DIVISÃO: IA processou TUDO: ${resultadoIA.dadosCompletos}`);
+                    return { processadoCompleto: true, resultado: resultadoIA };
+                }
+                
+                // Se IA só extraiu comprovativo, simular texto para processamento normal
+                if (resultadoIA.referencia && resultadoIA.valor) {
+                    console.log(`✅ DIVISÃO: IA extraiu comprovativo: ${resultadoIA.referencia} - ${resultadoIA.valor}MT`);
+                    const textoSimulado = `Confirmado ${resultadoIA.referencia} - Transferiste ${resultadoIA.valor}MT`;
+                    return textoSimulado;
+                }
             }
+            
+            console.log('❌ DIVISÃO: IA não conseguiu extrair comprovativo da imagem');
+            return null;
             
         } catch (error) {
             console.error('❌ DIVISÃO: Erro ao usar IA para extrair texto da imagem:', error);
             return null;
         }
+    }
+
+    // === GERAR TABELA PARA IA ===
+    gerarTabelaTextoParaIA(grupoId) {
+        const configGrupo = this.CONFIGURACAO_GRUPOS[grupoId];
+        if (!configGrupo || !configGrupo.precos) {
+            return '';
+        }
+        
+        let tabela = `📋 TABELA ${configGrupo.nome}:\n`;
+        
+        Object.entries(configGrupo.precos).forEach(([megas, preco]) => {
+            const gb = Math.floor(megas / 1024);
+            tabela += `${gb}GB➜${preco}MT\n`;
+        });
+        
+        console.log(`📋 DIVISÃO: Tabela gerada para IA: ${tabela}`);
+        return tabela;
     }
 
     // === STATUS DO BOT ===
