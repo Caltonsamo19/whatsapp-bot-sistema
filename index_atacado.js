@@ -734,7 +734,8 @@ client.on('ready', async () => {
         console.log(`   📋 ${config.nome} (${grupoId})`);
     });
     
-    console.log('\n🔧 Comandos admin: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
+    console.log('\n🔧 Comandos admin globais: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
+    console.log('🔧 Comandos admin de grupo: .f (fechar) .a (abrir) .atenção (mencionar todos)');
 });
 
 client.on('group-join', async (notification) => {
@@ -1026,6 +1027,88 @@ client.on('message', async (message) => {
                     `📝 Verifique o console para detalhes completos`
                 );
                 return;
+            }
+        }
+
+        // === COMANDOS ADMINISTRATIVOS DE GRUPO ===
+        if (message.from.endsWith('@g.us')) {
+            const isAdminGlobal = isAdministrador(message.from);
+            const isAdminDoGrupo = await isAdminGrupo(message.from, message.author || message.from);
+            
+            // Só admins globais OU admins do grupo podem usar estes comandos
+            if (isAdminGlobal || isAdminDoGrupo) {
+                const comando = message.body.toLowerCase().trim();
+                
+                // COMANDO: .f (Fechar grupo)
+                if (comando === '.f') {
+                    try {
+                        const chat = await client.getChatById(message.from);
+                        await chat.setMessagesAdminsOnly(true);
+                        console.log(`🔒 Grupo ${chat.name} fechado por admin`);
+                        await message.reply('🔒 *GRUPO FECHADO*\n\nApenas administradores podem enviar mensagens.');
+                    } catch (error) {
+                        console.error('❌ Erro ao fechar grupo:', error);
+                        await message.reply('❌ *Erro ao fechar grupo*\n\nVerifique se o bot tem permissões de administrador.');
+                    }
+                    return;
+                }
+                
+                // COMANDO: .a (Abrir grupo)
+                if (comando === '.a') {
+                    try {
+                        const chat = await client.getChatById(message.from);
+                        await chat.setMessagesAdminsOnly(false);
+                        console.log(`🔓 Grupo ${chat.name} aberto por admin`);
+                        await message.reply('🔓 *GRUPO ABERTO*\n\nTodos os membros podem enviar mensagens.');
+                    } catch (error) {
+                        console.error('❌ Erro ao abrir grupo:', error);
+                        await message.reply('❌ *Erro ao abrir grupo*\n\nVerifique se o bot tem permissões de administrador.');
+                    }
+                    return;
+                }
+                
+                // COMANDO: .atenção (Mencionar todos)
+                if (comando === '.atenção' || comando === '.atencao') {
+                    try {
+                        const chat = await client.getChatById(message.from);
+                        const participants = await chat.participants;
+                        
+                        // Criar lista de menções
+                        let mencoes = [];
+                        let textoMencoes = '';
+                        
+                        for (const participant of participants) {
+                            // Não mencionar o próprio bot
+                            if (participant.id._serialized !== client.info.wid._serialized) {
+                                mencoes.push(participant.id._serialized);
+                                const nome = participant.pushname || participant.id.user;
+                                textoMencoes += `@${nome} `;
+                            }
+                        }
+                        
+                        const mensagemAtencao = `🚨 *ATENÇÃO GERAL* 🚨\n\n${textoMencoes}\n\n📢 Mensagem importante para todos os membros do grupo!`;
+                        
+                        await chat.sendMessage(mensagemAtencao, {
+                            mentions: mencoes
+                        });
+                        
+                        console.log(`📢 Comando .atenção executado no grupo ${chat.name} - ${participants.length} membros mencionados`);
+                        
+                    } catch (error) {
+                        console.error('❌ Erro ao executar comando atenção:', error);
+                        await message.reply('❌ *Erro ao mencionar membros*\n\nVerifique se o bot tem permissões adequadas.');
+                    }
+                    return;
+                }
+            } else {
+                // Verificar se tentou usar comando admin sem ser admin
+                const comandosAdmin = ['.f', '.a', '.atenção', '.atencao'];
+                const comando = message.body.toLowerCase().trim();
+                
+                if (comandosAdmin.includes(comando)) {
+                    await message.reply('🚫 *ACESSO NEGADO*\n\nApenas administradores podem usar este comando.');
+                    return;
+                }
             }
         }
 
