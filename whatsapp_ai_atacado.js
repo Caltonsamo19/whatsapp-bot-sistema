@@ -1001,29 +1001,43 @@ Se não conseguires extrair, responde:
   limparValor(valor) {
     if (!valor) return '0';
     
+    console.log(`🔧 ATACADO: Limpando valor original: "${valor}"`);
+    
     let valorStr = valor.toString();
     valorStr = valorStr.replace(/\s*(MT|mt|meticais?|metical)\s*/gi, '');
     valorStr = valorStr.trim();
     
+    console.log(`🔧 ATACADO: Após remover MT: "${valorStr}"`);
+    
+    // Tratamento específico para formato moçambicano
     if (valorStr.includes(',') && valorStr.includes('.')) {
+      // Formato: 1,000.00 (vírgula para milhares, ponto para decimais)
       valorStr = valorStr.replace(/,/g, '');
+      console.log(`🔧 ATACADO: Vírgula + ponto detectado: "${valorStr}"`);
     } else if (valorStr.includes(',')) {
       const parts = valorStr.split(',');
       if (parts.length === 2 && parts[1].length <= 2) {
+        // Formato: 375,00 (vírgula como separador decimal)
         valorStr = valorStr.replace(',', '.');
+        console.log(`🔧 ATACADO: Vírgula decimal detectada: "${valorStr}"`);
       } else {
+        // Formato: 1,000 (vírgula para milhares)
         valorStr = valorStr.replace(/,/g, '');
+        console.log(`🔧 ATACADO: Vírgula de milhares detectada: "${valorStr}"`);
       }
     }
     
     const match = valorStr.match(/\d+\.?\d*/);
     if (match) {
       const numero = parseFloat(match[0]);
+      console.log(`🔧 ATACADO: Valor final: ${numero}`);
       return numero.toString();
     }
     
     const digitos = valorStr.replace(/[^\d]/g, '');
-    return digitos || '0';
+    const resultado = digitos || '0';
+    console.log(`🔧 ATACADO: Valor final (fallback): ${resultado}`);
+    return resultado;
   }
 
   // === HISTÓRICO (CÓDIGO ORIGINAL) ===

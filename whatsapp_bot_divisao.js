@@ -604,11 +604,17 @@ class WhatsAppBotDivisao {
     async buscarPagamentoNaPlanilha(referencia, valorEsperado) {
         try {
             console.log(`🔍 DIVISÃO: Buscando pagamento ${referencia} - ${valorEsperado}MT`);
+            console.log(`🔍 DIVISÃO: Tipo do valor: ${typeof valorEsperado}`);
+            console.log(`🔍 DIVISÃO: Valor original: "${valorEsperado}"`);
+            
+            // Converter valor para número para garantir consistência
+            const valorNumerico = parseFloat(valorEsperado);
+            console.log(`🔍 DIVISÃO: Valor numérico: ${valorNumerico}`);
             
             const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
                 action: "buscar_por_referencia",
                 referencia: referencia,
-                valor: valorEsperado
+                valor: valorNumerico
             }, {
                 timeout: 15000,
                 headers: {
