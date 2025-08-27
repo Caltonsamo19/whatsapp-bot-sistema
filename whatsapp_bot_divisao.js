@@ -98,9 +98,9 @@ class WhatsAppBotDivisao {
                 }
             }
             
-            // 1. DETECTAR SE É COMPROVATIVO SEM NÚMEROS
+            // 1. DETECTAR SE É COMPROVATIVO SEM NÚMEROS DE DESTINO
             const comprovativo = this.extrairComprovativo(mensagem);
-            if (comprovativo && !this.temNumeros(mensagem)) {
+            if (comprovativo && !this.temNumerosDestino(mensagem, grupoId)) {
                 console.log(`💰 DIVISÃO: Comprovativo memorizado: ${comprovativo.referencia} - ${comprovativo.valor}MT para remetente: ${remetente}`);
                 
                 // Normalizar remetente para armazenamento consistente
@@ -249,33 +249,25 @@ class WhatsAppBotDivisao {
     // === VERIFICAR SE TEM NÚMEROS ===
     temNumeros(mensagem) {
         const regex = /(?:\+258\s*)?8[0-9]{8}/g;
+        const matches = mensagem.match(regex);
+        return matches && matches.length > 0;
+    }
+
+    // === VERIFICAR SE TEM NÚMEROS DE DESTINO (IGNORA PAGAMENTO) ===
+    temNumerosDestino(mensagem, grupoId = null) {
+        const regex = /(?:\+258\s*)?8[0-9]{8}/g;
         const matches = mensagem.match(regex) || [];
         
         if (matches.length === 0) return false;
         
-        // Filtrar números de pagamento para não considerar como "números de destino"
-        const numerosValidos = matches.filter(numero => {
-            const numeroLimpo = this.limparNumero(numero);
-            
-            // Verificar se é número de pagamento conhecido
-            for (const grupoId in this.CONFIGURACAO_GRUPOS) {
-                const config = this.CONFIGURACAO_GRUPOS[grupoId];
-                if (config.numerosPagamento && config.numerosPagamento.some(numPag => {
-                    // Comparar versões com e sem prefixo
-                    const numLimpo = numeroLimpo.slice(-9); // Últimos 9 dígitos
-                    const numPagLimpo = numPag.replace(/^258/, '').slice(-9); // Remove 258 e pega últimos 9
-                    return numLimpo === numPagLimpo;
-                })) {
-                    console.log(`🚫 DIVISÃO: Número ${numeroLimpo} é número de pagamento, ignorando`);
-                    return false; // É número de pagamento, ignorar
-                }
-            }
-            
-            return true; // É número de destino válido
-        });
+        // Usar mesma filtragem que extrairMultiplosNumeros
+        const numerosLimpos = matches.map(num => this.limparNumero(num))
+                                    .filter(num => num && /^8[0-9]{8}$/.test(num));
         
-        console.log(`📊 DIVISÃO: Números válidos encontrados: ${numerosValidos.length}/${matches.length}`);
-        return numerosValidos.length > 0;
+        const numerosUnicos = [...new Set(numerosLimpos)];
+        const numerosFiltrados = this.filtrarNumerosComprovante(numerosUnicos, mensagem, grupoId);
+        
+        return numerosFiltrados.length > 0;
     }
     
     // === EXTRAIR MÚLTIPLOS NÚMEROS ===
