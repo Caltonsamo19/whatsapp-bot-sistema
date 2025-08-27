@@ -101,11 +101,17 @@ class WhatsAppBotDivisao {
             // 1. DETECTAR SE É COMPROVATIVO SEM NÚMEROS
             const comprovativo = this.extrairComprovativo(mensagem);
             if (comprovativo && !this.temNumeros(mensagem)) {
-                console.log(`💰 DIVISÃO: Comprovativo memorizado: ${comprovativo.referencia} - ${comprovativo.valor}MT`);
-                this.comprovantesMemorizados[remetente] = {
+                console.log(`💰 DIVISÃO: Comprovativo memorizado: ${comprovativo.referencia} - ${comprovativo.valor}MT para remetente: ${remetente}`);
+                
+                // Normalizar remetente para armazenamento consistente
+                const remetenteNormalizado = this.normalizarRemetente(remetente);
+                console.log(`🔄 DIVISÃO: Remetente normalizado: ${remetenteNormalizado}`);
+                
+                this.comprovantesMemorizados[remetenteNormalizado] = {
                     ...comprovativo,
                     timestamp: Date.now(),
-                    grupoId: grupoId
+                    grupoId: grupoId,
+                    remetenteOriginal: remetente
                 };
                 return null; // Não responde ainda
             }
@@ -130,8 +136,9 @@ class WhatsAppBotDivisao {
             if (numerosDetectados && numerosDetectados.length > 1 && !comprovativo) {
                 console.log(`📱 DIVISÃO: ${numerosDetectados.length} números detectados sem comprovativo na mensagem`);
                 
-                // Procurar comprovativo memorizado
-                let comprovantivoAssociado = this.comprovantesMemorizados[remetente];
+                // Procurar comprovativo memorizado usando normalização
+                const remetenteNormalizado = this.normalizarRemetente(remetente);
+                let comprovantivoAssociado = this.comprovantesMemorizados[remetenteNormalizado];
                 
                 // Se não tem memorizado, buscar no histórico (últimos 30 min)
                 if (!comprovantivoAssociado) {
@@ -338,14 +345,40 @@ class WhatsAppBotDivisao {
             .trim();
     }
     
+    // === NORMALIZAR REMETENTE PARA ARMAZENAMENTO CONSISTENTE ===
+    normalizarRemetente(remetente) {
+        // Extrair apenas os dígitos e pegar os últimos 9 (número de telefone)
+        const numerosApenas = remetente.replace(/\D/g, '');
+        if (numerosApenas.length >= 9) {
+            return numerosApenas.slice(-9); // Retorna apenas os últimos 9 dígitos
+        }
+        return remetente; // Se não conseguir normalizar, retorna original
+    }
+
     // === BUSCAR COMPROVATIVO NO HISTÓRICO (SIMULADO) ===
     async buscarComprovanteRecenteHist(remetente) {
-        // Esta função pode ser expandida para integrar com histórico real
-        // Por agora, verifica apenas os memorizados
-        const comprovativo = this.comprovantesMemorizados[remetente];
-        if (comprovativo && (Date.now() - comprovativo.timestamp) <= 1800000) { // 30 min
+        console.log(`🔍 DIVISÃO: Buscando comprovativo para remetente: ${remetente}`);
+        console.log(`📋 DIVISÃO: Comprovativos memorizados:`, Object.keys(this.comprovantesMemorizados));
+        
+        // Normalizar o remetente atual para busca
+        const remetenteNormalizado = this.normalizarRemetente(remetente);
+        console.log(`🔄 DIVISÃO: Remetente normalizado para busca: ${remetenteNormalizado}`);
+        
+        // Buscar usando a chave normalizada
+        const comprovativo = this.comprovantesMemorizados[remetenteNormalizado];
+        
+        // Verificar se ainda está dentro do prazo (30 min)
+        if (comprovativo && (Date.now() - comprovativo.timestamp) <= 1800000) {
+            console.log(`✅ DIVISÃO: Comprovativo encontrado dentro do prazo!`);
+            console.log(`   Ref: ${comprovativo.referencia}, Valor: ${comprovativo.valor}MT`);
             return comprovativo;
+        } else if (comprovativo) {
+            const minutosExpiracao = (Date.now() - comprovativo.timestamp) / 60000;
+            console.log(`❌ DIVISÃO: Comprovativo encontrado mas expirado (${minutosExpiracao.toFixed(1)} min)`);
+        } else {
+            console.log(`❌ DIVISÃO: Nenhum comprovativo encontrado para este remetente`);
         }
+        
         return null;
     }
     
@@ -501,7 +534,8 @@ class WhatsAppBotDivisao {
             }
             
             // 6. LIMPAR DADOS E RESPONDER
-            delete this.comprovantesMemorizados[message.author || message.from];
+            const remetenteLimpeza = this.normalizarRemetente(message.author || message.from);
+            delete this.comprovantesMemorizados[remetenteLimpeza];
             
             const mensagemFinal = `✅ *DIVISÃO CONCLUÍDA!*\n\n` +
                 `🎯 **${sucessos}/${divisao.length} pedidos criados**\n` +

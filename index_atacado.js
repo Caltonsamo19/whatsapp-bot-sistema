@@ -83,6 +83,11 @@ let adminCache = {};
 // Cache para evitar logs repetidos de grupos
 let gruposLogados = new Set();
 
+// Sistema de comandos personalizados por grupo
+let comandosPersonalizados = {
+    // Estrutura: { grupoId: { comando: { criador, resposta, timestamp } } }
+};
+
 // Configuração de administradores GLOBAIS
 const ADMINISTRADORES_GLOBAIS = [
     '258861645968@c.us',
@@ -510,26 +515,205 @@ function isGrupoMonitorado(chatId) {
     return CONFIGURACAO_GRUPOS.hasOwnProperty(chatId);
 }
 
+// === SISTEMA DE COMANDOS PERSONALIZADOS ===
+
+// Salvar comandos personalizados em arquivo
+function salvarComandosPersonalizados() {
+    try {
+        const fs = require('fs');
+        const dados = JSON.stringify(comandosPersonalizados, null, 2);
+        fs.writeFileSync('comandos_personalizados.json', dados);
+        console.log('💾 Comandos personalizados salvos');
+    } catch (error) {
+        console.error('❌ Erro ao salvar comandos personalizados:', error);
+    }
+}
+
+// Carregar comandos personalizados do arquivo
+function carregarComandosPersonalizados() {
+    try {
+        const fs = require('fs');
+        if (fs.existsSync('comandos_personalizados.json')) {
+            const dados = fs.readFileSync('comandos_personalizados.json', 'utf8');
+            comandosPersonalizados = JSON.parse(dados);
+            const totalComandos = Object.values(comandosPersonalizados)
+                .reduce((total, grupo) => total + Object.keys(grupo).length, 0);
+            console.log(`📋 ${totalComandos} comandos personalizados carregados`);
+        }
+    } catch (error) {
+        console.error('❌ Erro ao carregar comandos personalizados:', error);
+        comandosPersonalizados = {};
+    }
+}
+
+// Adicionar comando personalizado
+function adicionarComandoPersonalizado(grupoId, comando, resposta, criadorId, criadorNome) {
+    if (!comandosPersonalizados[grupoId]) {
+        comandosPersonalizados[grupoId] = {};
+    }
+    
+    comandosPersonalizados[grupoId][comando] = {
+        resposta: resposta,
+        criador: criadorId,
+        criadorNome: criadorNome,
+        timestamp: Date.now(),
+        usos: 0
+    };
+    
+    salvarComandosPersonalizados();
+    console.log(`✅ Comando personalizado criado: ${comando} no grupo ${grupoId} por ${criadorNome}`);
+}
+
+// Remover comando personalizado
+function removerComandoPersonalizado(grupoId, comando) {
+    if (comandosPersonalizados[grupoId] && comandosPersonalizados[grupoId][comando]) {
+        delete comandosPersonalizados[grupoId][comando];
+        
+        // Se não há mais comandos no grupo, remover o grupo
+        if (Object.keys(comandosPersonalizados[grupoId]).length === 0) {
+            delete comandosPersonalizados[grupoId];
+        }
+        
+        salvarComandosPersonalizados();
+        console.log(`🗑️ Comando personalizado removido: ${comando}`);
+        return true;
+    }
+    return false;
+}
+
+// Verificar se existe comando personalizado
+function existeComandoPersonalizado(grupoId, comando) {
+    return comandosPersonalizados[grupoId] && comandosPersonalizados[grupoId][comando];
+}
+
+// Executar comando personalizado
+function executarComandoPersonalizado(grupoId, comando) {
+    if (existeComandoPersonalizado(grupoId, comando)) {
+        const cmd = comandosPersonalizados[grupoId][comando];
+        cmd.usos++;
+        salvarComandosPersonalizados();
+        return cmd.resposta;
+    }
+    return null;
+}
+
+// Listar comandos personalizados do grupo
+function listarComandosPersonalizados(grupoId) {
+    if (!comandosPersonalizados[grupoId]) {
+        return null;
+    }
+    
+    const comandos = comandosPersonalizados[grupoId];
+    let lista = `📋 *COMANDOS PERSONALIZADOS DO GRUPO*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    
+    Object.entries(comandos).forEach(([cmd, data]) => {
+        const data_criacao = new Date(data.timestamp).toLocaleDateString('pt-BR');
+        lista += `🔹 **${cmd}**\n`;
+        lista += `   👤 Criado por: ${data.criadorNome}\n`;
+        lista += `   📅 Data: ${data_criacao}\n`;
+        lista += `   📊 Usos: ${data.usos}\n`;
+        lista += `   💬 Prévia: "${data.resposta.substring(0, 50)}${data.resposta.length > 50 ? '...' : ''}"\n\n`;
+    });
+    
+    lista += `📊 Total: ${Object.keys(comandos).length} comandos`;
+    return lista;
+}
+
 function getConfiguracaoGrupo(chatId) {
     return CONFIGURACAO_GRUPOS[chatId] || null;
 }
 
 async function isAdminGrupo(chatId, participantId) {
     try {
+        console.log(`🔍 Verificando admin do grupo: ${participantId} no grupo ${chatId}`);
+        
+        // Normalizar IDs para comparação
+        function normalizarIds(ids, participantIdOriginal) {
+            const normalized = new Set();
+            
+            ids.forEach(id => {
+                normalized.add(id); // ID original
+                
+                // Se for ID @lid, tentar extrair número equivalente @c.us
+                if (id.includes('@lid')) {
+                    // Manter ID interno como está, pois pode não ter equivalente direto
+                    normalized.add(id);
+                } else if (id.includes('@c.us')) {
+                    normalized.add(id);
+                    // Extrair apenas os dígitos para comparação flexível
+                    const digitos = id.replace(/\D/g, '');
+                    if (digitos.length >= 11) {
+                        normalized.add(digitos);
+                        normalized.add(digitos.substring(3)); // sem código do país
+                    }
+                }
+            });
+            
+            // Também normalizar o participantId para busca
+            normalized.add(participantIdOriginal);
+            if (participantIdOriginal.includes('@c.us') || participantIdOriginal.includes('@lid')) {
+                normalized.add(participantIdOriginal);
+                const digitos = participantIdOriginal.replace(/\D/g, '');
+                if (digitos.length >= 9) {
+                    normalized.add(digitos);
+                    normalized.add(`258${digitos}@c.us`);
+                }
+            }
+            
+            return Array.from(normalized);
+        }
+        
+        // Verificar cache (5 minutos)
         if (adminCache[chatId] && adminCache[chatId].timestamp > Date.now() - 300000) {
-            return adminCache[chatId].admins.includes(participantId);
+            console.log(`📋 Usando cache de admins para grupo ${chatId}`);
+            
+            // Verificação com normalização de IDs
+            const todosIds = normalizarIds(adminCache[chatId].admins, participantId);
+            const isAdmin = todosIds.some(id => adminCache[chatId].admins.includes(id)) || 
+                           adminCache[chatId].admins.some(adminId => todosIds.includes(adminId));
+            
+            console.log(`   Cache resultado: ${isAdmin}`);
+            console.log(`   Admins no cache: ${adminCache[chatId].admins.join(', ')}`);
+            console.log(`   IDs normalizados para busca: ${todosIds.join(', ')}`);
+            return isAdmin;
         }
 
+        console.log(`🔄 Buscando admins do grupo ${chatId} (cache expirado ou inexistente)`);
         const chat = await client.getChatById(chatId);
         const participants = await chat.participants;
-        const admins = participants.filter(p => p.isAdmin || p.isSuperAdmin).map(p => p.id._serialized);
         
+        console.log(`👥 Total de participantes: ${participants.length}`);
+        
+        // Buscar admins com diferentes formatos de ID
+        const admins = [];
+        participants.forEach(p => {
+            if (p.isAdmin || p.isSuperAdmin) {
+                const adminId = p.id._serialized;
+                admins.push(adminId);
+                console.log(`👨‍💼 Admin encontrado: ${adminId} (${p.isAdmin ? 'Admin' : 'Super Admin'})`);
+            }
+        });
+        
+        console.log(`🔒 Total de admins encontrados: ${admins.length}`);
+        console.log(`📝 Lista de admins: ${admins.join(', ')}`);
+        
+        // Salvar no cache
         adminCache[chatId] = {
             admins: admins,
             timestamp: Date.now()
         };
 
-        return admins.includes(participantId);
+        // Verificação com normalização de IDs
+        const todosIds = normalizarIds(admins, participantId);
+        const isAdmin = todosIds.some(id => admins.includes(id)) || 
+                       admins.some(adminId => todosIds.includes(adminId));
+        
+        console.log(`🎯 Participante verificado: ${participantId}`);
+        console.log(`🎯 IDs normalizados: ${todosIds.join(', ')}`);
+        console.log(`🎯 Resultado final: ${isAdmin}`);
+        
+        return isAdmin;
+        
     } catch (error) {
         console.error('❌ Erro ao verificar admin do grupo:', error);
         return false;
@@ -767,6 +951,9 @@ client.on('ready', async () => {
     console.log('🔄 Bot de Divisão ATIVO - Múltiplos números automático!');
     console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
     
+    // Carregar comandos personalizados
+    carregarComandosPersonalizados();
+    
     await carregarHistorico();
     
     console.log('\n🤖 Monitorando grupos ATACADO:');
@@ -777,6 +964,7 @@ client.on('ready', async () => {
     
     console.log('\n🔧 Comandos admin globais: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
     console.log('🔧 Comandos admin de grupo: .f (fechar) .a (abrir) .atenção (mencionar todos) .silencio (ultra-discreto)');
+    console.log('🔧 Comandos personalizados: .addcmd (criar) .delcmd (remover) .listcmd (listar)');
 });
 
 client.on('group-join', async (notification) => {
@@ -1166,6 +1354,82 @@ client.on('message', async (message) => {
                     return;
                 }
                 
+                // COMANDO: .addcmd (Criar comando personalizado)
+                if (comando.startsWith('.addcmd ')) {
+                    try {
+                        const args = message.body.substring(8).trim(); // Remove ".addcmd "
+                        const partes = args.split(' ');
+                        
+                        if (partes.length < 2) {
+                            await message.reply('❌ *Formato incorreto*\n\nUso: `.addcmd nome_comando resposta completa`\n\nExemplo: `.addcmd regras As regras do grupo são: 1) Respeito 2) Sem spam`');
+                            return;
+                        }
+                        
+                        const nomeComando = partes[0].toLowerCase();
+                        const resposta = partes.slice(1).join(' ');
+                        
+                        // Verificar se não conflita com comandos do sistema
+                        const comandosSistema = ['.f', '.a', '.atenção', '.atencao', '.silencio', '.silêncio', '.addcmd', '.delcmd', '.listcmd', '.meunum'];
+                        if (comandosSistema.includes(nomeComando)) {
+                            await message.reply(`❌ *Comando reservado*\n\nO comando "${nomeComando}" é reservado do sistema.\n\nEscolha outro nome.`);
+                            return;
+                        }
+                        
+                        const autorMensagem = message.author || message.from;
+                        const nomeAutor = message._data?.notifyName || 'Admin';
+                        
+                        adicionarComandoPersonalizado(message.from, nomeComando, resposta, autorMensagem, nomeAutor);
+                        
+                        await message.reply(`✅ *Comando criado com sucesso!*\n\n🔹 **Comando:** ${nomeComando}\n👤 **Criado por:** ${nomeAutor}\n💬 **Resposta:** ${resposta.substring(0, 100)}${resposta.length > 100 ? '...' : ''}\n\n💡 Use \`${nomeComando}\` para executar`);
+                        
+                    } catch (error) {
+                        console.error('❌ Erro ao criar comando personalizado:', error);
+                        await message.reply('❌ *Erro ao criar comando*\n\nTente novamente.');
+                    }
+                    return;
+                }
+                
+                // COMANDO: .delcmd (Remover comando personalizado)
+                if (comando.startsWith('.delcmd ')) {
+                    try {
+                        const nomeComando = message.body.substring(8).trim().toLowerCase();
+                        
+                        if (!nomeComando) {
+                            await message.reply('❌ *Nome do comando necessário*\n\nUso: `.delcmd nome_comando`\n\nExemplo: `.delcmd regras`');
+                            return;
+                        }
+                        
+                        if (removerComandoPersonalizado(message.from, nomeComando)) {
+                            await message.reply(`✅ *Comando removido*\n\nO comando "${nomeComando}" foi removido do grupo.`);
+                        } else {
+                            await message.reply(`❌ *Comando não encontrado*\n\nO comando "${nomeComando}" não existe neste grupo.\n\nUse \`.listcmd\` para ver comandos disponíveis.`);
+                        }
+                        
+                    } catch (error) {
+                        console.error('❌ Erro ao remover comando personalizado:', error);
+                        await message.reply('❌ *Erro ao remover comando*\n\nTente novamente.');
+                    }
+                    return;
+                }
+                
+                // COMANDO: .listcmd (Listar comandos personalizados)
+                if (comando === '.listcmd') {
+                    try {
+                        const lista = listarComandosPersonalizados(message.from);
+                        
+                        if (lista) {
+                            await message.reply(lista);
+                        } else {
+                            await message.reply('📋 *Nenhum comando personalizado*\n\nEste grupo ainda não possui comandos personalizados.\n\n💡 Crie um com: `.addcmd nome_comando resposta`');
+                        }
+                        
+                    } catch (error) {
+                        console.error('❌ Erro ao listar comandos personalizados:', error);
+                        await message.reply('❌ *Erro ao listar comandos*\n\nTente novamente.');
+                    }
+                    return;
+                }
+
                 // COMANDO: .silencio (Mencionar todos de forma ultra-discreta)
                 if (comando === '.silencio' || comando === '.silêncio') {
                     try {
@@ -1234,13 +1498,25 @@ client.on('message', async (message) => {
                 }
                 
                 // Verificar se tentou usar comando admin sem ser admin
-                const comandosAdmin = ['.f', '.a', '.atenção', '.atencao', '.silencio', '.silêncio'];
+                const comandosAdmin = ['.f', '.a', '.atenção', '.atencao', '.silencio', '.silêncio', '.addcmd', '.delcmd', '.listcmd'];
                 
                 if (comandosAdmin.includes(comando)) {
                     const autorMensagem = message.author || message.from;
                     await message.reply(`🚫 *ACESSO NEGADO*\n\nApenas administradores podem usar este comando.\n\n📱 Seu número: \`${autorMensagem}\`\n💡 Digite \`.meunum\` para ver seu número completo.`);
                     return;
                 }
+            }
+        }
+
+        // === VERIFICAR COMANDOS PERSONALIZADOS ===
+        if (message.from.endsWith('@g.us') && message.body.startsWith('.')) {
+            const comando = message.body.toLowerCase().trim();
+            const respostaPersonalizada = executarComandoPersonalizado(message.from, comando);
+            
+            if (respostaPersonalizada) {
+                await message.reply(respostaPersonalizada);
+                console.log(`🔹 Comando personalizado executado: ${comando} no grupo ${message.from}`);
+                return;
             }
         }
 
