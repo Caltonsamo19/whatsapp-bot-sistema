@@ -472,16 +472,36 @@ class WhatsAppBotDivisao {
         try {
             console.log(`🔄 DIVISÃO: Iniciando processamento de ${comprovativo.referencia}`);
             
-            // 1. CONFIRMAR PAGAMENTO EXISTE
-            const pagamentoExiste = await this.buscarPagamentoNaPlanilha(
+            // 1. CONFIRMAR PAGAMENTO EXISTE (com retry para sincronização)
+            console.log(`🔍 DIVISÃO: Verificando pagamento (pode precisar aguardar sincronização)...`);
+            let pagamentoExiste = await this.buscarPagamentoNaPlanilha(
                 comprovativo.referencia, 
                 comprovativo.valor
             );
             
+            // Se não encontrou, tentar mais 2 vezes com delay (sincronização Google Sheets)
             if (!pagamentoExiste) {
-                console.log(`⏳ DIVISÃO: Pagamento não encontrado, aguardando...`);
+                console.log(`⏳ DIVISÃO: Primeira tentativa falhou, aguardando sincronização...`);
+                await new Promise(resolve => setTimeout(resolve, 3000)); // 3 segundos
+                pagamentoExiste = await this.buscarPagamentoNaPlanilha(
+                    comprovativo.referencia, 
+                    comprovativo.valor
+                );
+                
+                if (!pagamentoExiste) {
+                    console.log(`⏳ DIVISÃO: Segunda tentativa falhou, última tentativa...`);
+                    await new Promise(resolve => setTimeout(resolve, 5000)); // +5 segundos
+                    pagamentoExiste = await this.buscarPagamentoNaPlanilha(
+                        comprovativo.referencia, 
+                        comprovativo.valor
+                    );
+                }
+            }
+            
+            if (!pagamentoExiste) {
+                console.log(`❌ DIVISÃO: Pagamento não encontrado após 3 tentativas`);
                 return {
-                    resposta: `⏳ *PAGAMENTO NÃO ENCONTRADO*\n\n💰 Referência: ${comprovativo.referencia}\n💳 Valor: ${comprovativo.valor}MT\n\n🔍 Aguardando confirmação do pagamento...`
+                    resposta: `⏳ *PAGAMENTO NÃO ENCONTRADO*\n\n💰 Referência: ${comprovativo.referencia}\n💳 Valor: ${comprovativo.valor}MT\n\n🔍 Aguarde alguns minutos e tente novamente.\n(O sistema pode estar sincronizando com o banco)`
                 };
             }
             
