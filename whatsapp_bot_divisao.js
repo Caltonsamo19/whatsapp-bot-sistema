@@ -1221,7 +1221,8 @@ class WhatsAppBotDivisao {
             
             // Criar configuração de grupo para a IA (usando dados do bot de divisão)
             const configGrupoParaIA = this.CONFIGURACAO_GRUPOS[grupoId] ? {
-                tabela: this.gerarTabelaTextoParaIA(grupoId)
+                tabela: this.gerarTabelaTextoParaIA(grupoId),
+                precos: this.CONFIGURACAO_GRUPOS[grupoId].precos  // CORREÇÃO: Adicionar preços diretos
             } : null;
             
             // Usar a IA avançada para extrair comprovativo da imagem
