@@ -526,7 +526,7 @@ class WhatsAppAIAtacado {
       
       if (megasCalculados) {
         const numeroLimpo = this.limparNumero(numero);
-        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLimpo}`;
+        const resultado = `${comprovante.referencia}|${megasCalculados.quantidade}|${numeroLimpo}`;
         console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO: ${resultado}`);
         return { 
           sucesso: true, 
@@ -670,15 +670,29 @@ Se não conseguires ler a imagem ou extrair os dados:
             console.log(`   📱 Números da legenda: ${numeros.join(', ')}`);
             
             if (numeros.length === 1) {
-              const dadosCompletos = `${comprovante.referencia}|${comprovante.valor}|${numeros[0]}`;
-              console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${dadosCompletos}`);
-              return { 
-                sucesso: true, 
-                dadosCompletos: dadosCompletos,
-                tipo: 'numero_processado',
-                numero: numeros[0],
-                fonte: 'imagem_com_legenda'
-              };
+              // CORREÇÃO: Calcular megas antes de criar dados completos
+              const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+              
+              if (megasCalculados) {
+                const dadosCompletos = `${comprovante.referencia}|${megasCalculados.quantidade}|${numeros[0]}`;
+                console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${dadosCompletos}`);
+                return { 
+                  sucesso: true, 
+                  dadosCompletos: dadosCompletos,
+                  tipo: 'numero_processado',
+                  numero: numeros[0],
+                  megas: megasCalculados.megas,
+                  fonte: 'imagem_com_legenda'
+                };
+              } else {
+                console.log(`   ❌ ATACADO: Valor ${comprovante.valor}MT não encontrado na tabela`);
+                return {
+                  sucesso: false,
+                  tipo: 'valor_nao_encontrado_na_tabela',
+                  valor: comprovante.valor,
+                  mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
+                };
+              }
             } else {
               // Múltiplos números detectados - não permitido no sistema atacado
               console.log(`   ❌ ATACADO: Múltiplos números na legenda não permitidos`);
@@ -693,15 +707,29 @@ Se não conseguires ler a imagem ou extrair os dados:
         }
         
         // Sem números na legenda - processar comprovante normalmente
-        await this.processarComprovante(comprovante, remetente, timestamp);
+        // CORREÇÃO: Calcular megas antes de salvar
+        const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
         
-        return { 
-          sucesso: true, 
-          tipo: 'comprovante_imagem_recebido',
-          referencia: comprovante.referencia,
-          valor: comprovante.valor,
-          mensagem: 'Comprovante da imagem processado! Agora envie o número que vai receber os megas.'
-        };
+        if (megasCalculados) {
+          await this.processarComprovante(comprovante, remetente, timestamp);
+          
+          return { 
+            sucesso: true, 
+            tipo: 'comprovante_imagem_recebido',
+            referencia: comprovante.referencia,
+            valor: comprovante.valor,
+            megas: megasCalculados.megas,
+            mensagem: `Comprovante da imagem processado! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
+          };
+        } else {
+          console.log(`   ❌ ATACADO: Valor ${comprovante.valor}MT não encontrado na tabela`);
+          return {
+            sucesso: false,
+            tipo: 'valor_nao_encontrado_na_tabela',
+            valor: comprovante.valor,
+            mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
+          };
+        }
       } else {
         console.log(`   ❌ ATACADO: IA não conseguiu extrair dados da imagem`);
         return {
@@ -927,7 +955,7 @@ Se não conseguires ler a imagem ou extrair os dados:
       const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
       
       if (megasCalculados) {
-        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numero}`;
+        const resultado = `${comprovante.referencia}|${megasCalculados.quantidade}|${numero}`;
         delete this.comprovantesEmAberto[remetente];
         
         console.log(`   ✅ ATACADO: PEDIDO COMPLETO: ${resultado}`);
@@ -958,7 +986,7 @@ Se não conseguires ler a imagem ou extrair os dados:
       const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
       
       if (megasCalculados) {
-        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numero}`;
+        const resultado = `${comprovante.referencia}|${megasCalculados.quantidade}|${numero}`;
         console.log(`   ✅ ATACADO: ENCONTRADO NO HISTÓRICO: ${resultado}`);
         return { 
           sucesso: true, 
