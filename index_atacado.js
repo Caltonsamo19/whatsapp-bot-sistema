@@ -152,6 +152,19 @@ botDivisao.CONFIGURACAO_GRUPOS = CONFIGURACAO_GRUPOS_DIVISAO;
 const CONFIGURACAO_GRUPOS = {
     '120363419652375064@g.us': {
         nome: 'Net Fornecedor V',
+        // CORREÇÃO: Adicionar preços estruturados para cálculo correto de megas
+        precos: {
+            10240: 125,    // 10GB = 125MT
+            20480: 250,    // 20GB = 250MT
+            30720: 375,    // 30GB = 375MT
+            40960: 500,    // 40GB = 500MT
+            51200: 625,    // 50GB = 625MT
+            61440: 750,    // 60GB = 750MT
+            71680: 875,    // 70GB = 875MT
+            81920: 1000,   // 80GB = 1000MT
+            92160: 1125,   // 90GB = 1125MT
+            102400: 1250   // 100GB = 1250MT
+        },
         tabela: `GB'S COMPLETOS
 📱 10GB➜125MT 
 📱 20GB ➜ 250MT  
