@@ -511,13 +511,45 @@ class WhatsAppBotDivisao {
             const especificacoes = this.extrairEspecificacoes(message.body || '', numeros);
             
             // 3. CALCULAR DIVISÃO (usar especificações se disponíveis)
-            const divisao = Object.keys(especificacoes).length > 0 
-                ? this.calcularDivisaoComEspecificacoes(comprovativo.valor, numeros, grupoId, especificacoes)
-                : this.calcularDivisaoPorPrioridade(comprovativo.valor, numeros, grupoId);
+            let divisao = null;
             
+            if (Object.keys(especificacoes).length > 0) {
+                divisao = this.calcularDivisaoComEspecificacoes(comprovativo.valor, numeros, grupoId, especificacoes);
+            } else {
+                // Tentar divisão automática com retry
+                console.log(`🔄 DIVISÃO: Tentando cálculo automático...`);
+                divisao = this.calcularDivisaoPorPrioridade(comprovativo.valor, numeros, grupoId);
+                
+                // Se falhou, tentar diferentes estratégias
+                if (!divisao || divisao.length === 0) {
+                    console.log(`⚠️ DIVISÃO: Primeira tentativa falhou, tentando estratégias alternativas...`);
+                    
+                    // ESTRATÉGIA 2: Tentar redistribuir se possível
+                    divisao = await this.tentarEstrategiaAlternativa(comprovativo.valor, numeros, grupoId);
+                }
+            }
+            
+            // Se ainda não conseguiu calcular, retornar erro detalhado
             if (!divisao || divisao.length === 0) {
+                console.error(`❌ DIVISÃO: FALHA COMPLETA no cálculo`);
+                
+                // Obter preços disponíveis para mostrar na mensagem
+                const configGrupo = this.CONFIGURACAO_GRUPOS[grupoId];
+                const precosDisponiveis = Object.entries(configGrupo.precos || {})
+                    .map(([megas, preco]) => `${Math.floor(megas/1024)}GB = ${preco}MT`)
+                    .join('\n• ');
+                
                 return {
-                    resposta: `❌ *ERRO NO CÁLCULO*\n\n💰 Valor ${comprovativo.valor}MT não pode ser dividido pelos números informados.\n\n📋 Verifique a tabela de preços do grupo.`
+                    resposta: `❌ *ERRO NO CÁLCULO DE DIVISÃO*\n\n` +
+                             `💰 **Valor:** ${comprovativo.valor}MT\n` +
+                             `📱 **Números:** ${numeros.length}\n\n` +
+                             `🚫 **Problema:** Este valor não pode ser dividido automaticamente entre ${numeros.length} números.\n\n` +
+                             `📋 **Preços disponíveis:**\n• ${precosDisponiveis}\n\n` +
+                             `💡 **Sugestões:**\n` +
+                             `• Use um valor que seja soma exata dos preços disponíveis\n` +
+                             `• Especifique manualmente os tamanhos (ex: "10gb 840123456")\n` +
+                             `• Divida em menos números\n\n` +
+                             `🔄 **Não foram enviados dados** - sistema protegido contra erros.`
                 };
             }
             
@@ -712,9 +744,26 @@ class WhatsAppBotDivisao {
                 return null;
             }
             
-            // Converter valor para megas total
+            // VALIDAÇÃO CRÍTICA: Verificar se o valor é válido
+            if (!valorTotal || isNaN(valorTotal) || valorTotal <= 0) {
+                console.error(`❌ DIVISÃO: Valor inválido: ${valorTotal}MT`);
+                return null;
+            }
+            
+            // VALIDAÇÃO CRÍTICA: Verificar se há números para divisão
+            if (!numeros || numeros.length === 0) {
+                console.error(`❌ DIVISÃO: Nenhum número válido para divisão`);
+                return null;
+            }
+            
+            console.log(`🔍 DIVISÃO: Tentando dividir ${valorTotal}MT entre ${numeros.length} números`);
+            
+            // Converter valor para megas total com validação melhorada
             let megasTotal = null;
+            const precosDisponiveis = [];
+            
             for (const [megas, preco] of Object.entries(configGrupo.precos)) {
+                precosDisponiveis.push(`${Math.floor(megas/1024)}GB=${preco}MT`);
                 if (preco === valorTotal) {
                     megasTotal = parseInt(megas);
                     break;
@@ -722,30 +771,85 @@ class WhatsAppBotDivisao {
             }
             
             if (!megasTotal) {
-                console.error(`❌ DIVISÃO: Valor ${valorTotal}MT não encontrado na tabela`);
+                console.error(`❌ DIVISÃO: Valor ${valorTotal}MT não encontrado na tabela de preços`);
+                console.error(`📋 DIVISÃO: Preços disponíveis: ${precosDisponiveis.join(', ')}`);
                 return null;
             }
             
-            console.log(`📊 DIVISÃO: ${valorTotal}MT = ${megasTotal}MB total para ${numeros.length} números`);
+            console.log(`✅ DIVISÃO: ${valorTotal}MT = ${megasTotal}MB (${megasTotal/1024}GB) total`);
+            
+            // TENTATIVA 1: Divisão exata primeiro
+            const resultado = this.tentarDivisaoExata(megasTotal, numeros, configGrupo);
+            if (resultado && resultado.length > 0) {
+                // Validar se a soma confere
+                const somaValores = resultado.reduce((sum, item) => sum + item.valorMT, 0);
+                if (somaValores === valorTotal) {
+                    console.log(`✅ DIVISÃO: Divisão exata bem-sucedida`);
+                    return resultado;
+                } else {
+                    console.log(`⚠️ DIVISÃO: Divisão exata falhou na validação - ${somaValores}MT ≠ ${valorTotal}MT`);
+                }
+            }
+            
+            // TENTATIVA 2: Divisão por aproximação
+            console.log(`🔄 DIVISÃO: Tentando divisão por aproximação...`);
+            const resultadoAprox = this.tentarDivisaoPorAproximacao(valorTotal, numeros, configGrupo);
+            if (resultadoAprox && resultadoAprox.length > 0) {
+                // Validar se a soma confere
+                const somaValores = resultadoAprox.reduce((sum, item) => sum + item.valorMT, 0);
+                if (somaValores === valorTotal) {
+                    console.log(`✅ DIVISÃO: Divisão por aproximação bem-sucedida`);
+                    return resultadoAprox;
+                } else {
+                    console.log(`⚠️ DIVISÃO: Divisão por aproximação falhou na validação - ${somaValores}MT ≠ ${valorTotal}MT`);
+                }
+            }
+            
+            // FALHA: Não foi possível dividir
+            console.error(`❌ DIVISÃO: FALHA COMPLETA - Valor ${valorTotal}MT não pode ser dividido entre ${numeros.length} números`);
+            console.error(`📋 DIVISÃO: Preços disponíveis no grupo: ${precosDisponiveis.join(', ')}`);
+            
+            return null;
+            
+        } catch (error) {
+            console.error(`❌ DIVISÃO: Erro crítico no cálculo:`, error);
+            return null;
+        }
+    }
+
+    // === TENTATIVA 1: DIVISÃO EXATA ===
+    tentarDivisaoExata(megasTotal, numeros, configGrupo) {
+        try {
+            console.log(`🎯 DIVISÃO: Tentando divisão exata de ${megasTotal}MB entre ${numeros.length} números`);
             
             // Calcular divisão base
             const megasPorNumero = Math.floor(megasTotal / numeros.length);
-            const megasBase = Math.floor(megasPorNumero / 10240) * 10240; // Arredondar para múltiplo de 10GB
+            
+            // Tentar arredondar para múltiplos de 10GB primeiro
+            let megasBase = Math.floor(megasPorNumero / 10240) * 10240;
+            
+            // Se megasBase é 0, tentar múltiplos menores
+            if (megasBase === 0) {
+                console.log(`🔄 DIVISÃO: Base de 10GB muito grande, tentando valores menores...`);
+                return null; // Deixar para aproximação
+            }
+            
             const megasRestante = megasTotal - (megasBase * numeros.length);
             
             console.log(`📊 DIVISÃO: Base ${megasBase}MB cada, restante ${megasRestante}MB`);
             
-            // Distribuir por prioridade
             const resultado = [];
+            let megasDistribuidos = 0;
+            
             for (let i = 0; i < numeros.length; i++) {
                 let megasFinais = megasBase;
                 
-                // Distribuir restante por prioridade (primeiros números recebem mais)
+                // Distribuir restante por prioridade
                 if (megasRestante > 0 && i < Math.floor(megasRestante / 10240)) {
                     megasFinais += 10240; // +10GB
                 }
                 
-                // Encontrar valor em MT correspondente
+                // Verificar se este tamanho existe na tabela
                 let valorMT = null;
                 let megasTexto = '';
                 
@@ -758,7 +862,7 @@ class WhatsAppBotDivisao {
                 }
                 
                 if (valorMT === null) {
-                    console.error(`❌ DIVISÃO: Não encontrou preço para ${megasFinais}MB`);
+                    console.error(`❌ DIVISÃO: Tamanho ${megasFinais}MB (${megasFinais/1024}GB) não existe na tabela`);
                     return null;
                 }
                 
@@ -768,20 +872,175 @@ class WhatsAppBotDivisao {
                     megasTexto: megasTexto,
                     valorMT: valorMT
                 });
+                
+                megasDistribuidos += megasFinais;
             }
             
-            // Verificar se a divisão está correta
-            const somaValores = resultado.reduce((sum, item) => sum + item.valorMT, 0);
-            if (somaValores !== valorTotal) {
-                console.error(`❌ DIVISÃO: Soma ${somaValores}MT ≠ Total ${valorTotal}MT`);
+            // Verificar se todos os megas foram distribuídos
+            if (megasDistribuidos !== megasTotal) {
+                console.error(`❌ DIVISÃO: Megas distribuídos ${megasDistribuidos} ≠ Total ${megasTotal}`);
                 return null;
             }
             
-            console.log(`✅ DIVISÃO: Cálculo concluído - ${resultado.length} divisões`);
+            console.log(`✅ DIVISÃO: Divisão exata calculada com sucesso`);
             return resultado;
             
         } catch (error) {
-            console.error(`❌ DIVISÃO: Erro no cálculo:`, error);
+            console.error(`❌ DIVISÃO: Erro na divisão exata:`, error);
+            return null;
+        }
+    }
+
+    // === TENTATIVA 2: DIVISÃO POR APROXIMAÇÃO ===
+    tentarDivisaoPorAproximacao(valorTotal, numeros, configGrupo) {
+        try {
+            console.log(`🔄 DIVISÃO: Tentando divisão por aproximação - ${valorTotal}MT entre ${numeros.length} números`);
+            
+            // Obter todos os preços disponíveis ordenados
+            const precosOrdenados = Object.entries(configGrupo.precos)
+                .map(([megas, preco]) => ({ megas: parseInt(megas), preco: parseInt(preco) }))
+                .sort((a, b) => a.preco - b.preco);
+            
+            console.log(`📋 DIVISÃO: Preços disponíveis:`, precosOrdenados.map(p => `${p.preco}MT(${p.megas/1024}GB)`).join(', '));
+            
+            // Encontrar combinações que somem exatamente o valor total
+            const combinacoes = this.encontrarCombinacoesExatas(valorTotal, numeros.length, precosOrdenados);
+            
+            if (combinacoes && combinacoes.length > 0) {
+                const resultado = [];
+                
+                for (let i = 0; i < numeros.length && i < combinacoes.length; i++) {
+                    const { megas, preco } = combinacoes[i];
+                    resultado.push({
+                        numero: numeros[i],
+                        megas: megas,
+                        megasTexto: `${megas / 1024}GB`,
+                        valorMT: preco
+                    });
+                }
+                
+                console.log(`✅ DIVISÃO: Combinação encontrada por aproximação`);
+                return resultado;
+            }
+            
+            console.log(`❌ DIVISÃO: Nenhuma combinação válida encontrada`);
+            return null;
+            
+        } catch (error) {
+            console.error(`❌ DIVISÃO: Erro na divisão por aproximação:`, error);
+            return null;
+        }
+    }
+
+    // === ENCONTRAR COMBINAÇÕES EXATAS ===
+    encontrarCombinacoesExatas(valorAlvo, quantidadeNumeros, precosDisponiveis) {
+        console.log(`🔍 DIVISÃO: Procurando combinações que somem ${valorAlvo}MT para ${quantidadeNumeros} números`);
+        
+        // Função recursiva para encontrar combinações
+        const encontrarCombinacao = (valorRestante, numerosRestantes, combinacaoAtual) => {
+            // Caso base: se não há mais números para preencher
+            if (numerosRestantes === 0) {
+                return valorRestante === 0 ? combinacaoAtual : null;
+            }
+            
+            // Se valor restante é negativo, falhou
+            if (valorRestante < 0) {
+                return null;
+            }
+            
+            // Tentar cada preço disponível
+            for (const preco of precosDisponiveis) {
+                if (preco.preco <= valorRestante) {
+                    const novaCombinacao = [...combinacaoAtual, preco];
+                    const resultado = encontrarCombinacao(
+                        valorRestante - preco.preco,
+                        numerosRestantes - 1,
+                        novaCombinacao
+                    );
+                    
+                    if (resultado) {
+                        return resultado;
+                    }
+                }
+            }
+            
+            return null;
+        };
+        
+        const resultado = encontrarCombinacao(valorAlvo, quantidadeNumeros, []);
+        
+        if (resultado) {
+            console.log(`✅ DIVISÃO: Combinação encontrada:`, resultado.map(p => `${p.preco}MT(${p.megas/1024}GB)`).join(', '));
+        } else {
+            console.log(`❌ DIVISÃO: Nenhuma combinação exata encontrada`);
+        }
+        
+        return resultado;
+    }
+
+    // === ESTRATÉGIA ALTERNATIVA DE CÁLCULO ===
+    async tentarEstrategiaAlternativa(valorTotal, numeros, grupoId) {
+        try {
+            console.log(`🔄 DIVISÃO: Tentando estratégia alternativa para ${valorTotal}MT`);
+            
+            const configGrupo = this.CONFIGURACAO_GRUPOS[grupoId];
+            if (!configGrupo || !configGrupo.precos) {
+                return null;
+            }
+            
+            // ESTRATÉGIA 1: Tentar com números diferentes (reduzir 1 número)
+            if (numeros.length > 2) {
+                console.log(`🔄 DIVISÃO: Tentando com ${numeros.length - 1} números...`);
+                const numerosReduzidos = numeros.slice(0, -1);
+                const divisaoReduzida = this.calcularDivisaoPorPrioridade(valorTotal, numerosReduzidos, grupoId);
+                
+                if (divisaoReduzida && divisaoReduzida.length > 0) {
+                    console.log(`⚠️ DIVISÃO: Consegui dividir apenas entre ${numerosReduzidos.length} números`);
+                    
+                    // Adicionar informação sobre número não processado
+                    const numeroNaoProcessado = numeros[numeros.length - 1];
+                    divisaoReduzida.observacao = `Número ${numeroNaoProcessado} não pôde ser incluído na divisão automática`;
+                    
+                    return divisaoReduzida;
+                }
+            }
+            
+            // ESTRATÉGIA 2: Verificar se é múltiplo de preços menores
+            const precosOrdenados = Object.entries(configGrupo.precos)
+                .map(([megas, preco]) => ({ megas: parseInt(megas), preco: parseInt(preco) }))
+                .sort((a, b) => a.preco - b.preco);
+            
+            console.log(`🔄 DIVISÃO: Tentando dividir usando menor preço disponível...`);
+            const menorPreco = precosOrdenados[0];
+            
+            if (menorPreco && valorTotal % menorPreco.preco === 0) {
+                const quantidadePossivel = Math.floor(valorTotal / menorPreco.preco);
+                
+                if (quantidadePossivel >= numeros.length) {
+                    console.log(`✅ DIVISÃO: Posso dar ${menorPreco.megas/1024}GB para todos`);
+                    
+                    const resultado = numeros.map(numero => ({
+                        numero: numero,
+                        megas: menorPreco.megas,
+                        megasTexto: `${menorPreco.megas / 1024}GB`,
+                        valorMT: menorPreco.preco
+                    }));
+                    
+                    // Calcular sobra
+                    const valorUsado = numeros.length * menorPreco.preco;
+                    if (valorUsado < valorTotal) {
+                        resultado.observacao = `Sobra de ${valorTotal - valorUsado}MT não foi distribuída`;
+                    }
+                    
+                    return resultado;
+                }
+            }
+            
+            console.log(`❌ DIVISÃO: Todas as estratégias alternativas falharam`);
+            return null;
+            
+        } catch (error) {
+            console.error(`❌ DIVISÃO: Erro na estratégia alternativa:`, error);
             return null;
         }
     }
