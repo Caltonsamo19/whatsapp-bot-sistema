@@ -981,17 +981,11 @@ async function processarFila() {
 // === EVENTOS DO BOT ===
 
 client.on('qr', (qr) => {
-    console.log('📱 BOT ATACADO - Escaneie o QR Code:');
+    console.log('📱 Escaneie o QR Code:');
     qrcode.generate(qr, { small: true });
 });
 
-// Variável para controlar se o bot já foi inicializado
-let botInicializado = false;
-
-// Função para inicializar o bot (reutilizável)
-async function inicializarBot() {
-    if (botInicializado) return;
-    
+client.on('ready', async () => {
     console.log('✅ Bot ATACADO conectado e pronto!');
     console.log('🧠 IA WhatsApp ATACADO ativa!');
     console.log('📦 Sistema inteligente: Cálculo automático de megas!');
@@ -1013,43 +1007,8 @@ async function inicializarBot() {
     console.log('\n🔧 Comandos admin globais: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
     console.log('🔧 Comandos admin de grupo: .f (fechar) .a (abrir) .atenção (mencionar todos) .silencio (ultra-discreto)');
     console.log('🔧 Comandos personalizados: .addcmd (criar) .delcmd (remover) .listcmd (listar)');
-    
-    botInicializado = true;
-}
+});
 
-// Evento ready original
-client.on('ready', inicializarBot);
-
-// WORKAROUND: Verificar se o client está pronto periodicamente
-let tentativasVerificacao = 0;
-const maxTentativas = 30; // 30 tentativas = 1.5 minutos
-
-const verificarStatusClient = setInterval(async () => {
-    tentativasVerificacao++;
-    
-    try {
-        // Verificar se o client tem informações básicas carregadas
-        if (client.info && client.info.wid && !botInicializado) {
-            console.log('🔄 WORKAROUND: Cliente detectado como pronto, forçando inicialização...');
-            clearInterval(verificarStatusClient);
-            await inicializarBot();
-        }
-        
-        // Parar após número máximo de tentativas
-        if (tentativasVerificacao >= maxTentativas) {
-            console.log('⚠️ WORKAROUND: Máximo de tentativas atingido, assumindo que bot está pronto...');
-            clearInterval(verificarStatusClient);
-            if (!botInicializado) {
-                await inicializarBot();
-            }
-        }
-    } catch (error) {
-        // Erro é esperado antes do client estar pronto
-        if (tentativasVerificacao % 10 === 0) {
-            console.log(`🔄 Aguardando client estar pronto... (${tentativasVerificacao}/${maxTentativas})`);
-        }
-    }
-}, 3000); // Verificar a cada 3 segundos
 
 client.on('group-join', async (notification) => {
     try {
