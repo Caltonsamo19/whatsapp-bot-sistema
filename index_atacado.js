@@ -59,6 +59,9 @@ const ia = new WhatsAppAIAtacado(process.env.OPENAI_API_KEY);
 // === INICIALIZAR O BOT DE DIVISÃO ===
 const botDivisao = new WhatsAppBotDivisao();
 
+// Configurar IA no bot de divisão após inicialização
+botDivisao.configurarIA(ia);
+
 // Configuração para encaminhamento
 const ENCAMINHAMENTO_CONFIG = {
     grupoOrigem: '120363402160265624@g.us', // Grupo de atacado
