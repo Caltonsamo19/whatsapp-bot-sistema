@@ -284,50 +284,29 @@ class WhatsAppBotDivisao {
         // Remover duplicatas
         const numerosUnicos = [...new Set(numerosLimpos)];
         
-        console.log(`🔍 DIVISÃO: Números únicos encontrados: ${numerosUnicos.join(', ')}`);
-        
         // === FILTRAR NÚMEROS QUE ESTÃO NO MEIO DE OUTROS NÚMEROS ===
         const numerosFiltradosPorContexto = numerosUnicos.filter(numero => {
-            console.log(`🔍 DIVISÃO: Verificando contexto de ${numero}...`);
+            // Verificar se este número está no meio de um número maior
+            const posicaoNumero = mensagem.indexOf(numero);
+            if (posicaoNumero === -1) return true; // Se não encontrou, aceitar
             
-            // Encontrar TODAS as ocorrências deste número na mensagem
-            const ocorrencias = [];
-            let posicao = mensagem.indexOf(numero);
-            while (posicao !== -1) {
-                ocorrencias.push(posicao);
-                posicao = mensagem.indexOf(numero, posicao + 1);
+            // Verificar caractere antes e depois
+            const charAntes = mensagem[posicaoNumero - 1];
+            const charDepois = mensagem[posicaoNumero + numero.length];
+            
+            // Se há dígitos antes ou depois, é parte de um número maior
+            const isPartOfLargerNumber = /\d/.test(charAntes) || /\d/.test(charDepois);
+            
+            if (isPartOfLargerNumber) {
+                console.log(`🚫 DIVISÃO: ${numero} REJEITADO (parte de número maior)`);
+                return false;
             }
             
-            console.log(`   📍 ${numero} encontrado em ${ocorrencias.length} posição(ões): [${ocorrencias.join(', ')}]`);
-            
-            // Verificar cada ocorrência
-            for (const posicaoNumero of ocorrencias) {
-                // Verificar caractere antes e depois desta ocorrência
-                const charAntes = mensagem[posicaoNumero - 1];
-                const charDepois = mensagem[posicaoNumero + numero.length];
-                
-                console.log(`   🔍 Posição ${posicaoNumero}: antes='${charAntes || 'INÍCIO'}', depois='${charDepois || 'FIM'}'`);
-                
-                // Se há dígitos antes ou depois, é parte de um número maior
-                const isPartOfLargerNumber = /\d/.test(charAntes) || /\d/.test(charDepois);
-                
-                if (isPartOfLargerNumber) {
-                    console.log(`   🚫 ${numero} na posição ${posicaoNumero} é parte de número maior - REJEITADO`);
-                    return false; // Rejeitar se qualquer ocorrência estiver no meio
-                } else {
-                    console.log(`   ✅ ${numero} na posição ${posicaoNumero} é número independente`);
-                }
-            }
-            
-            return true; // Aceitar se todas as ocorrências são números independentes
+            return true;
         });
-        
-        console.log(`🔍 DIVISÃO: Números após filtrar contexto: ${numerosFiltradosPorContexto.join(', ')}`);
         
         // === FILTRAR NÚMEROS QUE NÃO SÃO PARA DIVISÃO ===
         const numerosFiltrados = this.filtrarNumerosComprovante(numerosFiltradosPorContexto, mensagem, grupoId);
-        
-        console.log(`🔍 DIVISÃO: Números finais para divisão: ${numerosFiltrados.join(', ')}`);
         
         return numerosFiltrados.length > 0 ? numerosFiltrados : null;
     }
