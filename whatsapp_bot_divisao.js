@@ -6,9 +6,15 @@ class WhatsAppBotDivisao {
         this.comprovantesMemorizados = {};
         this.processandoDivisoes = new Set();
         
-        // IA será configurada externamente para evitar conflitos
-        this.ia = null;
-        console.log('🔄 Bot de divisão criado - IA será configurada externamente');
+        // Inicializar IA usando variável de ambiente (mesma do servidor)
+        const openaiApiKey = process.env.OPENAI_API_KEY;
+        if (openaiApiKey) {
+            this.ia = new WhatsAppAIAtacado(openaiApiKey);
+            console.log('🧠 IA integrada ao bot de divisão usando .env!');
+        } else {
+            this.ia = null;
+            console.log('⚠️ IA não disponível - OPENAI_API_KEY não encontrada no .env');
+        }
         
         // URLs dos Google Apps Scripts existentes
         this.SCRIPTS_CONFIG = {
@@ -43,20 +49,12 @@ class WhatsAppBotDivisao {
             // Adicionar outros grupos conforme necessário
         };
         
-        // Limpar comprovativos antigos a cada 10 minutos (com delay para evitar problema de inicialização)
-        setTimeout(() => {
-            setInterval(() => {
-                this.limparComprovantesAntigos();
-            }, 10 * 60 * 1000);
-        }, 5000); // Aguardar 5 segundos antes de iniciar o timer
+        // Limpar comprovativos antigos a cada 10 minutos
+        setInterval(() => {
+            this.limparComprovantesAntigos();
+        }, 10 * 60 * 1000);
         
         console.log('🔄 Bot de Divisão inicializado - Múltiplos números automático!');
-    }
-    
-    // === CONFIGURAR IA EXTERNAMENTE ===
-    configurarIA(instanciaIA) {
-        this.ia = instanciaIA;
-        console.log('🧠 IA configurada no bot de divisão!');
     }
     
     // === FUNÇÃO PRINCIPAL - PROCESSAR MENSAGEM ===
@@ -74,36 +72,28 @@ class WhatsAppBotDivisao {
             // VERIFICAR SE TEM IMAGEM COM COMPROVATIVO
             if (message.hasMedia && (message.type === 'image' || message.type === 'document')) {
                 console.log(`📷 DIVISÃO: Mensagem contém mídia do tipo: ${message.type}`);
-                
-                // Só processar imagens se IA estiver disponível
-                if (!this.ia) {
-                    console.log('💡 DIVISÃO: IA não configurada - pulando processamento de imagem');
-                } else {
-                    try {
-                        // Timeout para evitar travamento
-                        const resultadoImagem = await Promise.race([
-                            this.extrairTextoDeImagem(message, grupoId),
-                            new Promise((_, reject) => 
-                                setTimeout(() => reject(new Error('Timeout processamento imagem')), 15000)
-                            )
-                        ]);
-                        
-                        // Se a IA já processou tudo completamente, retornar resultado direto
-                        if (resultadoImagem && resultadoImagem.processadoCompleto) {
-                            console.log('🎯 DIVISÃO: IA processou imagem + número completamente!');
-                            return resultadoImagem.resultado;
-                        }
-                        
-                        // Se extraiu texto do comprovativo, continuar processamento normal
-                        if (resultadoImagem && typeof resultadoImagem === 'string') {
-                            console.log(`📄 DIVISÃO: Texto extraído da imagem: "${resultadoImagem.substring(0, 100)}..."`);
-                            mensagem = resultadoImagem + ' ' + mensagem; // Combinar texto da imagem com texto da mensagem
-                        }
-                        
-                    } catch (error) {
-                        console.error('❌ DIVISÃO: Erro ao extrair texto da imagem:', error);
-                        // Não retornar erro - continuar processamento normal sem a imagem
+                try {
+                    const resultadoImagem = await this.extrairTextoDeImagem(message, grupoId);
+                    
+                    // Se a IA já processou tudo completamente, retornar resultado direto
+                    if (resultadoImagem && resultadoImagem.processadoCompleto) {
+                        console.log('🎯 DIVISÃO: IA processou imagem + número completamente!');
+                        return resultadoImagem.resultado;
                     }
+                    
+                    // Se extraiu texto do comprovativo, continuar processamento normal
+                    if (resultadoImagem && typeof resultadoImagem === 'string') {
+                        console.log(`📄 DIVISÃO: Texto extraído da imagem: "${resultadoImagem.substring(0, 100)}..."`);
+                        mensagem = resultadoImagem + ' ' + mensagem; // Combinar texto da imagem com texto da mensagem
+                    } else {
+                        // Se tem imagem mas não conseguiu extrair texto, orientar o usuário
+                        console.log('💡 DIVISÃO: Imagem detectada mas texto não extraído');
+                        return {
+                            resposta: `📷 *COMPROVATIVO EM IMAGEM DETECTADO*\n\n🧠 Tentei processar com IA avançada mas não consegui extrair os dados.\n\n💡 *Para melhor resultado:*\n• Tire uma foto mais clara e focada\n• Certifique-se que TODO o comprovativo está visível\n• Ou copie e cole o texto do comprovativo\n\n🔍 Exemplo: Confirmado ABC123 - Transferiste 250MT`
+                        };
+                    }
+                } catch (error) {
+                    console.error('❌ DIVISÃO: Erro ao extrair texto da imagem:', error);
                 }
             }
             
