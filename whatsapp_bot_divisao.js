@@ -41,8 +41,7 @@ class WhatsAppBotDivisao {
                 // NÚMEROS DE PAGAMENTO DO GRUPO (NUNCA devem receber megas)
                 numerosPagamento: [
                     '870059057',   // Número eMola do grupo
-                    '840326152',   // Número M-Pesa do VASCO
-                    '884032615',   // Versão truncada que aparece nos logs
+                    '840326152',   // Número M-Pesa do VASCO (sem prefixo)
                     '258840326152', // Versão completa com prefixo
                     '877777777'    // Adicionar outros números de pagamento do grupo aqui
                 ]
@@ -272,7 +271,8 @@ class WhatsAppBotDivisao {
     
     // === EXTRAIR MÚLTIPLOS NÚMEROS ===
     extrairMultiplosNumeros(mensagem, grupoId = null) {
-        const regex = /(?:\+258\s*)?8[0-9]{8}/g;
+        // REGEX MELHORADA: Capturar números com ou sem prefixo 258
+        const regex = /(?:\+?258\s*)?8[0-9]{8}/g;
         const matches = mensagem.match(regex) || [];
         
         if (matches.length === 0) return null;
@@ -284,8 +284,50 @@ class WhatsAppBotDivisao {
         // Remover duplicatas
         const numerosUnicos = [...new Set(numerosLimpos)];
         
+        console.log(`🔍 DIVISÃO: Números únicos encontrados: ${numerosUnicos.join(', ')}`);
+        
+        // === FILTRAR NÚMEROS QUE ESTÃO NO MEIO DE OUTROS NÚMEROS ===
+        const numerosFiltradosPorContexto = numerosUnicos.filter(numero => {
+            console.log(`🔍 DIVISÃO: Verificando contexto de ${numero}...`);
+            
+            // Encontrar TODAS as ocorrências deste número na mensagem
+            const ocorrencias = [];
+            let posicao = mensagem.indexOf(numero);
+            while (posicao !== -1) {
+                ocorrencias.push(posicao);
+                posicao = mensagem.indexOf(numero, posicao + 1);
+            }
+            
+            console.log(`   📍 ${numero} encontrado em ${ocorrencias.length} posição(ões): [${ocorrencias.join(', ')}]`);
+            
+            // Verificar cada ocorrência
+            for (const posicaoNumero of ocorrencias) {
+                // Verificar caractere antes e depois desta ocorrência
+                const charAntes = mensagem[posicaoNumero - 1];
+                const charDepois = mensagem[posicaoNumero + numero.length];
+                
+                console.log(`   🔍 Posição ${posicaoNumero}: antes='${charAntes || 'INÍCIO'}', depois='${charDepois || 'FIM'}'`);
+                
+                // Se há dígitos antes ou depois, é parte de um número maior
+                const isPartOfLargerNumber = /\d/.test(charAntes) || /\d/.test(charDepois);
+                
+                if (isPartOfLargerNumber) {
+                    console.log(`   🚫 ${numero} na posição ${posicaoNumero} é parte de número maior - REJEITADO`);
+                    return false; // Rejeitar se qualquer ocorrência estiver no meio
+                } else {
+                    console.log(`   ✅ ${numero} na posição ${posicaoNumero} é número independente`);
+                }
+            }
+            
+            return true; // Aceitar se todas as ocorrências são números independentes
+        });
+        
+        console.log(`🔍 DIVISÃO: Números após filtrar contexto: ${numerosFiltradosPorContexto.join(', ')}`);
+        
         // === FILTRAR NÚMEROS QUE NÃO SÃO PARA DIVISÃO ===
-        const numerosFiltrados = this.filtrarNumerosComprovante(numerosUnicos, mensagem, grupoId);
+        const numerosFiltrados = this.filtrarNumerosComprovante(numerosFiltradosPorContexto, mensagem, grupoId);
+        
+        console.log(`🔍 DIVISÃO: Números finais para divisão: ${numerosFiltrados.join(', ')}`);
         
         return numerosFiltrados.length > 0 ? numerosFiltrados : null;
     }
@@ -324,18 +366,31 @@ class WhatsAppBotDivisao {
             }
             
             // 3. VERIFICAR CONTEXTOS ESPECÍFICOS DE PAGAMENTO
+            // PADRÕES PARA DETECTAR NÚMEROS DE PAGAMENTO EM CONFIRMAÇÕES M-PESA/EMOLA
             const contextosPagamentoEspecificos = [
+                // eMola - padrões gerais
                 new RegExp(`para\\s+conta\\s+${numero}`, 'i'),                    // "para conta 870059057"
                 new RegExp(`conta\\s+${numero}`, 'i'),                            // "conta 870059057"
                 new RegExp(`para\\s+${numero}\\s*,\\s*nome`, 'i'),               // "para 870059057, nome:"
-                new RegExp(`Transferiste.*para\\s+${numero}\\s*-`, 'i'),         // "Transferiste ... para 840326152 - VASCO"
                 new RegExp(`${numero}\\s*,\\s*nome:`, 'i'),                      // "870059057, nome: vasco"
+                
+                // M-Pesa - padrões específicos (COM e SEM prefixo 258)
+                new RegExp(`Transferiste.*para\\s+${numero}\\s*-`, 'i'),         // "Transferiste ... para 840326152 - VASCO"
+                new RegExp(`Transferiste.*para\\s+258${numero}\\s*-`, 'i'),       // "Transferiste ... para 258840326152 - VASCO"
                 new RegExp(`para\\s+${numero}\\s*-\\s*[A-Z]`, 'i'),              // "para 840326152 - VASCO"
                 new RegExp(`para\\s+258${numero}\\s*-`, 'i'),                    // "para 258840326152 - VASCO"
-                new RegExp(`MT.*para\\s+${numero}`, 'i'),                        // "750.00MT ... para 840326152"
+                new RegExp(`MT.*para\\s+${numero}`, 'i'),                        // "125.00MT ... para 840326152"
+                new RegExp(`MT.*para\\s+258${numero}`, 'i'),                     // "125.00MT ... para 258840326152"
                 new RegExp(`taxa.*para\\s+${numero}`, 'i'),                      // "taxa foi ... para 840326152"
+                new RegExp(`taxa.*para\\s+258${numero}`, 'i'),                   // "taxa foi ... para 258840326152"
                 new RegExp(`${numero}\\s*-\\s*[A-Z]{2,}`, 'i'),                  // "840326152 - VASCO"
                 new RegExp(`258${numero}\\s*-\\s*[A-Z]{2,}`, 'i'),               // "258840326152 - VASCO"
+                
+                // NOVOS: Padrões mais específicos para capturar destinatários
+                new RegExp(`e\\s+a\\s+taxa\\s+foi\\s+de.*para\\s+${numero}`, 'i'),      // "e a taxa foi de 0.00MT para 840326152"
+                new RegExp(`e\\s+a\\s+taxa\\s+foi\\s+de.*para\\s+258${numero}`, 'i'),   // "e a taxa foi de 0.00MT para 258840326152"
+                new RegExp(`taxa\\s+foi\\s+de.*para\\s+${numero}`, 'i'),               // "taxa foi de 0.00MT para 840326152"
+                new RegExp(`taxa\\s+foi\\s+de.*para\\s+258${numero}`, 'i')             // "taxa foi de 0.00MT para 258840326152"
             ];
             
             // Se o número aparece em contexto ESPECÍFICO de pagamento, não é para divisão
@@ -355,11 +410,18 @@ class WhatsAppBotDivisao {
     limparNumero(numero) {
         if (!numero || typeof numero !== 'string') return numero;
         
-        return numero
+        let numeroLimpo = numero
             .replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '') // Caracteres invisíveis
-            .replace(/^\+258\s*/, '') // Remove +258
+            .replace(/^\+?258\s*/, '') // Remove +258 ou 258
             .replace(/\s+/g, '') // Remove espaços
             .trim();
+        
+        // Se após limpar sobrou um número que começa com 8 e tem 9 dígitos, retornar apenas os últimos 9
+        if (/^8[0-9]{8,}$/.test(numeroLimpo) && numeroLimpo.length > 9) {
+            numeroLimpo = numeroLimpo.slice(-9); // Pegar os últimos 9 dígitos
+        }
+        
+        return numeroLimpo;
     }
     
     // === NORMALIZAR REMETENTE PARA ARMAZENAMENTO CONSISTENTE ===
