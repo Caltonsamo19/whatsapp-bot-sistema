@@ -58,26 +58,26 @@ const client = new Client({
         clientId: "bot_atacado" // Diferente do bot retalho
     }),
     puppeteer: {
-        headless: false,
-        timeout: 0,
+        headless: true,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
             '--disable-gpu',
-            '--disable-web-security',
-            '--disable-features=VizDisplayCompositor',
+            '--no-first-run',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection',
             '--disable-extensions',
-            '--disable-plugins'
+            '--disable-default-apps',
+            '--disable-sync',
+            '--disable-translate',
+            '--disable-web-security',
+            '--no-zygote',
+            '--single-process'
         ],
-        ignoreDefaultArgs: ['--disable-extensions'],
-        handleSIGINT: false,
-        handleSIGTERM: false,
-        handleSIGHUP: false
+        executablePath: process.env.CHROME_BIN || null
     }
 });
 
