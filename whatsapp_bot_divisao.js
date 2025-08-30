@@ -286,23 +286,25 @@ class WhatsAppBotDivisao {
         
         // === FILTRAR NÚMEROS QUE ESTÃO NO MEIO DE OUTROS NÚMEROS ===
         const numerosFiltradosPorContexto = numerosUnicos.filter(numero => {
-            // Verificar se este número está no meio de um número maior
-            const posicaoNumero = mensagem.indexOf(numero);
-            if (posicaoNumero === -1) return true; // Se não encontrou, aceitar
-            
-            // Verificar caractere antes e depois
-            const charAntes = mensagem[posicaoNumero - 1];
-            const charDepois = mensagem[posicaoNumero + numero.length];
-            
-            // Se há dígitos antes ou depois, é parte de um número maior
-            const isPartOfLargerNumber = /\d/.test(charAntes) || /\d/.test(charDepois);
-            
-            if (isPartOfLargerNumber) {
-                console.log(`🚫 DIVISÃO: ${numero} REJEITADO (parte de número maior)`);
-                return false;
+            // Encontrar TODAS as ocorrências deste número na mensagem
+            let posicao = 0;
+            while ((posicao = mensagem.indexOf(numero, posicao)) !== -1) {
+                // Verificar caractere antes e depois desta ocorrência
+                const charAntes = mensagem[posicao - 1];
+                const charDepois = mensagem[posicao + numero.length];
+                
+                // Se há dígitos antes ou depois, é parte de um número maior
+                const isPartOfLargerNumber = /\d/.test(charAntes) || /\d/.test(charDepois);
+                
+                if (isPartOfLargerNumber) {
+                    console.log(`🚫 DIVISÃO: ${numero} REJEITADO (parte de número maior)`);
+                    return false; // Rejeitar se qualquer ocorrência estiver no meio
+                }
+                
+                posicao++; // Continuar buscando outras ocorrências
             }
             
-            return true;
+            return true; // Aceitar se todas as ocorrências são números independentes
         });
         
         // === FILTRAR NÚMEROS QUE NÃO SÃO PARA DIVISÃO ===

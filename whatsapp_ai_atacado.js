@@ -1,5 +1,6 @@
 const { OpenAI } = require("openai");
 
+
 class WhatsAppAIAtacado {
   constructor(apiKey) {
     this.openai = new OpenAI({ apiKey });

@@ -1,5 +1,16 @@
 require('dotenv').config();
 const { Client, LocalAuth } = require('whatsapp-web.js');
+
+// Tratamento de erros não capturados
+process.on('unhandledRejection', (reason, promise) => {
+    console.log('❌ Promise rejeitada:', reason);
+    // Não encerrar o processo, apenas logar
+});
+
+process.on('uncaughtException', (error) => {
+    console.log('❌ Exceção não capturada:', error);
+    // Não encerrar o processo, apenas logar
+});
 const qrcode = require('qrcode-terminal');
 const fs = require('fs').promises;
 const axios = require('axios'); // npm install axios
@@ -47,8 +58,26 @@ const client = new Client({
         clientId: "bot_atacado" // Diferente do bot retalho
     }),
     puppeteer: {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        headless: false,
+        timeout: 0,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor',
+            '--disable-extensions',
+            '--disable-plugins'
+        ],
+        ignoreDefaultArgs: ['--disable-extensions'],
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        handleSIGHUP: false
     }
 });
 
