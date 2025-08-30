@@ -1118,8 +1118,12 @@ Bem-vindo(a) ao *${configGrupo.nome}*!
 
 client.on('message', async (message) => {
     try {
+        console.log(`📩 MENSAGEM RECEBIDA: ${message.from} | Tipo: ${message.type} | Conteúdo: ${message.body?.substring(0, 50) || 'N/A'}...`);
+        
         const isPrivado = !message.from.endsWith('@g.us');
         const isAdmin = isAdministrador(message.from);
+        
+        console.log(`🔍 ANÁLISE: Privado=${isPrivado} | Admin=${isAdmin} | GrupoMonitorado=${isGrupoMonitorado(message.from)}`);
 
         // === COMANDOS ADMINISTRATIVOS ===
         if (isAdmin) {
@@ -1618,14 +1622,22 @@ client.on('message', async (message) => {
         }
 
         // === PROCESSAMENTO DE GRUPOS ===
+        console.log(`🔍 VERIFICAÇÃO: É grupo=${message.from.endsWith('@g.us')} | Monitorado=${isGrupoMonitorado(message.from)}`);
+        
         if (!message.from.endsWith('@g.us') || !isGrupoMonitorado(message.from)) {
+            console.log(`❌ IGNORADO: Não é grupo monitorado ou é mensagem privada`);
             return;
         }
+        
+        console.log(`✅ PROCESSANDO: Grupo monitorado detectado`);
 
         const configGrupo = getConfiguracaoGrupo(message.from);
         if (!configGrupo || message.fromMe) {
+            console.log(`❌ SAINDO: ConfigGrupo=${!!configGrupo} | É do bot=${message.fromMe}`);
             return;
         }
+        
+        console.log(`🎯 CONTINUANDO: Mensagem válida para processamento`);
 
         // ============================================================================
         // NOVA LÓGICA: BOT DE DIVISÃO TEM PRIORIDADE ABSOLUTA
