@@ -1,16 +1,5 @@
 require('dotenv').config();
 const { Client, LocalAuth } = require('whatsapp-web.js');
-
-// Tratamento de erros não capturados
-process.on('unhandledRejection', (reason, promise) => {
-    console.log('❌ Promise rejeitada:', reason);
-    // Não encerrar o processo, apenas logar
-});
-
-process.on('uncaughtException', (error) => {
-    console.log('❌ Exceção não capturada:', error);
-    // Não encerrar o processo, apenas logar
-});
 const qrcode = require('qrcode-terminal');
 const fs = require('fs').promises;
 const axios = require('axios'); // npm install axios
@@ -817,17 +806,8 @@ client.on('qr', (qr) => {
 });
 
 client.on('ready', async () => {
-    console.log('✅ ======= BOT ATACADO VERSÃO DEBUG ATIVA! =======');
+    console.log('✅ Event ready fired! Bot ATACADO conectado e pronto!');
     console.log('🧠 IA WhatsApp ATACADO ativa!');
-    
-    // TESTE: Verificar se o event listener está funcionando
-    console.log('🔧 TESTE: Verificando event listeners...');
-    console.log('📊 Event listeners registrados:', client.eventNames());
-    
-    // TESTE: Simular uma mensagem para testar o handler
-    setTimeout(() => {
-        console.log('🧪 TESTE: Tentando disparar evento message interno...');
-    }, 3000);
     console.log('📦 Sistema inteligente: Cálculo automático de megas!');
     console.log('📊 Google Sheets ATACADO configurado!');
     console.log('🔄 Bot de Divisão ATIVO - Múltiplos números automático!');
@@ -915,18 +895,11 @@ Bem-vindo(a) ao *${configGrupo.nome}*!
 
 client.on('message', async (message) => {
     try {
-        console.log(`🚨🚨🚨 MENSAGEM DETECTADA!!! 🚨🚨🚨`);
-        console.log(`🔍 DE: ${message.from}`);
-        console.log(`📝 TEXTO: ${message.body || 'sem texto'}`);
-        
         const isPrivado = !message.from.endsWith('@g.us');
         const isAdmin = isAdministrador(message.from);
-        
-        console.log(`🔍 DEBUG: isPrivado=${isPrivado}, isAdmin=${isAdmin}, body="${message.body}"`);
 
         // === COMANDOS ADMINISTRATIVOS ===
         if (isAdmin) {
-            console.log(`🔧 DEBUG: Processando comando admin`);
             const comando = message.body.toLowerCase().trim();
 
             if (comando === '.ia') {
@@ -1166,8 +1139,6 @@ client.on('message', async (message) => {
                 return;
             }
         }
-        
-        console.log(`🔍 DEBUG: Finalizou comandos admin, continuando processamento`);
 
         // === DETECÇÃO DE GRUPOS NÃO CONFIGURADOS ===
         if (message.from.endsWith('@g.us') && !isGrupoMonitorado(message.from) && !message.fromMe) {
@@ -1183,20 +1154,7 @@ client.on('message', async (message) => {
         }
 
         // === PROCESSAMENTO DE GRUPOS ===
-        console.log(`🔍 DEBUG: Iniciando processamento de grupos`);
-        if (!message.from.endsWith('@g.us')) {
-            console.log(`🔍 DEBUG: É mensagem privada, parando processamento`);
-            return;
-        }
-
-        // Log para debug - verificar IDs dos grupos
-        console.log(`🔍 DEBUG: Mensagem do grupo ${message.from}`);
-        const isMonitorado = isGrupoMonitorado(message.from);
-        console.log(`🔍 DEBUG: Grupo monitorado? ${isMonitorado}`);
-        
-        if (!isMonitorado) {
-            console.log(`⚠️ DEBUG: Grupo ${message.from} não está configurado`);
-            console.log(`📋 DEBUG: Grupos configurados:`, Object.keys(CONFIGURACAO_GRUPOS));
+        if (!message.from.endsWith('@g.us') || !isGrupoMonitorado(message.from)) {
             return;
         }
 
@@ -1345,20 +1303,17 @@ client.on('message', async (message) => {
 
         // TESTE SIMPLES - Comando de teste
         if (/^!teste$/i.test(message.body)) {
-            console.log(`✅ DEBUG: Respondendo teste no grupo ${message.from}`);
             await message.reply(`✅ Bot funcionando! Grupo: ${configGrupo.nome}`);
             return;
         }
 
         // Comandos de tabela e pagamento
         if (/tabela/i.test(message.body)) {
-            console.log(`✅ DEBUG: Respondendo tabela no grupo ${message.from}`);
             await message.reply(configGrupo.tabela);
             return;
         }
 
         if (/pagamento/i.test(message.body)) {
-            console.log(`✅ DEBUG: Respondendo pagamento no grupo ${message.from}`);
             await message.reply(configGrupo.pagamento);
             return;
         }
@@ -1518,48 +1473,8 @@ process.on('unhandledRejection', (reason, promise) => {
     }
 });
 
-// === EVENTOS DE DEBUG ADICIONALES ===
-client.on('authenticated', () => {
-    console.log('🔐 CLIENTE AUTENTICADO!');
-});
-
-client.on('auth_failure', () => {
-    console.log('❌ FALHA NA AUTENTICAÇÃO!');
-});
-
-client.on('loading_screen', (percent, message) => {
-    console.log('⏳ CARREGANDO:', percent, message);
-    
-    // CORREÇÃO: Se travou em 97%, forçar ready
-    if (percent >= 97) {
-        console.log('🔧 APLICANDO CORREÇÃO: Carregamento >= 97%, aguardando...');
-        setTimeout(() => {
-            console.log('⚡ FORÇANDO READY após timeout...');
-        }, 10000);
-    }
-});
-
-client.on('change_state', state => {
-    console.log('🔄 ESTADO MUDOU PARA:', state);
-});
-
 // === INICIALIZAÇÃO ===
-console.log('🚀 INICIANDO CLIENTE...');
 client.initialize();
-
-// CORREÇÃO: Timeout para detectar se travou no loading
-setTimeout(() => {
-    console.log('⚠️ TIMEOUT: Verificando se bot travou no loading...');
-    console.log('🔍 Estado atual do cliente disponível');
-    
-    // Tentar forçar uma verificação de estado
-    try {
-        console.log('💡 DICA: Se travou em 97%, o bot deve funcionar mesmo assim.');
-        console.log('📱 Tente enviar mensagem agora - pode estar funcionando!');
-    } catch (error) {
-        console.log('❌ Erro ao verificar estado:', error.message);
-    }
-}, 15000);
 
 // Salvar histórico a cada 5 minutos
 setInterval(salvarHistorico, 5 * 60 * 1000);
