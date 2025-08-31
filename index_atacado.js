@@ -1,16 +1,5 @@
 require('dotenv').config();
 const { Client, LocalAuth } = require('whatsapp-web.js');
-
-// Tratamento de erros não capturados
-process.on('unhandledRejection', (reason, promise) => {
-    console.log('❌ Promise rejeitada:', reason);
-    // Não encerrar o processo, apenas logar
-});
-
-process.on('uncaughtException', (error) => {
-    console.log('❌ Exceção não capturada:', error);
-    // Não encerrar o processo, apenas logar
-});
 const qrcode = require('qrcode-terminal');
 const fs = require('fs').promises;
 const axios = require('axios'); // npm install axios
@@ -59,25 +48,7 @@ const client = new Client({
     }),
     puppeteer: {
         headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-gpu',
-            '--no-first-run',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-renderer-backgrounding',
-            '--disable-features=TranslateUI',
-            '--disable-ipc-flooding-protection',
-            '--disable-extensions',
-            '--disable-default-apps',
-            '--disable-sync',
-            '--disable-translate',
-            '--disable-web-security',
-            '--no-zygote',
-            '--single-process'
-        ],
-        executablePath: process.env.CHROME_BIN || null
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
 
@@ -112,17 +83,11 @@ let adminCache = {};
 // Cache para evitar logs repetidos de grupos
 let gruposLogados = new Set();
 
-// Sistema de comandos personalizados por grupo
-let comandosPersonalizados = {
-    // Estrutura: { grupoId: { comando: { criador, resposta, timestamp } } }
-};
-
 // Configuração de administradores GLOBAIS
 const ADMINISTRADORES_GLOBAIS = [
     '258861645968@c.us',
     '258871112049@c.us', 
-    '258852118624@c.us',
-    '23450974470333@lid'  // Calton Samo - ID interno WhatsApp
+    '258852118624@c.us'
 ];
 
 // === CONFIGURAÇÃO DE MODERAÇÃO ===
@@ -181,19 +146,6 @@ botDivisao.CONFIGURACAO_GRUPOS = CONFIGURACAO_GRUPOS_DIVISAO;
 const CONFIGURACAO_GRUPOS = {
     '120363419652375064@g.us': {
         nome: 'Net Fornecedor V',
-        // CORREÇÃO: Adicionar preços estruturados para cálculo correto de megas
-        precos: {
-            10240: 125,    // 10GB = 125MT
-            20480: 250,    // 20GB = 250MT
-            30720: 375,    // 30GB = 375MT
-            40960: 500,    // 40GB = 500MT
-            51200: 625,    // 50GB = 625MT
-            61440: 750,    // 60GB = 750MT
-            71680: 875,    // 70GB = 875MT
-            81920: 1000,   // 80GB = 1000MT
-            92160: 1125,   // 90GB = 1125MT
-            102400: 1250   // 100GB = 1250MT
-        },
         tabela: `GB'S COMPLETOS
 📱 10GB➜125MT 
 📱 20GB ➜ 250MT  
@@ -509,156 +461,12 @@ function detectarPerguntaPorNumero(mensagem) {
     return padroes.some(padrao => padrao.test(texto));
 }
 
-// === FUNÇÃO PARA EXTRAIR NÚMERO REAL DO USUÁRIO ===
-function extrairNumeroReal(message) {
-    // 1. Tentar pegar do notifyName se for número
-    if (message._data && message._data.notifyName && /^8\d{8}$/.test(message._data.notifyName)) {
-        return `258${message._data.notifyName}@c.us`;
-    }
-    
-    // 2. Tentar extrair do author
-    if (message.author) {
-        const match = message.author.match(/258(\d{9})@c\.us/);
-        if (match) {
-            return message.author;
-        }
-        
-        // Se for ID interno, tentar extrair número do contato
-        if (message.author.includes('@lid')) {
-            // Buscar número no contato
-            if (message._data && message._data.notifyName && /^8\d{8}$/.test(message._data.notifyName)) {
-                return `258${message._data.notifyName}@c.us`;
-            }
-        }
-    }
-    
-    // 3. Fallback para o author original
-    return message.author || message.from;
-}
-
 function isAdministrador(numero) {
-    // Verificar direto na lista (inclui IDs internos agora)
-    if (ADMINISTRADORES_GLOBAIS.includes(numero)) {
-        return true;
-    }
-    
-    // Tentar extrair apenas os dígitos do número para números tradicionais
-    const digitos = numero.replace(/\D/g, '');
-    if (digitos.length >= 9) {
-        const numeroLimpo = digitos.slice(-9); // Pegar últimos 9 dígitos
-        const numeroCompleto = `258${numeroLimpo}@c.us`;
-        return ADMINISTRADORES_GLOBAIS.includes(numeroCompleto);
-    }
-    
-    return false;
+    return ADMINISTRADORES_GLOBAIS.includes(numero);
 }
 
 function isGrupoMonitorado(chatId) {
     return CONFIGURACAO_GRUPOS.hasOwnProperty(chatId);
-}
-
-// === SISTEMA DE COMANDOS PERSONALIZADOS ===
-
-// Salvar comandos personalizados em arquivo
-function salvarComandosPersonalizados() {
-    try {
-        const fs = require('fs');
-        const dados = JSON.stringify(comandosPersonalizados, null, 2);
-        fs.writeFileSync('comandos_personalizados.json', dados);
-        console.log('💾 Comandos personalizados salvos');
-    } catch (error) {
-        console.error('❌ Erro ao salvar comandos personalizados:', error);
-    }
-}
-
-// Carregar comandos personalizados do arquivo
-function carregarComandosPersonalizados() {
-    try {
-        const fs = require('fs');
-        if (fs.existsSync('comandos_personalizados.json')) {
-            const dados = fs.readFileSync('comandos_personalizados.json', 'utf8');
-            comandosPersonalizados = JSON.parse(dados);
-            const totalComandos = Object.values(comandosPersonalizados)
-                .reduce((total, grupo) => total + Object.keys(grupo).length, 0);
-            console.log(`📋 ${totalComandos} comandos personalizados carregados`);
-        }
-    } catch (error) {
-        console.error('❌ Erro ao carregar comandos personalizados:', error);
-        comandosPersonalizados = {};
-    }
-}
-
-// Adicionar comando personalizado
-function adicionarComandoPersonalizado(grupoId, comando, resposta, criadorId, criadorNome) {
-    if (!comandosPersonalizados[grupoId]) {
-        comandosPersonalizados[grupoId] = {};
-    }
-    
-    comandosPersonalizados[grupoId][comando] = {
-        resposta: resposta,
-        criador: criadorId,
-        criadorNome: criadorNome,
-        timestamp: Date.now(),
-        usos: 0
-    };
-    
-    salvarComandosPersonalizados();
-    console.log(`✅ Comando personalizado criado: ${comando} no grupo ${grupoId} por ${criadorNome}`);
-}
-
-// Remover comando personalizado
-function removerComandoPersonalizado(grupoId, comando) {
-    if (comandosPersonalizados[grupoId] && comandosPersonalizados[grupoId][comando]) {
-        delete comandosPersonalizados[grupoId][comando];
-        
-        // Se não há mais comandos no grupo, remover o grupo
-        if (Object.keys(comandosPersonalizados[grupoId]).length === 0) {
-            delete comandosPersonalizados[grupoId];
-        }
-        
-        salvarComandosPersonalizados();
-        console.log(`🗑️ Comando personalizado removido: ${comando}`);
-        return true;
-    }
-    return false;
-}
-
-// Verificar se existe comando personalizado
-function existeComandoPersonalizado(grupoId, comando) {
-    return comandosPersonalizados[grupoId] && comandosPersonalizados[grupoId][comando];
-}
-
-// Executar comando personalizado
-function executarComandoPersonalizado(grupoId, comando) {
-    if (existeComandoPersonalizado(grupoId, comando)) {
-        const cmd = comandosPersonalizados[grupoId][comando];
-        cmd.usos++;
-        salvarComandosPersonalizados();
-        return cmd.resposta;
-    }
-    return null;
-}
-
-// Listar comandos personalizados do grupo
-function listarComandosPersonalizados(grupoId) {
-    if (!comandosPersonalizados[grupoId]) {
-        return null;
-    }
-    
-    const comandos = comandosPersonalizados[grupoId];
-    let lista = `📋 *COMANDOS PERSONALIZADOS DO GRUPO*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-    
-    Object.entries(comandos).forEach(([cmd, data]) => {
-        const data_criacao = new Date(data.timestamp).toLocaleDateString('pt-BR');
-        lista += `🔹 **${cmd}**\n`;
-        lista += `   👤 Criado por: ${data.criadorNome}\n`;
-        lista += `   📅 Data: ${data_criacao}\n`;
-        lista += `   📊 Usos: ${data.usos}\n`;
-        lista += `   💬 Prévia: "${data.resposta.substring(0, 50)}${data.resposta.length > 50 ? '...' : ''}"\n\n`;
-    });
-    
-    lista += `📊 Total: ${Object.keys(comandos).length} comandos`;
-    return lista;
 }
 
 function getConfiguracaoGrupo(chatId) {
@@ -667,95 +475,20 @@ function getConfiguracaoGrupo(chatId) {
 
 async function isAdminGrupo(chatId, participantId) {
     try {
-        console.log(`🔍 Verificando admin do grupo: ${participantId} no grupo ${chatId}`);
-        
-        // Normalizar IDs para comparação
-        function normalizarIds(ids, participantIdOriginal) {
-            const normalized = new Set();
-            
-            ids.forEach(id => {
-                normalized.add(id); // ID original
-                
-                // Se for ID @lid, tentar extrair número equivalente @c.us
-                if (id.includes('@lid')) {
-                    // Manter ID interno como está, pois pode não ter equivalente direto
-                    normalized.add(id);
-                } else if (id.includes('@c.us')) {
-                    normalized.add(id);
-                    // Extrair apenas os dígitos para comparação flexível
-                    const digitos = id.replace(/\D/g, '');
-                    if (digitos.length >= 11) {
-                        normalized.add(digitos);
-                        normalized.add(digitos.substring(3)); // sem código do país
-                    }
-                }
-            });
-            
-            // Também normalizar o participantId para busca
-            normalized.add(participantIdOriginal);
-            if (participantIdOriginal.includes('@c.us') || participantIdOriginal.includes('@lid')) {
-                normalized.add(participantIdOriginal);
-                const digitos = participantIdOriginal.replace(/\D/g, '');
-                if (digitos.length >= 9) {
-                    normalized.add(digitos);
-                    normalized.add(`258${digitos}@c.us`);
-                }
-            }
-            
-            return Array.from(normalized);
-        }
-        
-        // Verificar cache (5 minutos)
         if (adminCache[chatId] && adminCache[chatId].timestamp > Date.now() - 300000) {
-            console.log(`📋 Usando cache de admins para grupo ${chatId}`);
-            
-            // Verificação com normalização de IDs
-            const todosIds = normalizarIds(adminCache[chatId].admins, participantId);
-            const isAdmin = todosIds.some(id => adminCache[chatId].admins.includes(id)) || 
-                           adminCache[chatId].admins.some(adminId => todosIds.includes(adminId));
-            
-            console.log(`   Cache resultado: ${isAdmin}`);
-            console.log(`   Admins no cache: ${adminCache[chatId].admins.join(', ')}`);
-            console.log(`   IDs normalizados para busca: ${todosIds.join(', ')}`);
-            return isAdmin;
+            return adminCache[chatId].admins.includes(participantId);
         }
 
-        console.log(`🔄 Buscando admins do grupo ${chatId} (cache expirado ou inexistente)`);
         const chat = await client.getChatById(chatId);
         const participants = await chat.participants;
+        const admins = participants.filter(p => p.isAdmin || p.isSuperAdmin).map(p => p.id._serialized);
         
-        console.log(`👥 Total de participantes: ${participants.length}`);
-        
-        // Buscar admins com diferentes formatos de ID
-        const admins = [];
-        participants.forEach(p => {
-            if (p.isAdmin || p.isSuperAdmin) {
-                const adminId = p.id._serialized;
-                admins.push(adminId);
-                console.log(`👨‍💼 Admin encontrado: ${adminId} (${p.isAdmin ? 'Admin' : 'Super Admin'})`);
-            }
-        });
-        
-        console.log(`🔒 Total de admins encontrados: ${admins.length}`);
-        console.log(`📝 Lista de admins: ${admins.join(', ')}`);
-        
-        // Salvar no cache
         adminCache[chatId] = {
             admins: admins,
             timestamp: Date.now()
         };
 
-        // Verificação com normalização de IDs
-        const todosIds = normalizarIds(admins, participantId);
-        const isAdmin = todosIds.some(id => admins.includes(id)) || 
-                       admins.some(adminId => todosIds.includes(adminId));
-        
-        console.log(`🎯 Participante verificado: ${participantId}`);
-        console.log(`🎯 IDs normalizados: ${todosIds.join(', ')}`);
-        console.log(`🎯 Resultado final: ${isAdmin}`);
-        
-        return isAdmin;
-        
+        return admins.includes(participantId);
     } catch (error) {
         console.error('❌ Erro ao verificar admin do grupo:', error);
         return false;
@@ -981,34 +714,36 @@ async function processarFila() {
 // === EVENTOS DO BOT ===
 
 client.on('qr', (qr) => {
-    console.log('📱 Escaneie o QR Code:');
+    console.log('📱 BOT ATACADO - Escaneie o QR Code:');
     qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', async () => {
-    console.log('✅ Bot ATACADO conectado e pronto!');
-    console.log('🧠 IA WhatsApp ATACADO ativa!');
-    console.log('📦 Sistema inteligente: Cálculo automático de megas!');
-    console.log('📊 Google Sheets ATACADO configurado!');
-    console.log('🔄 Bot de Divisão ATIVO - Múltiplos números automático!');
-    console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
-    
-    // Carregar comandos personalizados
-    carregarComandosPersonalizados();
-    
-    await carregarHistorico();
-    
-    console.log('\n🤖 Monitorando grupos ATACADO:');
-    Object.keys(CONFIGURACAO_GRUPOS).forEach(grupoId => {
-        const config = CONFIGURACAO_GRUPOS[grupoId];
-        console.log(`   📋 ${config.nome} (${grupoId})`);
-    });
-    
-    console.log('\n🔧 Comandos admin globais: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
-    console.log('🔧 Comandos admin de grupo: .f (fechar) .a (abrir) .atenção (mencionar todos) .silencio (ultra-discreto)');
-    console.log('🔧 Comandos personalizados: .addcmd (criar) .delcmd (remover) .listcmd (listar)');
+    try {
+        console.log('✅ Bot ATACADO conectado e pronto!');
+        console.log('🧠 IA WhatsApp ATACADO ativa!');
+        console.log('📦 Sistema inteligente: Cálculo automático de megas!');
+        console.log('📊 Google Sheets ATACADO configurado!');
+        console.log('🔄 Bot de Divisão ATIVO - Múltiplos números automático!');
+        console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
+        
+        // Verificar informações do cliente
+        const clientInfo = await client.info;
+        console.log(`📱 Bot conectado como: ${clientInfo?.pushname || 'N/A'} (${clientInfo?.wid?.user || 'N/A'})`);
+        
+        await carregarHistorico();
+        
+        console.log('\n🤖 Monitorando grupos ATACADO:');
+        Object.keys(CONFIGURACAO_GRUPOS).forEach(grupoId => {
+            const config = CONFIGURACAO_GRUPOS[grupoId];
+            console.log(`   📋 ${config.nome} (${grupoId})`);
+        });
+        
+        console.log('\n🔧 Comandos admin: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
+    } catch (error) {
+        console.error('❌ Erro durante inicialização ready:', error);
+    }
 });
-
 
 client.on('group-join', async (notification) => {
     try {
@@ -1016,11 +751,12 @@ client.on('group-join', async (notification) => {
         
         // Detectar se o bot foi adicionado
         const addedParticipants = notification.recipientIds || [];
-        const botInfo = client.info;
-        
-        if (botInfo && addedParticipants.includes(botInfo.wid._serialized)) {
-            console.log(`\n🤖 BOT ATACADO ADICIONADO A UM NOVO GRUPO!`);
-            await logGrupoInfo(chatId, 'BOT ATACADO ADICIONADO');
+        try {
+            const botInfo = await client.info;
+            
+            if (botInfo && addedParticipants.includes(botInfo.wid._serialized)) {
+                console.log(`\n🤖 BOT ATACADO ADICIONADO A UM NOVO GRUPO!`);
+                await logGrupoInfo(chatId, 'BOT ATACADO ADICIONADO');
             
             setTimeout(async () => {
                 try {
@@ -1035,6 +771,9 @@ client.on('group-join', async (notification) => {
                     console.error('❌ Erro ao enviar mensagem de status:', error);
                 }
             }, 3000);
+            }
+        } catch (error) {
+            console.error('❌ Erro ao verificar info do bot:', error);
         }
         
         // Código original do grupo já configurado
@@ -1077,12 +816,8 @@ Bem-vindo(a) ao *${configGrupo.nome}*!
 
 client.on('message', async (message) => {
     try {
-        console.log(`📩 MENSAGEM RECEBIDA: ${message.from} | Tipo: ${message.type} | Conteúdo: ${message.body?.substring(0, 50) || 'N/A'}...`);
-        
         const isPrivado = !message.from.endsWith('@g.us');
         const isAdmin = isAdministrador(message.from);
-        
-        console.log(`🔍 ANÁLISE: Privado=${isPrivado} | Admin=${isAdmin} | GrupoMonitorado=${isGrupoMonitorado(message.from)}`);
 
         // === COMANDOS ADMINISTRATIVOS ===
         if (isAdmin) {
@@ -1306,267 +1041,6 @@ client.on('message', async (message) => {
             }
         }
 
-        // === COMANDOS ADMINISTRATIVOS DE GRUPO ===
-        if (message.from.endsWith('@g.us')) {
-            const autorMensagem = message.author || message.from;
-            const isAdminGlobal = isAdministrador(autorMensagem);
-            const isAdminDoGrupo = await isAdminGrupo(message.from, autorMensagem);
-            
-            console.log(`🔍 ADMIN CHECK: Usuário ${autorMensagem} no grupo ${message.from}`);
-            console.log(`   🌍 Admin Global: ${isAdminGlobal} (verificando: ${autorMensagem})`);
-            console.log(`   🏢 Admin do Grupo: ${isAdminDoGrupo}`);
-            
-            // Só admins globais OU admins do grupo podem usar estes comandos
-            if (isAdminGlobal || isAdminDoGrupo) {
-                const comando = message.body.toLowerCase().trim();
-                
-                // COMANDO: .f (Fechar grupo)
-                if (comando === '.f') {
-                    try {
-                        const chat = await client.getChatById(message.from);
-                        await chat.setMessagesAdminsOnly(true);
-                        console.log(`🔒 Grupo ${chat.name} fechado por admin`);
-                        await message.reply('🔒 *GRUPO FECHADO*\n\nApenas administradores podem enviar mensagens.');
-                    } catch (error) {
-                        console.error('❌ Erro ao fechar grupo:', error);
-                        await message.reply('❌ *Erro ao fechar grupo*\n\nVerifique se o bot tem permissões de administrador.');
-                    }
-                    return;
-                }
-                
-                // COMANDO: .a (Abrir grupo)
-                if (comando === '.a') {
-                    try {
-                        const chat = await client.getChatById(message.from);
-                        await chat.setMessagesAdminsOnly(false);
-                        console.log(`🔓 Grupo ${chat.name} aberto por admin`);
-                        await message.reply('🔓 *GRUPO ABERTO*\n\nTodos os membros podem enviar mensagens.');
-                    } catch (error) {
-                        console.error('❌ Erro ao abrir grupo:', error);
-                        await message.reply('❌ *Erro ao abrir grupo*\n\nVerifique se o bot tem permissões de administrador.');
-                    }
-                    return;
-                }
-                
-                // COMANDO: .atenção (Mencionar todos)
-                if (comando === '.atenção' || comando === '.atencao') {
-                    try {
-                        const chat = await client.getChatById(message.from);
-                        const participants = await chat.participants;
-                        
-                        // Primeiro, apagar a mensagem do comando discretamente
-                        try {
-                            await message.delete(true);
-                            console.log(`🗑️ Mensagem do comando .atenção apagada discretamente`);
-                        } catch (deleteError) {
-                            console.log(`⚠️ Não foi possível apagar a mensagem do comando (pode não ter permissão)`);
-                        }
-                        
-                        // Criar lista de menções
-                        let mencoes = [];
-                        let textoMencoes = '';
-                        
-                        for (const participant of participants) {
-                            // Não mencionar o próprio bot
-                            if (participant.id._serialized !== client.info.wid._serialized) {
-                                mencoes.push(participant.id._serialized);
-                                const nome = participant.pushname || participant.id.user;
-                                textoMencoes += `@${nome} `;
-                            }
-                        }
-                        
-                        const mensagemAtencao = `🚨 *ATENÇÃO GERAL* 🚨\n\n${textoMencoes}\n\n📢 Mensagem importante para todos os membros do grupo!`;
-                        
-                        // Enviar mensagem mencionando todos
-                        const mensagemEnviada = await chat.sendMessage(mensagemAtencao, {
-                            mentions: mencoes
-                        });
-                        
-                        console.log(`📢 Comando .atenção executado no grupo ${chat.name} - ${participants.length} membros mencionados`);
-                        
-                        // Opcional: Apagar a mensagem de menção após alguns segundos
-                        setTimeout(async () => {
-                            try {
-                                await mensagemEnviada.delete(true);
-                                console.log(`🗑️ Mensagem de menção apagada após 10 segundos`);
-                            } catch (autoDeleteError) {
-                                console.log(`⚠️ Não foi possível auto-apagar a mensagem de menção`);
-                            }
-                        }, 10000); // 10 segundos
-                        
-                    } catch (error) {
-                        console.error('❌ Erro ao executar comando atenção:', error);
-                        await message.reply('❌ *Erro ao mencionar membros*\n\nVerifique se o bot tem permissões adequadas.');
-                    }
-                    return;
-                }
-                
-                // COMANDO: .addcmd (Criar comando personalizado)
-                if (comando.startsWith('.addcmd ')) {
-                    try {
-                        const args = message.body.substring(8).trim(); // Remove ".addcmd "
-                        const partes = args.split(' ');
-                        
-                        if (partes.length < 2) {
-                            await message.reply('❌ *Formato incorreto*\n\nUso: `.addcmd nome_comando resposta completa`\n\nExemplo: `.addcmd regras As regras do grupo são: 1) Respeito 2) Sem spam`');
-                            return;
-                        }
-                        
-                        const nomeComando = partes[0].toLowerCase();
-                        const resposta = partes.slice(1).join(' ');
-                        
-                        // Verificar se não conflita com comandos do sistema
-                        const comandosSistema = ['.f', '.a', '.atenção', '.atencao', '.silencio', '.silêncio', '.addcmd', '.delcmd', '.listcmd', '.meunum'];
-                        if (comandosSistema.includes(nomeComando)) {
-                            await message.reply(`❌ *Comando reservado*\n\nO comando "${nomeComando}" é reservado do sistema.\n\nEscolha outro nome.`);
-                            return;
-                        }
-                        
-                        const autorMensagem = message.author || message.from;
-                        const nomeAutor = message._data?.notifyName || 'Admin';
-                        
-                        adicionarComandoPersonalizado(message.from, nomeComando, resposta, autorMensagem, nomeAutor);
-                        
-                        await message.reply(`✅ *Comando criado com sucesso!*\n\n🔹 **Comando:** ${nomeComando}\n👤 **Criado por:** ${nomeAutor}\n💬 **Resposta:** ${resposta.substring(0, 100)}${resposta.length > 100 ? '...' : ''}\n\n💡 Use \`${nomeComando}\` para executar`);
-                        
-                    } catch (error) {
-                        console.error('❌ Erro ao criar comando personalizado:', error);
-                        await message.reply('❌ *Erro ao criar comando*\n\nTente novamente.');
-                    }
-                    return;
-                }
-                
-                // COMANDO: .delcmd (Remover comando personalizado)
-                if (comando.startsWith('.delcmd ')) {
-                    try {
-                        const nomeComando = message.body.substring(8).trim().toLowerCase();
-                        
-                        if (!nomeComando) {
-                            await message.reply('❌ *Nome do comando necessário*\n\nUso: `.delcmd nome_comando`\n\nExemplo: `.delcmd regras`');
-                            return;
-                        }
-                        
-                        if (removerComandoPersonalizado(message.from, nomeComando)) {
-                            await message.reply(`✅ *Comando removido*\n\nO comando "${nomeComando}" foi removido do grupo.`);
-                        } else {
-                            await message.reply(`❌ *Comando não encontrado*\n\nO comando "${nomeComando}" não existe neste grupo.\n\nUse \`.listcmd\` para ver comandos disponíveis.`);
-                        }
-                        
-                    } catch (error) {
-                        console.error('❌ Erro ao remover comando personalizado:', error);
-                        await message.reply('❌ *Erro ao remover comando*\n\nTente novamente.');
-                    }
-                    return;
-                }
-                
-                // COMANDO: .listcmd (Listar comandos personalizados)
-                if (comando === '.listcmd') {
-                    try {
-                        const lista = listarComandosPersonalizados(message.from);
-                        
-                        if (lista) {
-                            await message.reply(lista);
-                        } else {
-                            await message.reply('📋 *Nenhum comando personalizado*\n\nEste grupo ainda não possui comandos personalizados.\n\n💡 Crie um com: `.addcmd nome_comando resposta`');
-                        }
-                        
-                    } catch (error) {
-                        console.error('❌ Erro ao listar comandos personalizados:', error);
-                        await message.reply('❌ *Erro ao listar comandos*\n\nTente novamente.');
-                    }
-                    return;
-                }
-
-                // COMANDO: .silencio (Mencionar todos de forma ultra-discreta)
-                if (comando === '.silencio' || comando === '.silêncio') {
-                    try {
-                        const chat = await client.getChatById(message.from);
-                        const participants = await chat.participants;
-                        
-                        // Apagar a mensagem do comando imediatamente
-                        try {
-                            await message.delete(true);
-                        } catch (deleteError) {
-                            console.log(`⚠️ Não foi possível apagar comando .silencio`);
-                        }
-                        
-                        // Criar lista de menções (sem texto visível)
-                        let mencoes = [];
-                        
-                        for (const participant of participants) {
-                            // Não mencionar o próprio bot
-                            if (participant.id._serialized !== client.info.wid._serialized) {
-                                mencoes.push(participant.id._serialized);
-                            }
-                        }
-                        
-                        // Mensagem mínima apenas com menções invisíveis
-                        const mensagemSilenciosa = `📢`; // Apenas um emoji
-                        
-                        // Enviar e apagar rapidamente (3 segundos)
-                        const mensagemEnviada = await chat.sendMessage(mensagemSilenciosa, {
-                            mentions: mencoes
-                        });
-                        
-                        console.log(`🤫 Comando .silencio executado - ${participants.length} membros notificados discretamente`);
-                        
-                        // Apagar a mensagem após 3 segundos
-                        setTimeout(async () => {
-                            try {
-                                await mensagemEnviada.delete(true);
-                                console.log(`🗑️ Mensagem silenciosa apagada`);
-                            } catch (autoDeleteError) {
-                                console.log(`⚠️ Não foi possível auto-apagar mensagem silenciosa`);
-                            }
-                        }, 3000); // 3 segundos apenas
-                        
-                    } catch (error) {
-                        console.error('❌ Erro ao executar comando silencio:', error);
-                    }
-                    return;
-                }
-            } else {
-                // COMANDO TEMPORÁRIO PARA DESCOBRIR O NÚMERO DO USUÁRIO
-                const comando = message.body.toLowerCase().trim();
-                if (comando === '.meunum') {
-                    const autorMensagem = message.author || message.from;
-                    const isAdmin = isAdministrador(autorMensagem);
-                    
-                    await message.reply(`📱 *INFORMAÇÕES DO USUÁRIO:*\n\n` +
-                        `🆔 ID WhatsApp: \`${autorMensagem}\`\n` +
-                        `👤 Admin Status: ${isAdmin ? '✅ É ADMIN' : '❌ NÃO É ADMIN'}\n` +
-                        `📋 Nome/Contato: ${message._data?.notifyName || 'N/A'}\n\n` +
-                        `📋 Lista de admins: ${ADMINISTRADORES_GLOBAIS.join(', ')}`);
-                    
-                    console.log(`📱 DEBUG USUÁRIO SIMPLES:`);
-                    console.log(`   ID WhatsApp: ${autorMensagem}`);
-                    console.log(`   É Admin: ${isAdmin}`);
-                    return;
-                }
-                
-                // Verificar se tentou usar comando admin sem ser admin
-                const comandosAdmin = ['.f', '.a', '.atenção', '.atencao', '.silencio', '.silêncio', '.addcmd', '.delcmd', '.listcmd'];
-                
-                if (comandosAdmin.includes(comando)) {
-                    const autorMensagem = message.author || message.from;
-                    await message.reply(`🚫 *ACESSO NEGADO*\n\nApenas administradores podem usar este comando.\n\n📱 Seu número: \`${autorMensagem}\`\n💡 Digite \`.meunum\` para ver seu número completo.`);
-                    return;
-                }
-            }
-        }
-
-        // === VERIFICAR COMANDOS PERSONALIZADOS ===
-        if (message.from.endsWith('@g.us') && message.body.startsWith('.')) {
-            const comando = message.body.toLowerCase().trim();
-            const respostaPersonalizada = executarComandoPersonalizado(message.from, comando);
-            
-            if (respostaPersonalizada) {
-                await message.reply(respostaPersonalizada);
-                console.log(`🔹 Comando personalizado executado: ${comando} no grupo ${message.from}`);
-                return;
-            }
-        }
-
         // === DETECÇÃO DE GRUPOS NÃO CONFIGURADOS ===
         if (message.from.endsWith('@g.us') && !isGrupoMonitorado(message.from) && !message.fromMe) {
             if (!gruposLogados.has(message.from)) {
@@ -1581,22 +1055,14 @@ client.on('message', async (message) => {
         }
 
         // === PROCESSAMENTO DE GRUPOS ===
-        console.log(`🔍 VERIFICAÇÃO: É grupo=${message.from.endsWith('@g.us')} | Monitorado=${isGrupoMonitorado(message.from)}`);
-        
         if (!message.from.endsWith('@g.us') || !isGrupoMonitorado(message.from)) {
-            console.log(`❌ IGNORADO: Não é grupo monitorado ou é mensagem privada`);
             return;
         }
-        
-        console.log(`✅ PROCESSANDO: Grupo monitorado detectado`);
 
         const configGrupo = getConfiguracaoGrupo(message.from);
         if (!configGrupo || message.fromMe) {
-            console.log(`❌ SAINDO: ConfigGrupo=${!!configGrupo} | É do bot=${message.fromMe}`);
             return;
         }
-        
-        console.log(`🎯 CONTINUANDO: Mensagem válida para processamento`);
 
         // ============================================================================
         // NOVA LÓGICA: BOT DE DIVISÃO TEM PRIORIDADE ABSOLUTA
