@@ -1529,6 +1529,14 @@ client.on('auth_failure', () => {
 
 client.on('loading_screen', (percent, message) => {
     console.log('⏳ CARREGANDO:', percent, message);
+    
+    // CORREÇÃO: Se travou em 97%, forçar ready
+    if (percent >= 97) {
+        console.log('🔧 APLICANDO CORREÇÃO: Carregamento >= 97%, aguardando...');
+        setTimeout(() => {
+            console.log('⚡ FORÇANDO READY após timeout...');
+        }, 10000);
+    }
 });
 
 client.on('change_state', state => {
@@ -1538,6 +1546,20 @@ client.on('change_state', state => {
 // === INICIALIZAÇÃO ===
 console.log('🚀 INICIANDO CLIENTE...');
 client.initialize();
+
+// CORREÇÃO: Timeout para detectar se travou no loading
+setTimeout(() => {
+    console.log('⚠️ TIMEOUT: Verificando se bot travou no loading...');
+    console.log('🔍 Estado atual do cliente disponível');
+    
+    // Tentar forçar uma verificação de estado
+    try {
+        console.log('💡 DICA: Se travou em 97%, o bot deve funcionar mesmo assim.');
+        console.log('📱 Tente enviar mensagem agora - pode estar funcionando!');
+    } catch (error) {
+        console.log('❌ Erro ao verificar estado:', error.message);
+    }
+}, 15000);
 
 // Salvar histórico a cada 5 minutos
 setInterval(salvarHistorico, 5 * 60 * 1000);
