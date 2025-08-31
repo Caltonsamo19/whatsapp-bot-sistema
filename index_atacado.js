@@ -1348,7 +1348,11 @@ client.on('message', async (message) => {
             
             // Se foi processado com sucesso, não continuar para o bot original
             if (resultadoDivisao.processado) {
-                console.log(`✅ DIVISÃO: ${resultadoDivisao.sucessos}/${resultadoDivisao.total} pedidos criados`);
+                if (resultadoDivisao.duplicados > 0) {
+                    console.log(`✅ DIVISÃO: ${resultadoDivisao.sucessos}/${resultadoDivisao.total} pedidos criados, ${resultadoDivisao.duplicados} duplicados`);
+                } else {
+                    console.log(`✅ DIVISÃO: ${resultadoDivisao.sucessos}/${resultadoDivisao.total} pedidos criados`);
+                }
                 return; // IMPORTANTE: Sair aqui, não processar no bot original
             }
             

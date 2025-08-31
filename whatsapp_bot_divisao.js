@@ -340,19 +340,33 @@ class WhatsAppBotDivisao {
             
             // 5. CRIAR REGISTROS DIVIDIDOS
             let sucessos = 0;
+            let duplicados = 0;
+            let pedidosDuplicados = [];
+            
             for (let i = 0; i < divisao.length; i++) {
                 const { numero, megas, valorMT } = divisao[i];
                 const novaRef = novasReferencias[i];
                 
                 try {
                     // PEDIDO na planilha de pedidos
-                    await this.enviarParaPlanilhaPedidos(novaRef, megas, numero, grupoId);
+                    const resultadoPedido = await this.enviarParaPlanilhaPedidos(novaRef, megas, numero, grupoId);
                     
                     // PAGAMENTO na planilha de pagamentos  
-                    await this.enviarParaPlanilhaPagamentos(novaRef, valorMT, numero, grupoId);
+                    const resultadoPagamento = await this.enviarParaPlanilhaPagamentos(novaRef, valorMT, numero, grupoId);
                     
-                    sucessos++;
-                    console.log(`✅ DIVISÃO: ${novaRef} criado com sucesso`);
+                    // Verificar se foram duplicados
+                    if (resultadoPedido && resultadoPedido.duplicado) {
+                        duplicados++;
+                        pedidosDuplicados.push({
+                            referencia: novaRef,
+                            numero: numero,
+                            status: resultadoPedido.status
+                        });
+                        console.log(`⚠️ DIVISÃO: ${novaRef} já existia (duplicado)`);
+                    } else {
+                        sucessos++;
+                        console.log(`✅ DIVISÃO: ${novaRef} criado com sucesso`);
+                    }
                     
                 } catch (error) {
                     console.error(`❌ DIVISÃO: Erro ao criar ${novaRef}:`, error);
@@ -360,12 +374,44 @@ class WhatsAppBotDivisao {
             }
             
             // 6. LIMPAR DADOS E RESPONDER
-            delete this.comprovantesMemorizados[message.author || message.from];
+            const remetenteLimpeza = this.normalizarRemetente(message.author || message.from);
+            delete this.comprovantesMemorizados[remetenteLimpeza];
             
-            const mensagemFinal = `✅ *DIVISÃO CONCLUÍDA!*\n\n` +
-                `🎯 **${sucessos}/${divisao.length} pedidos criados**\n` +
-                `📊 Referências: ${novasReferencias.join(', ')}\n\n` +
-                `⏳ *O sistema principal processará as transferências em instantes...*`;
+            // Criar mensagem final baseada no resultado
+            let mensagemFinal = '';
+            
+            if (sucessos > 0 && duplicados === 0) {
+                // Todos criados com sucesso
+                mensagemFinal = `✅ *DIVISÃO CONCLUÍDA!*\n\n` +
+                    `🎯 **${sucessos}/${divisao.length} pedidos criados**\n` +
+                    `📊 Referências: ${novasReferencias.join(', ')}\n\n` +
+                    `⏳ *O sistema principal processará as transferências em instantes...*`;
+                    
+            } else if (sucessos === 0 && duplicados > 0) {
+                // Todos já existiam
+                mensagemFinal = `⚠️ *DIVISÃO JÁ PROCESSADA*\n\n` +
+                    `📋 **Todos os ${duplicados} pedidos já existem na planilha:**\n\n` +
+                    pedidosDuplicados.map(p => 
+                        `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
+                    ).join('\n') + 
+                    `\n\n✅ *Não é necessário reprocessar - os pedidos já estão no sistema.*`;
+                    
+            } else if (sucessos > 0 && duplicados > 0) {
+                // Alguns criados, alguns duplicados
+                mensagemFinal = `⚠️ *DIVISÃO PARCIALMENTE PROCESSADA*\n\n` +
+                    `✅ **${sucessos} pedidos criados com sucesso**\n` +
+                    `⚠️ **${duplicados} pedidos já existiam:**\n\n` +
+                    pedidosDuplicados.map(p => 
+                        `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
+                    ).join('\n') + 
+                    `\n\n📊 Total processado: ${sucessos + duplicados}/${divisao.length}`;
+                    
+            } else {
+                // Erro geral
+                mensagemFinal = `❌ *ERRO NA DIVISÃO*\n\n` +
+                    `🚫 Nenhum pedido foi processado com sucesso\n` +
+                    `📋 Verifique os logs para mais detalhes`;
+            }
             
             // Aguardar um pouco antes da mensagem final
             setTimeout(async () => {
@@ -376,7 +422,13 @@ class WhatsAppBotDivisao {
                 }
             }, 2000);
             
-            return { processado: true, sucessos, total: divisao.length };
+            return { 
+                processado: true, 
+                sucessos, 
+                duplicados, 
+                total: divisao.length,
+                pedidosDuplicados: pedidosDuplicados
+            };
             
         } catch (error) {
             console.error('❌ DIVISÃO: Erro no processamento:', error);
@@ -527,6 +579,12 @@ class WhatsAppBotDivisao {
             
             console.log(`📋 DIVISÃO: Resposta recebida:`, response.data);
             
+            // Verificar se é pedido duplicado (caso especial)
+            if (response.data && response.data.duplicado) {
+                console.log(`⚠️ DIVISÃO: Pedido ${referencia} já existe (Status: ${response.data.status_existente})`);
+                return { duplicado: true, referencia, status: response.data.status_existente };
+            }
+            
             if (!response.data || !response.data.success) {
                 const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
                 throw new Error(`Erro ao salvar pedido: ${responseText}`);
@@ -586,6 +644,12 @@ class WhatsAppBotDivisao {
             });
             
             console.log(`💰 DIVISÃO: Resposta recebida:`, response.data);
+            
+            // Verificar se é pagamento duplicado (caso especial)
+            if (response.data && response.data.duplicado) {
+                console.log(`⚠️ DIVISÃO: Pagamento ${referencia} já existe (Status: ${response.data.status_existente})`);
+                return { duplicado: true, referencia, status: response.data.status_existente };
+            }
             
             // Verificar se foi sucesso - pode ser objeto {success: true} ou string "Sucesso!"
             const isSuccess = (response.data && response.data.success) || 
