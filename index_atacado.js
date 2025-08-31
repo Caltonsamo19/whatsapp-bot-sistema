@@ -819,6 +819,15 @@ client.on('qr', (qr) => {
 client.on('ready', async () => {
     console.log('✅ ======= BOT ATACADO VERSÃO DEBUG ATIVA! =======');
     console.log('🧠 IA WhatsApp ATACADO ativa!');
+    
+    // TESTE: Verificar se o event listener está funcionando
+    console.log('🔧 TESTE: Verificando event listeners...');
+    console.log('📊 Event listeners registrados:', client.eventNames());
+    
+    // TESTE: Simular uma mensagem para testar o handler
+    setTimeout(() => {
+        console.log('🧪 TESTE: Tentando disparar evento message interno...');
+    }, 3000);
     console.log('📦 Sistema inteligente: Cálculo automático de megas!');
     console.log('📊 Google Sheets ATACADO configurado!');
     console.log('🔄 Bot de Divisão ATIVO - Múltiplos números automático!');
@@ -1509,7 +1518,25 @@ process.on('unhandledRejection', (reason, promise) => {
     }
 });
 
+// === EVENTOS DE DEBUG ADICIONALES ===
+client.on('authenticated', () => {
+    console.log('🔐 CLIENTE AUTENTICADO!');
+});
+
+client.on('auth_failure', () => {
+    console.log('❌ FALHA NA AUTENTICAÇÃO!');
+});
+
+client.on('loading_screen', (percent, message) => {
+    console.log('⏳ CARREGANDO:', percent, message);
+});
+
+client.on('change_state', state => {
+    console.log('🔄 ESTADO MUDOU PARA:', state);
+});
+
 // === INICIALIZAÇÃO ===
+console.log('🚀 INICIANDO CLIENTE...');
 client.initialize();
 
 // Salvar histórico a cada 5 minutos
