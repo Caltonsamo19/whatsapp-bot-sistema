@@ -906,16 +906,16 @@ Bem-vindo(a) ao *${configGrupo.nome}*!
 
 client.on('message', async (message) => {
     try {
-        // Proteção adicional contra contextos destruídos
-        if (!client.pupBrowser || !client.pupPage) {
-            console.log('⚠️ Cliente não está pronto, ignorando mensagem');
-            return;
-        }
+        console.log(`🔍 RECEBIDA: ${message.from}: ${message.body ? message.body.substring(0, 50) : 'sem texto'}...`);
+        
         const isPrivado = !message.from.endsWith('@g.us');
         const isAdmin = isAdministrador(message.from);
+        
+        console.log(`🔍 DEBUG: isPrivado=${isPrivado}, isAdmin=${isAdmin}, body="${message.body}"`);
 
         // === COMANDOS ADMINISTRATIVOS ===
         if (isAdmin) {
+            console.log(`🔧 DEBUG: Processando comando admin`);
             const comando = message.body.toLowerCase().trim();
 
             if (comando === '.ia') {
@@ -1155,6 +1155,8 @@ client.on('message', async (message) => {
                 return;
             }
         }
+        
+        console.log(`🔍 DEBUG: Finalizou comandos admin, continuando processamento`);
 
         // === DETECÇÃO DE GRUPOS NÃO CONFIGURADOS ===
         if (message.from.endsWith('@g.us') && !isGrupoMonitorado(message.from) && !message.fromMe) {
@@ -1170,8 +1172,9 @@ client.on('message', async (message) => {
         }
 
         // === PROCESSAMENTO DE GRUPOS ===
+        console.log(`🔍 DEBUG: Iniciando processamento de grupos`);
         if (!message.from.endsWith('@g.us')) {
-            // É mensagem privada, não processar aqui
+            console.log(`🔍 DEBUG: É mensagem privada, parando processamento`);
             return;
         }
 
