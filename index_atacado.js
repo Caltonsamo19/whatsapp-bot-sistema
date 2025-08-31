@@ -817,7 +817,7 @@ client.on('qr', (qr) => {
 });
 
 client.on('ready', async () => {
-    console.log('✅ Event ready fired! Bot ATACADO conectado e pronto!');
+    console.log('✅ ======= BOT ATACADO VERSÃO DEBUG ATIVA! =======');
     console.log('🧠 IA WhatsApp ATACADO ativa!');
     console.log('📦 Sistema inteligente: Cálculo automático de megas!');
     console.log('📊 Google Sheets ATACADO configurado!');
@@ -906,7 +906,9 @@ Bem-vindo(a) ao *${configGrupo.nome}*!
 
 client.on('message', async (message) => {
     try {
-        console.log(`🔍 RECEBIDA: ${message.from}: ${message.body ? message.body.substring(0, 50) : 'sem texto'}...`);
+        console.log(`🚨🚨🚨 MENSAGEM DETECTADA!!! 🚨🚨🚨`);
+        console.log(`🔍 DE: ${message.from}`);
+        console.log(`📝 TEXTO: ${message.body || 'sem texto'}`);
         
         const isPrivado = !message.from.endsWith('@g.us');
         const isAdmin = isAdministrador(message.from);
