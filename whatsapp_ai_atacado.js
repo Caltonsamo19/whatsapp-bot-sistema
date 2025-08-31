@@ -11,7 +11,7 @@ class WhatsAppAIAtacado {
       this.limparComprovantesAntigos();
     }, 10 * 60 * 1000);
     
-    console.log('🧠 IA WhatsApp ATACADO inicializada - Sistema inteligente com cálculo automático de megas E processamento de imagens melhorado');
+    console.log('🧠 IA WhatsApp ATACADO v4.0 inicializada - Sistema OCR simplificado e otimizado!');
   }
 
   // === CÓDIGO ORIGINAL MANTIDO - PROCESSAMENTO DE TEXTO ===
@@ -107,7 +107,7 @@ class WhatsAppAIAtacado {
     return null;
   }
 
-  // === EXTRAIR PREÇOS TABELA (CÓDIGO ORIGINAL) ===
+  // === EXTRAIR PREÇOS TABELA (MELHORADO COM MAIS PADRÕES) ===
   extrairPrecosTabela(tabelaTexto) {
     console.log(`   📋 Extraindo preços da tabela atacado...`);
     
@@ -163,12 +163,24 @@ class WhatsAppAIAtacado {
     return precosUnicos;
   }
 
-  // === CALCULAR MEGAS POR VALOR (CÓDIGO ORIGINAL) ===
+  // === CALCULAR MEGAS POR VALOR (MELHORADO COM SUPORTE A PREÇOS DIRETOS) ===
   calcularMegasPorValor(valorPago, configGrupo) {
     console.log(`   🧮 ATACADO: Calculando megas para valor ${valorPago}MT...`);
     
-    if (!configGrupo || !configGrupo.tabela) {
-      console.log(`   ❌ ATACADO: Tabela do grupo não disponível`);
+    if (!configGrupo) {
+      console.log(`   ❌ ATACADO: Configuração do grupo não disponível`);
+      return null;
+    }
+    
+    // CORREÇÃO: Se configGrupo tem uma estrutura de precos (do bot divisão), usar diretamente
+    if (configGrupo.precos) {
+      console.log(`   🔧 ATACADO: Usando configuração de preços diretos do bot divisão`);
+      return this.calcularMegasPorValorDireto(valorPago, configGrupo.precos);
+    }
+    
+    // CASO ORIGINAL: Se tem tabela como texto, usar método original
+    if (!configGrupo.tabela) {
+      console.log(`   ❌ ATACADO: Nem preços diretos nem tabela disponível`);
       return null;
     }
     
@@ -210,6 +222,51 @@ class WhatsAppAIAtacado {
     }
     
     console.log(`   ❌ ATACADO: Nenhum pacote encontrado para valor ${valorPago}MT`);
+    return null;
+  }
+
+  // === NOVO: CALCULAR MEGAS COM PREÇOS DIRETOS ===
+  calcularMegasPorValorDireto(valorPago, precos) {
+    console.log(`   🧮 ATACADO: Calculando megas com preços diretos para valor ${valorPago}MT...`);
+    console.log(`   📋 ATACADO: Preços disponíveis:`, Object.entries(precos).map(([megas, preco]) => `${Math.floor(megas/1024)}GB=${preco}MT`).join(', '));
+    
+    const valorNumerico = parseFloat(valorPago);
+    
+    // Procurar preço exato
+    for (const [megas, preco] of Object.entries(precos)) {
+      if (parseInt(preco) === valorNumerico) {
+        const gb = Math.floor(parseInt(megas) / 1024);
+        const megasTexto = `${gb}GB`;
+        console.log(`   ✅ ATACADO: Preço exato encontrado: ${valorNumerico}MT = ${megasTexto}`);
+        return {
+          megas: megasTexto,
+          quantidade: parseInt(megas),
+          tipo: 'GB',
+          preco: parseInt(preco)
+        };
+      }
+    }
+    
+    // Procurar preço aproximado (tolerância de 5MT)
+    const tolerancia = 5;
+    for (const [megas, preco] of Object.entries(precos)) {
+      const diferenca = Math.abs(parseInt(preco) - valorNumerico);
+      if (diferenca <= tolerancia) {
+        const gb = Math.floor(parseInt(megas) / 1024);
+        const megasTexto = `${gb}GB`;
+        console.log(`   ⚡ ATACADO: Preço aproximado encontrado: ${valorNumerico}MT ≈ ${megasTexto} (diferença: ${diferenca}MT)`);
+        return {
+          megas: megasTexto,
+          quantidade: parseInt(megas),
+          tipo: 'GB',
+          preco: parseInt(preco),
+          aproximado: true,
+          diferenca: diferenca
+        };
+      }
+    }
+    
+    console.log(`   ❌ ATACADO: Valor ${valorPago}MT não encontrado na tabela de preços`);
     return null;
   }
 

@@ -5,6 +5,17 @@ class WhatsAppBotDivisao {
         this.comprovantesMemorizados = {};
         this.processandoDivisoes = new Set();
         
+        // Inicializar IA usando variável de ambiente (mesma do servidor)
+        const WhatsAppAIAtacado = require('./whatsapp_ai_atacado');
+        const openaiApiKey = process.env.OPENAI_API_KEY;
+        if (openaiApiKey) {
+            this.ia = new WhatsAppAIAtacado(openaiApiKey);
+            console.log('🧠 IA integrada ao bot de divisão usando .env!');
+        } else {
+            this.ia = null;
+            console.log('⚠️ IA não disponível - OPENAI_API_KEY não encontrada no .env');
+        }
+        
         // URLs dos Google Apps Scripts existentes
         this.SCRIPTS_CONFIG = {
             PEDIDOS: 'https://script.google.com/macros/s/AKfycbzdvM-IrH4a6gS53WZ0J-AGXY0duHfgv15DyxdqUm1BLEm3Z15T67qgstu6yPTedgOSCA/exec',
@@ -26,7 +37,14 @@ class WhatsAppBotDivisao {
                     81920: 1000,   // 80GB = 1000MT
                     92160: 1125,   // 90GB = 1125MT
                     102400: 1250   // 100GB = 1250MT
-                }
+                },
+                // NÚMEROS DE PAGAMENTO DO GRUPO (NUNCA devem receber megas)
+                numerosPagamento: [
+                    '870059057',   // Número eMola do grupo
+                    '840326152',   // Número M-Pesa do VASCO (sem prefixo)
+                    '258840326152', // Versão completa com prefixo
+                    '877777777'    // Adicionar outros números de pagamento do grupo aqui
+                ]
             }
             // Adicionar outros grupos conforme necessário
         };
@@ -55,7 +73,8 @@ class WhatsAppBotDivisao {
             const comprovativo = this.extrairComprovativo(mensagem);
             if (comprovativo && !this.temNumeros(mensagem)) {
                 console.log(`💰 DIVISÃO: Comprovativo memorizado: ${comprovativo.referencia} - ${comprovativo.valor}MT`);
-                this.comprovantesMemorizados[remetente] = {
+                const remetenteNormalizado = this.normalizarRemetente(remetente);
+                this.comprovantesMemorizados[remetenteNormalizado] = {
                     ...comprovativo,
                     timestamp: Date.now(),
                     grupoId: grupoId
@@ -78,7 +97,8 @@ class WhatsAppBotDivisao {
                 console.log(`📱 DIVISÃO: ${numerosDetectados.length} números detectados sem comprovativo na mensagem`);
                 
                 // Procurar comprovativo memorizado
-                let comprovantivoAssociado = this.comprovantesMemorizados[remetente];
+                const remetenteNormalizado = this.normalizarRemetente(remetente);
+                let comprovantivoAssociado = this.comprovantesMemorizados[remetenteNormalizado];
                 
                 // Se não tem memorizado, buscar no histórico (últimos 30 min)
                 if (!comprovantivoAssociado) {
@@ -235,12 +255,27 @@ class WhatsAppBotDivisao {
     
     // === BUSCAR COMPROVATIVO NO HISTÓRICO (SIMULADO) ===
     async buscarComprovanteRecenteHist(remetente) {
-        // Esta função pode ser expandida para integrar com histórico real
-        // Por agora, verifica apenas os memorizados
-        const comprovativo = this.comprovantesMemorizados[remetente];
-        if (comprovativo && (Date.now() - comprovativo.timestamp) <= 1800000) { // 30 min
+        console.log(`🔍 DIVISÃO: Buscando comprovativo para remetente: ${remetente}`);
+        console.log(`📋 DIVISÃO: Comprovativos memorizados:`, Object.keys(this.comprovantesMemorizados));
+        
+        // Normalizar o remetente atual para busca
+        const remetenteNormalizado = this.normalizarRemetente(remetente);
+        console.log(`🔄 DIVISÃO: Remetente normalizado para busca: ${remetenteNormalizado}`);
+        
+        // Buscar usando a chave normalizada
+        const comprovativo = this.comprovantesMemorizados[remetenteNormalizado];
+        // Verificar se ainda está dentro do prazo (30 min)
+        if (comprovativo && (Date.now() - comprovativo.timestamp) <= 1800000) {
+            console.log(`✅ DIVISÃO: Comprovativo encontrado dentro do prazo!`);
+            console.log(`   Ref: ${comprovativo.referencia}, Valor: ${comprovativo.valor}MT`);
             return comprovativo;
+        } else if (comprovativo) {
+            const minutosExpiracao = (Date.now() - comprovativo.timestamp) / 60000;
+            console.log(`❌ DIVISÃO: Comprovativo encontrado mas expirado (${minutosExpiracao.toFixed(1)} min)`);
+        } else {
+            console.log(`❌ DIVISÃO: Nenhum comprovativo encontrado para este remetente`);
         }
+        
         return null;
     }
     
@@ -533,6 +568,95 @@ class WhatsAppBotDivisao {
         if (removidos > 0) {
             console.log(`🗑️ DIVISÃO: ${removidos} comprovativos antigos removidos`);
         }
+    }
+
+    // === LIMPAR E NORMALIZAR NÚMERO ===
+    limparNumero(numero) {
+        if (!numero) return numero;
+        
+        // Remover caracteres especiais e espaços
+        let numeroLimpo = numero.toString().replace(/\D/g, '');
+        
+        // Remover prefixo 258 se existir
+        if (numeroLimpo.startsWith('258') && numeroLimpo.length > 9) {
+            numeroLimpo = numeroLimpo.substring(3);
+        }
+        
+        // Se após limpar sobrou um número que começa com 8 e tem 9 dígitos, retornar apenas os últimos 9
+        if (/^8[0-9]{8,}$/.test(numeroLimpo) && numeroLimpo.length > 9) {
+            numeroLimpo = numeroLimpo.slice(-9); // Pegar os últimos 9 dígitos
+        }
+        
+        return numeroLimpo;
+    }
+    
+    // === NORMALIZAR REMETENTE PARA ARMAZENAMENTO CONSISTENTE ===
+    normalizarRemetente(remetente) {
+        // Extrair apenas os dígitos e pegar os últimos 9 (número de telefone)
+        const numerosApenas = remetente.replace(/\D/g, '');
+        if (numerosApenas.length >= 9) {
+            return numerosApenas.slice(-9); // Retorna apenas os últimos 9 dígitos
+        }
+        return remetente; // Se não conseguir normalizar, retorna original
+    }
+
+    // === EXTRAIR ESPECIFICAÇÕES DO CLIENTE ===
+    extrairEspecificacoes(mensagem, numeros) {
+        console.log(`🔍 DIVISÃO: Extraindo especificações da mensagem`);
+        
+        const especificacoes = {};
+        const linhas = mensagem.split('\n').map(linha => linha.trim()).filter(linha => linha.length > 0);
+        
+        console.log(`   📄 Processando ${linhas.length} linhas da mensagem`);
+        
+        // Processar linha por linha para encontrar padrões
+        for (let i = 0; i < linhas.length; i++) {
+            const linha = linhas[i];
+            console.log(`   🔍 Linha ${i + 1}: "${linha}"`);
+            
+            // Padrão 1: GB e número na mesma linha (ex: "10gb 852118624")
+            const sameLinha = linha.match(/(\d+)\s*gb\s+(\d{9})/i);
+            if (sameLinha) {
+                const gb = parseInt(sameLinha[1]);
+                const numero = sameLinha[2];
+                
+                if (numeros.includes(numero) && !especificacoes[numero]) {
+                    especificacoes[numero] = gb * 1024;
+                    console.log(`   ✅ Padrão mesma linha: ${numero} → ${gb}GB`);
+                }
+                continue; // Pular para próxima linha
+            }
+            
+            // Padrão 2: Linha só com GB (ex: "10gb")
+            const somenteGb = linha.match(/^(\d+)\s*gb\s*$/i);
+            if (somenteGb) {
+                const gb = parseInt(somenteGb[1]);
+                console.log(`   🔍 GB detectado: ${gb}GB - procurando próximo número`);
+                
+                // Procurar o PRÓXIMO número que ainda não tem especificação
+                for (let j = i + 1; j < linhas.length; j++) {
+                    const linhaSeguinte = linhas[j];
+                    const numeroMatch = linhaSeguinte.match(/^(\d{9})$/);
+                    
+                    if (numeroMatch) {
+                        const numero = numeroMatch[1];
+                        if (numeros.includes(numero) && !especificacoes[numero]) {
+                            especificacoes[numero] = gb * 1024;
+                            console.log(`   ✅ Padrão separado: ${numero} → ${gb}GB`);
+                            break; // Parar na primeira correspondência
+                        }
+                    }
+                }
+                continue; // Pular para próxima linha
+            }
+        }
+        
+        console.log(`   📊 Especificações finais extraídas:`);
+        Object.entries(especificacoes).forEach(([numero, megas]) => {
+            console.log(`      • ${numero}: ${megas/1024}GB`);
+        });
+        
+        return especificacoes;
     }
     
     // === STATUS DO BOT ===

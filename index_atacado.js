@@ -1,5 +1,16 @@
 require('dotenv').config();
 const { Client, LocalAuth } = require('whatsapp-web.js');
+
+// Tratamento de erros não capturados
+process.on('unhandledRejection', (reason, promise) => {
+    console.log('❌ Promise rejeitada:', reason);
+    // Não encerrar o processo, apenas logar
+});
+
+process.on('uncaughtException', (error) => {
+    console.log('❌ Exceção não capturada:', error);
+    // Não encerrar o processo, apenas logar
+});
 const qrcode = require('qrcode-terminal');
 const fs = require('fs').promises;
 const axios = require('axios'); // npm install axios
@@ -159,6 +170,19 @@ botDivisao.CONFIGURACAO_GRUPOS = CONFIGURACAO_GRUPOS_DIVISAO;
 const CONFIGURACAO_GRUPOS = {
     '120363419652375064@g.us': {
         nome: 'Net Fornecedor V',
+        // CORREÇÃO: Adicionar preços estruturados para cálculo correto de megas
+        precos: {
+            10240: 125,    // 10GB = 125MT
+            20480: 250,    // 20GB = 250MT
+            30720: 375,    // 30GB = 375MT
+            40960: 500,    // 40GB = 500MT
+            51200: 625,    // 50GB = 625MT
+            61440: 750,    // 60GB = 750MT
+            71680: 875,    // 70GB = 875MT
+            81920: 1000,   // 80GB = 1000MT
+            92160: 1125,   // 90GB = 1125MT
+            102400: 1250   // 100GB = 1250MT
+        },
         tabela: `GB'S COMPLETOS
 📱 10GB➜125MT 
 📱 20GB ➜ 250MT  
@@ -218,6 +242,16 @@ NOME: Vasco José Mahumane
     },
     '120363402160265624@g.us': {
         nome: 'Treinamento IA',
+        precos: {
+            10240: 130,    // 10GB = 130MT
+            20480: 260,    // 20GB = 260MT
+            30720: 390,    // 30GB = 390MT
+            40960: 520,    // 40GB = 520MT
+            51200: 630,    // 50GB = 630MT
+            61440: 750,    // 60GB = 750MT
+            71680: 875,    // 70GB = 875MT
+            81920: 1000    // 80GB = 1000MT
+        },
         tabela: `🚨PROMOÇÃO DE GIGABYTES🚨
 MAIS DE 40 GIGABYTES 12.5
 Oferecemos-lhe serviços extremamente rápido e seguro.🥳
@@ -798,7 +832,7 @@ client.on('ready', async () => {
         console.log(`   📋 ${config.nome} (${grupoId})`);
     });
     
-    console.log('\n🔧 Comandos admin: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo');
+    console.log('\n🔧 Comandos admin: .ia .divisao .test_busca .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo');
 });
 
 client.on('group-join', async (notification) => {
@@ -1489,11 +1523,6 @@ setInterval(() => {
     gruposLogados.clear();
     console.log('🗑️ Cache de grupos detectados limpo');
 }, 2 * 60 * 60 * 1000);
-
-process.on('uncaughtException', (error) => {
-    console.error('❌ Erro não capturado:', error);
-});
-
 
 process.on('SIGINT', async () => {
     console.log('\n💾 Salvando antes de sair...');
