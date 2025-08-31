@@ -354,13 +354,17 @@ class WhatsAppBotDivisao {
                     // PAGAMENTO na planilha de pagamentos  
                     const resultadoPagamento = await this.enviarParaPlanilhaPagamentos(novaRef, valorMT, numero, grupoId);
                     
-                    // Verificar se foram duplicados
-                    if (resultadoPedido && resultadoPedido.duplicado) {
+                    // Verificar se foram duplicados (tanto pedido quanto pagamento)
+                    const pedidoDuplicado = resultadoPedido && resultadoPedido.duplicado;
+                    const pagamentoDuplicado = resultadoPagamento && resultadoPagamento.duplicado;
+                    
+                    if (pedidoDuplicado || pagamentoDuplicado) {
                         duplicados++;
                         pedidosDuplicados.push({
                             referencia: novaRef,
                             numero: numero,
-                            status: resultadoPedido.status
+                            status: pedidoDuplicado ? resultadoPedido.status : 
+                                   (pagamentoDuplicado ? resultadoPagamento.status : 'Existente')
                         });
                         console.log(`⚠️ DIVISÃO: ${novaRef} já existia (duplicado)`);
                     } else {
@@ -369,7 +373,22 @@ class WhatsAppBotDivisao {
                     }
                     
                 } catch (error) {
-                    console.error(`❌ DIVISÃO: Erro ao criar ${novaRef}:`, error);
+                    console.error(`❌ DIVISÃO: Erro ao processar ${novaRef}:`, error);
+                    
+                    // Se o erro for relacionado a duplicata, tratar como duplicado
+                    if (error.message && (error.message.includes('Duplicado') || error.message.includes('já existe'))) {
+                        duplicados++;
+                        pedidosDuplicados.push({
+                            referencia: novaRef,
+                            numero: numero,
+                            status: 'Existente'
+                        });
+                        console.log(`⚠️ DIVISÃO: ${novaRef} já existia (duplicado - detectado por erro)`);
+                    } else {
+                        // Erro real - não incrementar contadores, apenas registrar
+                        console.error(`❌ DIVISÃO: Erro não relacionado a duplicata em ${novaRef}:`, error.message);
+                        // Você pode adicionar uma variável para contar erros se necessário
+                    }
                 }
             }
             
@@ -388,29 +407,107 @@ class WhatsAppBotDivisao {
                     `⏳ *O sistema principal processará as transferências em instantes...*`;
                     
             } else if (sucessos === 0 && duplicados > 0) {
-                // Todos já existiam
-                mensagemFinal = `⚠️ *DIVISÃO JÁ PROCESSADA*\n\n` +
-                    `📋 **Todos os ${duplicados} pedidos já existem na planilha:**\n\n` +
-                    pedidosDuplicados.map(p => 
-                        `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
-                    ).join('\n') + 
-                    `\n\n✅ *Não é necessário reprocessar - os pedidos já estão no sistema.*`;
+                // Todos já existiam - mensagem personalizada por status
+                const pedidosPendentes = pedidosDuplicados.filter(p => 
+                    p.status === 'Pendente' || p.status === 'PENDENTE' || 
+                    p.status === 'Em Processamento' || p.status === 'Aguardando'
+                );
+                const pedidosProcessados = pedidosDuplicados.filter(p => 
+                    p.status === 'Processado' || p.status === 'PROCESSADO' || 
+                    p.status === 'Concluído' || p.status === 'Completo' ||
+                    p.status === 'Finalizado' || p.status === 'Executado'
+                );
+                const pedidosOutrosStatus = pedidosDuplicados.filter(p => 
+                    !pedidosPendentes.includes(p) && !pedidosProcessados.includes(p)
+                );
+                
+                if (pedidosPendentes.length === duplicados) {
+                    // Todos pendentes
+                    mensagemFinal = `⏳ *PEDIDOS JÁ EM PROCESSAMENTO*\n\n` +
+                        `📋 **${duplicados} pedidos já estão na planilha:**\n\n` +
+                        pedidosDuplicados.map(p => 
+                            `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
+                        ).join('\n') + 
+                        `\n\n⏳ *Aguarde o processamento automático.*\n` +
+                        `🔄 As transferências serão executadas em breve!`;
+                } else if (pedidosProcessados.length === duplicados) {
+                    // Todos processados
+                    mensagemFinal = `✅ *DIVISÃO JÁ PROCESSADA ANTERIORMENTE*\n\n` +
+                        `📋 **${duplicados} pedidos já foram executados:**\n\n` +
+                        pedidosDuplicados.map(p => 
+                            `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
+                        ).join('\n') + 
+                        `\n\n✅ *Os pedidos já foram concluídos anteriormente.*`;
+                } else {
+                    // Status misto
+                    mensagemFinal = `⚠️ *PEDIDOS JÁ EXISTEM COM STATUS VARIADOS*\n\n` +
+                        `📋 **${duplicados} pedidos encontrados:**\n\n`;
+                    
+                    if (pedidosPendentes.length > 0) {
+                        mensagemFinal += `⏳ **Pendentes (${pedidosPendentes.length}):**\n` +
+                            pedidosPendentes.map(p => `• ${p.referencia} (${p.numero})`).join('\n') + '\n\n';
+                    }
+                    
+                    if (pedidosProcessados.length > 0) {
+                        mensagemFinal += `✅ **Processados (${pedidosProcessados.length}):**\n` +
+                            pedidosProcessados.map(p => `• ${p.referencia} (${p.numero})`).join('\n') + '\n\n';
+                    }
+                    
+                    if (pedidosOutrosStatus.length > 0) {
+                        mensagemFinal += `📋 **Outros (${pedidosOutrosStatus.length}):**\n` +
+                            pedidosOutrosStatus.map(p => `• ${p.referencia} (${p.numero}) - ${p.status}`).join('\n') + '\n\n';
+                    }
+                    
+                    mensagemFinal += `🔍 *Verifique os status individuais acima.*`;
+                }
                     
             } else if (sucessos > 0 && duplicados > 0) {
-                // Alguns criados, alguns duplicados
+                // Alguns criados, alguns duplicados - mensagem detalhada
                 mensagemFinal = `⚠️ *DIVISÃO PARCIALMENTE PROCESSADA*\n\n` +
                     `✅ **${sucessos} pedidos criados com sucesso**\n` +
-                    `⚠️ **${duplicados} pedidos já existiam:**\n\n` +
-                    pedidosDuplicados.map(p => 
-                        `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
-                    ).join('\n') + 
-                    `\n\n📊 Total processado: ${sucessos + duplicados}/${divisao.length}`;
+                    `📋 **${duplicados} pedidos já existiam:**\n\n`;
+                
+                // Agrupar duplicados por status
+                const duplicadosPorStatus = {};
+                pedidosDuplicados.forEach(p => {
+                    const status = p.status || 'Existente';
+                    if (!duplicadosPorStatus[status]) {
+                        duplicadosPorStatus[status] = [];
+                    }
+                    duplicadosPorStatus[status].push(p);
+                });
+                
+                // Mostrar duplicados agrupados por status
+                Object.entries(duplicadosPorStatus).forEach(([status, pedidos]) => {
+                    const emoji = status.toLowerCase().includes('pendent') || status.toLowerCase().includes('aguard') ? '⏳' : 
+                                 status.toLowerCase().includes('process') || status.toLowerCase().includes('conclu') ? '✅' : '📋';
+                    mensagemFinal += `${emoji} **${status} (${pedidos.length}):**\n` +
+                        pedidos.map(p => `• ${p.referencia} (${p.numero})`).join('\n') + '\n\n';
+                });
+                
+                mensagemFinal += `📊 **Resumo:** ${sucessos} novos + ${duplicados} existentes = ${sucessos + duplicados}/${divisao.length} total`;
                     
             } else {
-                // Erro geral
-                mensagemFinal = `❌ *ERRO NA DIVISÃO*\n\n` +
-                    `🚫 Nenhum pedido foi processado com sucesso\n` +
-                    `📋 Verifique os logs para mais detalhes`;
+                // Erro geral - fornecer mais contexto
+                if (duplicados > 0) {
+                    // Se teve duplicados mas nenhum sucesso, tratar como duplicados
+                    mensagemFinal = `⚠️ *ERRO NO PROCESSAMENTO*\n\n` +
+                        `🚫 Não foi possível processar os pedidos\n` +
+                        `📋 **${duplicados} pedidos com problemas:**\n\n` +
+                        pedidosDuplicados.map(p => 
+                            `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
+                        ).join('\n') + 
+                        `\n\n🔄 *Tente novamente ou contate o suporte.*`;
+                } else {
+                    // Erro geral sem duplicados
+                    mensagemFinal = `❌ *ERRO NA DIVISÃO*\n\n` +
+                        `🚫 Nenhum pedido foi processado com sucesso\n` +
+                        `⚠️ Possíveis causas:\n` +
+                        `• Problema de conectividade\n` +
+                        `• Erro nos dados de pagamento\n` +
+                        `• Falha temporária do sistema\n\n` +
+                        `🔄 *Tente novamente em alguns instantes.*`;
+                }
             }
             
             // Aguardar um pouco antes da mensagem final
@@ -645,10 +742,20 @@ class WhatsAppBotDivisao {
             
             console.log(`💰 DIVISÃO: Resposta recebida:`, response.data);
             
-            // Verificar se é pagamento duplicado (caso especial)
+            // Verificar se é pagamento duplicado (múltiplos formatos)
             if (response.data && response.data.duplicado) {
-                console.log(`⚠️ DIVISÃO: Pagamento ${referencia} já existe (Status: ${response.data.status_existente})`);
-                return { duplicado: true, referencia, status: response.data.status_existente };
+                const status = response.data.status_existente || 'Existente';
+                console.log(`⚠️ DIVISÃO: Pagamento ${referencia} já existe (Status: ${status})`);
+                return { duplicado: true, referencia, status };
+            }
+            
+            // Verificar formato de string "Duplicado! REFERENCIA [IGNORADO]"
+            if (typeof response.data === 'string' && response.data.includes('Duplicado!')) {
+                console.log(`⚠️ DIVISÃO: Pagamento ${referencia} já existe (formato string)`);
+                // Tentar extrair status da mensagem se disponível
+                const statusMatch = response.data.match(/\[([^\]]+)\]/);
+                const status = statusMatch ? statusMatch[1] : 'Existente';
+                return { duplicado: true, referencia, status };
             }
             
             // Verificar se foi sucesso - pode ser objeto {success: true} ou string "Sucesso!"
