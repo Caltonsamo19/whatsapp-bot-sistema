@@ -589,7 +589,7 @@ class WhatsAppAIAtacado {
 
   // === PROCESSAMENTO DE IMAGEM MELHORADO ===
   async processarImagem(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
-    console.log(`   📸 ATACADO: Processando imagem de ${remetente} com IA melhorada`);
+    console.log(`   📸 ATACADO: Processando imagem de ${remetente}`);
     
     const temLegendaValida = legendaImagem && 
                             typeof legendaImagem === 'string' && 
@@ -599,130 +599,37 @@ class WhatsAppAIAtacado {
       console.log(`   📝 ATACADO: Legenda detectada: "${legendaImagem.trim()}"`);
     }
 
-    const promptMelhorado = `
-ANALISE esta imagem de comprovante M-Pesa/E-Mola de Moçambique.
+    // PROMPT SIMPLIFICADO baseado no whatsapp_ai.js que funciona bem
+    const prompt = `
+Analisa esta imagem de comprovante de pagamento M-Pesa ou E-Mola de Moçambique.
 
-⚠️ ATENÇÃO CRÍTICA - REFERÊNCIAS QUEBRADAS EM MÚLTIPLAS LINHAS:
+Procura por:
+1. Referência da transação (exemplos: CGC4GQ17W84, PP250712.2035.u31398, etc.)
+2. Valor transferido (em MT - Meticais)
 
-🟡 FORMATO E-MOLA ESPECÍFICO - PADRÃO OBRIGATÓRIO:
-PP + 6 dígitos + . + 4 dígitos + . + mínimo 5 caracteres
-Exemplo: PP250820.1706.e9791O (PP + 250820 + . + 1706 + . + e9791O)
+ATENÇÃO: 
+- Procura por palavras como "Confirmado", "ID da transacao", "Transferiste"
+- O valor pode estar em formato "100.00MT", "100MT", "100,00MT"
+- A referência é geralmente um código alfanumérico
 
-⚠️ CRÍTICO: Referências E-Mola seguem padrão rígido:
-1. Começam com PP (2 letras)
-2. Seguido de 6 dígitos (data)
-3. Ponto (.)
-4. Seguido de 4 dígitos (hora)  
-5. Ponto (.)
-6. Seguido de 5+ caracteres alfanuméricos (código único)
-
-EXEMPLOS CORRETOS E-MOLA:
-- "PP250820.1706.e9791O" (PP + 6 dígitos + 4 dígitos + 6 caracteres)
-- "PP250821.1152.E58547" (PP + 6 dígitos + 4 dígitos + 6 caracteres)
-- "EP240815.1420.h45672" (EP + 6 dígitos + 4 dígitos + 6 caracteres)
-
-🚨 SE ENCONTRAR E-MOLA INCOMPLETO, PROCURE MAIS CARACTERES!
-Exemplo: Se você vê "PP250820.1706.e9791" mas na linha seguinte tem "O"
-RESULTADO CORRETO: "PP250820.1706.e9791O"
-
-🔵 M-PESA (SEM pontos):
-⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
-Se você vê:
-"CHK8H3PYK" + "pe" (em linhas separadas)
-RESULTADO: "CHK8H3PYKpe" (EXATO - não mude para maiúsculo!)
-
-🔍 INSTRUÇÕES DE BUSCA:
-1. Procure por "ID da transação" ou "Confirmado"
-2. Abaixo/ao lado, encontre o código
-3. Para E-Mola: SEMPRE tem 3 partes separadas por pontos
-4. Para M-Pesa: código alfanumérico sem pontos
-5. SE estiver quebrado em linhas, JUNTE TUDO!
-6. ⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
-
-VALOR: Procure valor em MT (ex: "375.00MT")
-
-CENÁRIO QUEBRADO COMUM:
-Se você vê:
-"PP250820.1706." (linha 1)
-"e9791O" (linha 2)
-RESULTADO: "PP250820.1706.e9791O" ✅
-
-🔵 PARA M-PESA:
-Se quebrado: "CHK8H3PYK" + "PE" = "CHK8H3PYKPE"
-
-⚠️ NÃO CORTE E NÃO ALTERE MAIÚSCULAS/MINÚSCULAS! Capture EXATAMENTE como aparece!
-
-Para E-Mola (PADRÃO: XX######.####.##### com 5+ chars na terceira parte):
+Responde APENAS no formato JSON:
 {
-  "referencia": "PP250820.1706.e9791O",
-  "valor": "375",
-  "encontrado": true,
-  "tipo": "emola"
+  "referencia": "CGC4GQ17W84",
+  "valor": "210",
+  "encontrado": true
 }
 
-Para M-Pesa (sem pontos e CASE ORIGINAL):
-{
-  "referencia": "CHK8H3PYKpe",
-  "valor": "125",
-  "encontrado": true,
-  "tipo": "mpesa"
-}`;
-
-    const promptAlternativo = `ANALISE esta imagem de comprovante M-Pesa/E-Mola de Moçambique.
-
-⚠️ ATENÇÃO CRÍTICA - REFERÊNCIAS QUEBRADAS EM MÚLTIPLAS LINHAS:
-
-🟡 FORMATO E-MOLA ESPECÍFICO - PADRÃO OBRIGATÓRIO:
-PP + 6 dígitos + . + 4 dígitos + . + mínimo 5 caracteres
-Exemplo: PP250820.1706.e9791O (PP + 250820 + . + 1706 + . + e9791O)
-
-⚠️ CRÍTICO: Referências E-Mola seguem padrão rígido:
-1. Começam com PP (2 letras)
-2. Seguido de 6 dígitos (data)
-3. Ponto (.)
-4. Seguido de 4 dígitos (hora)
-5. Ponto (.)
-6. Seguido de 5+ caracteres alfanuméricos (código único)
-
-🔵 M-PESA (SEM pontos):
-⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
-Se você vê:
-"CHK8H3PYK" + "pe" (em linhas separadas)
-RESULTADO: "CHK8H3PYKpe" (EXATO - não mude para maiúsculo!)
-
-🚨 SE ENCONTRAR REFERÊNCIA INCOMPLETA, PROCURE MAIS CARACTERES!
-Exemplo E-Mola: "PP250820.1706.e9791" + "O" (linha seguinte) = "PP250820.1706.e9791O"
-Exemplo M-Pesa: "CHK8H3PYK" + "PE" (linha seguinte) = "CHK8H3PYKPE"
-
-⚠️ CRÍTICO: MANTENHA maiúsculas e minúsculas EXATAMENTE como aparecem!
-
-VALOR: Procure valor em MT (ex: "375.00MT")
-
-Responda no formato:
-Para E-Mola (com 5+ chars na terceira parte):
-{
-  "referencia": "PP250820.1706.e9791O",
-  "valor": "375",
-  "encontrado": true,
-  "tipo": "emola"
-}
-
-Para M-Pesa (case original):
-{
-  "referencia": "CHK8H3PYKpe",
-  "valor": "125",
-  "encontrado": true,
-  "tipo": "mpesa"
-}`;
+Se não conseguires ler a imagem ou extrair os dados:
+{"encontrado": false}`;
 
     try {
-      let resposta = await this.openai.chat.completions.create({
+      const resposta = await this.openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
             role: "user",
             content: [
-              { type: "text", text: promptMelhorado },
+              { type: "text", text: prompt },
               {
                 type: "image_url",
                 image_url: {
@@ -733,142 +640,74 @@ Para M-Pesa (case original):
             ]
           }
         ],
-        temperature: 0.7,
-        max_tokens: 500
+        temperature: 0.1,
+        max_tokens: 300
       });
 
-      console.log(`   🔍 ATACADO: Primeira tentativa - Resposta da IA: ${resposta.choices[0].message.content}`);
-      let resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
-
-      if (!resultado || !resultado.encontrado) {
-        console.log(`   🔄 ATACADO: Primeira tentativa falhou, tentando prompt alternativo...`);
-        
-        resposta = await this.openai.chat.completions.create({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: promptAlternativo },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:image/jpeg;base64,${imagemBase64}`,
-                    detail: "high"
-                  }
-                }
-              ]
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 500
-        });
-
-        console.log(`   🔍 ATACADO: Segunda tentativa - Resposta da IA: ${resposta.choices[0].message.content}`);
-        resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
-      }
-
-      if (resultado && resultado.encontrado) {
+      console.log(`   🔍 ATACADO: Resposta da IA para imagem: ${resposta.choices[0].message.content}`);
+      
+      const resultado = this.extrairJSON(resposta.choices[0].message.content);
+      console.log(`   ✅ ATACADO: JSON extraído da imagem:`, resultado);
+      
+      if (resultado.encontrado) {
         const comprovante = {
-          referencia: resultado.referencia, // MANTÉM ORIGINAL - não limpar!
+          referencia: resultado.referencia,
           valor: this.limparValor(resultado.valor),
-          fonte: 'imagem_melhorada',
-          confianca: resultado.confianca || 'media',
-          tipo: resultado.tipo || 'desconhecido'
+          fonte: 'imagem'
         };
         
-        console.log(`   ✅ ATACADO: Dados extraídos com sucesso: ${comprovante.referencia} - ${comprovante.valor}MT (${comprovante.tipo}, confiança: ${comprovante.confianca})`);
+        console.log(`   ✅ ATACADO: Dados extraídos da imagem: ${comprovante.referencia} - ${comprovante.valor}MT`);
         
-        // VALIDAÇÃO ADICIONAL PARA E-MOLA
-        if (comprovante.tipo === 'emola') {
-          const pontosCount = (comprovante.referencia.match(/\./g) || []).length;
-          const partes = comprovante.referencia.split('.');
-          
-          console.log(`   🔍 ATACADO: Validando E-Mola: ${comprovante.referencia}`);
-          console.log(`   📊 ATACADO: Partes encontradas: ${JSON.stringify(partes)}`);
-          
-          if (pontosCount !== 2) {
-            console.log(`   ❌ ATACADO: ERRO - E-Mola deve ter exatamente 2 pontos! Encontrados: ${pontosCount}`);
-          }
-          
-          if (partes.length !== 3) {
-            console.log(`   ❌ ATACADO: ERRO - E-Mola deve ter 3 partes! Encontradas: ${partes.length}`);
-          } else {
-            const parte1 = partes[0];
-            const parte2 = partes[1];
-            const parte3 = partes[2];
-            
-            const prefixoOK = /^[A-Z]{2}/.test(parte1);
-            const dataOK = /^\d{6}$/.test(parte1.substring(2));
-            const horaOK = /^\d{4}$/.test(parte2);
-            const codigoOK = parte3.length >= 5;
-            
-            console.log(`   🔍 ATACADO: Prefixo (2 letras): ${prefixoOK} - "${parte1.substring(0,2)}"`);
-            console.log(`   🔍 ATACADO: Data (6 dígitos): ${dataOK} - "${parte1.substring(2)}"`);
-            console.log(`   🔍 ATACADO: Hora (4 dígitos): ${horaOK} - "${parte2}"`);
-            console.log(`   🔍 ATACADO: Código (5+ chars): ${codigoOK} - "${parte3}" (${parte3.length} chars)`);
-            
-            if (prefixoOK && dataOK && horaOK && codigoOK) {
-              console.log(`   ✅ ATACADO: E-Mola com padrão CORRETO!`);
-            } else {
-              console.log(`   ⚠️ ATACADO: E-Mola pode estar INCOMPLETO!`);
-              if (!codigoOK) {
-                console.log(`   🚨 ATACADO: Terceira parte muito curta (${parte3.length} chars) - pode ter sido cortada!`);
-              }
-            }
-          }
-        }
-        
+        // VERIFICAR SE HÁ LEGENDA COM NÚMEROS
         if (temLegendaValida) {
           console.log(`   🔍 ATACADO: ANALISANDO LEGENDA DA IMAGEM...`);
           
-          const numeroLegenda = this.extrairNumeroDeLegenda(legendaImagem);
+          const numeros = this.extrairNumerosSimples(legendaImagem);
           
-          if (numeroLegenda && numeroLegenda.multiplos) {
-            console.log(`   ❌ ATACADO: Múltiplos números na legenda não permitidos`);
-            return {
-              sucesso: false,
-              tipo: 'multiplos_numeros_nao_permitido',
-              numeros: numeroLegenda.numeros,
-              mensagem: 'Sistema atacado aceita apenas UM número por vez.'
-            };
-          }
-          
-          if (numeroLegenda) {
-            console.log(`   🎯 ATACADO: IMAGEM + NÚMERO NA LEGENDA DETECTADOS!`);
-            console.log(`   💰 ATACADO: Comprovante da imagem: ${comprovante.referencia} - ${comprovante.valor}MT`);
-            console.log(`   📱 ATACADO: Número da legenda: ${numeroLegenda}`);
+          if (numeros.length > 0) {
+            console.log(`   🎯 ATACADO: IMAGEM + NÚMEROS NA LEGENDA DETECTADOS!`);
+            console.log(`   💰 Comprovante da imagem: ${comprovante.referencia} - ${comprovante.valor}MT`);
+            console.log(`   📱 Números da legenda: ${numeros.join(', ')}`);
             
-            const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
-            
-            if (megasCalculados) {
-              const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLegenda}`;
-              console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${resultado}`);
-              return { 
-                sucesso: true, 
-                dadosCompletos: resultado,
-                tipo: 'numero_processado',
-                numero: numeroLegenda,
-                megas: megasCalculados.megas,
-                valorPago: comprovante.valor,
-                fonte: 'imagem_com_legenda_melhorada'
-              };
+            if (numeros.length === 1) {
+              // CORREÇÃO: Calcular megas antes de criar dados completos
+              const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+              
+              if (megasCalculados) {
+                const dadosCompletos = `${comprovante.referencia}|${megasCalculados.quantidade}|${numeros[0]}`;
+                console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${dadosCompletos}`);
+                return { 
+                  sucesso: true, 
+                  dadosCompletos: dadosCompletos,
+                  tipo: 'numero_processado',
+                  numero: numeros[0],
+                  megas: megasCalculados.megas,
+                  fonte: 'imagem_com_legenda'
+                };
+              } else {
+                console.log(`   ❌ ATACADO: Valor ${comprovante.valor}MT não encontrado na tabela`);
+                return {
+                  sucesso: false,
+                  tipo: 'valor_nao_encontrado_na_tabela',
+                  valor: comprovante.valor,
+                  mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
+                };
+              }
             } else {
-              console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
+              // Múltiplos números detectados - não permitido no sistema atacado
+              console.log(`   ❌ ATACADO: Múltiplos números na legenda não permitidos`);
               return {
                 sucesso: false,
-                tipo: 'valor_nao_encontrado_na_tabela',
-                valor: comprovante.valor,
-                mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis`
+                tipo: 'multiplos_numeros_nao_permitido',
+                numeros: numeros,
+                mensagem: 'Sistema atacado aceita apenas UM número por vez.'
               };
             }
-          } else {
-            console.log(`   ❌ ATACADO: Nenhum número válido encontrado na legenda`);
           }
-        } else {
-          console.log(`   ⚠️ ATACADO: Legenda não disponível ou vazia`);
         }
         
+        // Sem números na legenda - processar comprovante normalmente
+        // CORREÇÃO: Calcular megas antes de salvar
         const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
         
         if (megasCalculados) {
@@ -880,33 +719,69 @@ Para M-Pesa (case original):
             referencia: comprovante.referencia,
             valor: comprovante.valor,
             megas: megasCalculados.megas,
-            mensagem: `✅ *COMPROVANTE PROCESSADO!*\n📋 *REF:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n📊 *MEGAS:* ${megasCalculados.megas}\n\n📱 Agora envie UM número para receber os megas.`
+            mensagem: `Comprovante da imagem processado! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
           };
         } else {
+          console.log(`   ❌ ATACADO: Valor ${comprovante.valor}MT não encontrado na tabela`);
           return {
             sucesso: false,
             tipo: 'valor_nao_encontrado_na_tabela',
             valor: comprovante.valor,
-            mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis`
+            mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
           };
         }
-        
       } else {
-        console.log(`   ❌ ATACADO: Ambas as tentativas falharam em extrair dados da imagem`);
+        console.log(`   ❌ ATACADO: IA não conseguiu extrair dados da imagem`);
         return {
           sucesso: false,
-          tipo: 'imagem_nao_reconhecida_melhorada',
-          mensagem: `❌ *NÃO CONSEGUI LER A IMAGEM!*\n\n🔍 *Tentei 2 vezes com IA avançada*\n\n📸 *Possíveis problemas:*\n• Imagem muito escura/clara/borrada\n• Texto muito pequeno ou cortado\n• Comprovante incompleto\n• Formato não suportado\n\n💡 *Soluções:*\n• Tire uma foto mais clara e focada\n• Certifique-se que TODO o comprovante está visível\n• Aumente o brilho se estiver escuro\n• Ou envie o comprovante como texto copiado`
+          tipo: 'imagem_nao_reconhecida',
+          mensagem: 'Não consegui ler o comprovante na imagem. Envie como texto.'
         };
       }
       
     } catch (error) {
-      console.error('❌ ATACADO: Erro ao processar imagem melhorada:', error);
+      console.error('❌ ATACADO: Erro ao processar imagem:', error);
       return {
         sucesso: false,
         tipo: 'erro_processamento_imagem',
-        mensagem: `❌ *ERRO TÉCNICO NA IA!*\n\n🔧 *Detalhes:* ${error.message}\n\n💡 *Soluções:*\n• Tente enviar a imagem novamente\n• Ou envie o comprovante como texto\n• Contate o suporte se persistir`
+        mensagem: 'Erro ao processar imagem. Tente enviar como texto.'
       };
+    }
+  }
+
+  // === EXTRAIR NÚMEROS SIMPLES ===
+  extrairNumerosSimples(legenda) {
+    if (!legenda || typeof legenda !== 'string') {
+      return [];
+    }
+    
+    // Buscar números de 9 dígitos que começam com 8
+    const regex = /\b8[0-9]{8}\b/g;
+    const numeros = legenda.match(regex) || [];
+    
+    console.log(`   🔍 ATACADO: Números encontrados na legenda: ${numeros.join(', ')}`);
+    
+    return [...new Set(numeros)]; // Remove duplicatas
+  }
+
+  // === FUNÇÃO AUXILIAR PARA EXTRAIR JSON ===
+  extrairJSON(texto) {
+    try {
+      return JSON.parse(texto);
+    } catch (e) {
+      try {
+        let limpo = texto.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        return JSON.parse(limpo);
+      } catch (e2) {
+        try {
+          const match = texto.match(/\{[\s\S]*\}/);
+          if (match) {
+            return JSON.parse(match[0]);
+          }
+        } catch (e3) {
+          return { encontrado: false };
+        }
+      }
     }
   }
 
