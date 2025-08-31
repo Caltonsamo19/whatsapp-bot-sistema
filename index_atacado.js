@@ -1246,7 +1246,9 @@ client.on('message', async (message) => {
                     const mensagemNumeros = resultadoIA.numeros.join('\n');
                     const messageSimulada = {
                         body: mensagemNumeros,
-                        reply: message.reply.bind(message)
+                        reply: message.reply.bind(message),
+                        author: remetente,
+                        from: message.from
                     };
                     
                     const resultadoDivisaoImagem = await botDivisao.processarMensagem(

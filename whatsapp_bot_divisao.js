@@ -882,6 +882,12 @@ class WhatsAppBotDivisao {
     
     // === NORMALIZAR REMETENTE PARA ARMAZENAMENTO CONSISTENTE ===
     normalizarRemetente(remetente) {
+        // Verificar se remetente é válido
+        if (!remetente || typeof remetente !== 'string') {
+            console.log(`⚠️ DIVISÃO: Remetente inválido para normalização: ${remetente}`);
+            return 'remetente_indefinido';
+        }
+        
         // Extrair apenas os dígitos e pegar os últimos 9 (número de telefone)
         const numerosApenas = remetente.replace(/\D/g, '');
         if (numerosApenas.length >= 9) {
