@@ -798,7 +798,7 @@ client.on('ready', async () => {
         console.log(`   📋 ${config.nome} (${grupoId})`);
     });
     
-    console.log('\n🔧 Comandos admin: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
+    console.log('\n🔧 Comandos admin: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo');
 });
 
 client.on('group-join', async (notification) => {
@@ -1100,6 +1100,26 @@ client.on('message', async (message) => {
                 );
                 return;
             }
+
+            // NOVO COMANDO: Verificar IDs dos grupos atuais
+            if (comando === '.debug_grupo') {
+                const grupoInfo = {
+                    id: message.from,
+                    isGrupo: message.from.endsWith('@g.us'),
+                    isMonitorado: isGrupoMonitorado(message.from),
+                    configExiste: !!getConfiguracaoGrupo(message.from)
+                };
+                
+                await message.reply(
+                    `🔍 *DEBUG GRUPO*\n\n` +
+                    `🆔 ID: \`${grupoInfo.id}\`\n` +
+                    `📱 É grupo: ${grupoInfo.isGrupo ? '✅' : '❌'}\n` +
+                    `📊 Monitorado: ${grupoInfo.isMonitorado ? '✅' : '❌'}\n` +
+                    `⚙️ Config existe: ${grupoInfo.configExiste ? '✅' : '❌'}\n\n` +
+                    `📋 *Grupos configurados:*\n${Object.keys(CONFIGURACAO_GRUPOS).join('\n')}`
+                );
+                return;
+            }
         }
 
         // === DETECÇÃO DE GRUPOS NÃO CONFIGURADOS ===
@@ -1116,7 +1136,19 @@ client.on('message', async (message) => {
         }
 
         // === PROCESSAMENTO DE GRUPOS ===
-        if (!message.from.endsWith('@g.us') || !isGrupoMonitorado(message.from)) {
+        if (!message.from.endsWith('@g.us')) {
+            // É mensagem privada, não processar aqui
+            return;
+        }
+
+        // Log para debug - verificar IDs dos grupos
+        console.log(`🔍 DEBUG: Mensagem do grupo ${message.from}`);
+        const isMonitorado = isGrupoMonitorado(message.from);
+        console.log(`🔍 DEBUG: Grupo monitorado? ${isMonitorado}`);
+        
+        if (!isMonitorado) {
+            console.log(`⚠️ DEBUG: Grupo ${message.from} não está configurado`);
+            console.log(`📋 DEBUG: Grupos configurados:`, Object.keys(CONFIGURACAO_GRUPOS));
             return;
         }
 
@@ -1263,13 +1295,22 @@ client.on('message', async (message) => {
             return;
         }
 
+        // TESTE SIMPLES - Comando de teste
+        if (/^!teste$/i.test(message.body)) {
+            console.log(`✅ DEBUG: Respondendo teste no grupo ${message.from}`);
+            await message.reply(`✅ Bot funcionando! Grupo: ${configGrupo.nome}`);
+            return;
+        }
+
         // Comandos de tabela e pagamento
         if (/tabela/i.test(message.body)) {
+            console.log(`✅ DEBUG: Respondendo tabela no grupo ${message.from}`);
             await message.reply(configGrupo.tabela);
             return;
         }
 
         if (/pagamento/i.test(message.body)) {
+            console.log(`✅ DEBUG: Respondendo pagamento no grupo ${message.from}`);
             await message.reply(configGrupo.pagamento);
             return;
         }
