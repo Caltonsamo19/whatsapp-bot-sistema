@@ -48,7 +48,20 @@ const client = new Client({
     }),
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-extensions',
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection'
+        ],
+        timeout: 60000
     }
 });
 
@@ -435,6 +448,37 @@ function obterDadosTaskerHoje() {
     });
 }
 
+// === MIDDLEWARE DE PROTEÇÃO ===
+async function withRetry(operation, maxRetries = 3, delay = 1000) {
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            
+            if (error.message && error.message.includes('Execution context was destroyed')) {
+                console.log(`⚠️ Contexto destruído detectado na tentativa ${attempt}/${maxRetries}`);
+                
+                if (attempt < maxRetries) {
+                    console.log(`🔄 Aguardando ${delay}ms antes da próxima tentativa...`);
+                    await new Promise(resolve => setTimeout(resolve, delay * attempt));
+                    continue;
+                }
+            }
+            
+            if (attempt === maxRetries) {
+                throw lastError;
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+    
+    throw lastError;
+}
+
 // === FUNÇÕES AUXILIARES ===
 
 function detectarPerguntaPorNumero(mensagem) {
@@ -479,16 +523,23 @@ async function isAdminGrupo(chatId, participantId) {
             return adminCache[chatId].admins.includes(participantId);
         }
 
-        const chat = await client.getChatById(chatId);
-        const participants = await chat.participants;
-        const admins = participants.filter(p => p.isAdmin || p.isSuperAdmin).map(p => p.id._serialized);
-        
-        adminCache[chatId] = {
-            admins: admins,
-            timestamp: Date.now()
-        };
+        return await withRetry(async () => {
+            const chat = await client.getChatById(chatId);
+            if (!chat) {
+                console.log(`⚠️ Não foi possível acessar o chat ${chatId}`);
+                return false;
+            }
 
-        return admins.includes(participantId);
+            const participants = await chat.participants || [];
+            const admins = participants.filter(p => p.isAdmin || p.isSuperAdmin).map(p => p.id._serialized);
+            
+            adminCache[chatId] = {
+                admins: admins,
+                timestamp: Date.now()
+            };
+
+            return admins.includes(participantId);
+        });
     } catch (error) {
         console.error('❌ Erro ao verificar admin do grupo:', error);
         return false;
@@ -564,13 +615,23 @@ async function aplicarModeracao(message, motivoDeteccao) {
 // === DETECÇÃO DE GRUPOS ===
 async function logGrupoInfo(chatId, evento = 'detectado') {
     try {
-        const chat = await client.getChatById(chatId);
+        const chat = await withRetry(async () => {
+            return await client.getChatById(chatId);
+        }).catch(() => {
+            console.log(`⚠️ Não foi possível acessar informações do grupo ${chatId}`);
+            return null;
+        });
+        
+        if (!chat) {
+            return null;
+        }
+
         const isGrupoMonitorado = CONFIGURACAO_GRUPOS.hasOwnProperty(chatId);
         
         console.log(`\n🔍 ═══════════════════════════════════════`);
         console.log(`📋 GRUPO ${evento.toUpperCase()}`);
         console.log(`🔍 ═══════════════════════════════════════`);
-        console.log(`📛 Nome: ${chat.name}`);
+        console.log(`📛 Nome: ${chat.name || 'N/A'}`);
         console.log(`🆔 ID: ${chatId}`);
         console.log(`👥 Participantes: ${chat.participants ? chat.participants.length : 'N/A'}`);
         console.log(`📊 Monitorado: ${isGrupoMonitorado ? '✅ SIM' : '❌ NÃO'}`);
@@ -580,7 +641,7 @@ async function logGrupoInfo(chatId, evento = 'detectado') {
             console.log(`\n🔧 PARA ADICIONAR ESTE GRUPO:`);
             console.log(`📝 Copie este código para CONFIGURACAO_GRUPOS:`);
             console.log(`\n'${chatId}': {`);
-            console.log(`    nome: '${chat.name}',`);
+            console.log(`    nome: '${chat.name || 'Nome_do_Grupo'}',`);
             console.log(`    tabela: \`SUA_TABELA_AQUI\`,`);
             console.log(`    pagamento: \`SUAS_FORMAS_DE_PAGAMENTO_AQUI\``);
             console.log(`},\n`);
@@ -590,7 +651,7 @@ async function logGrupoInfo(chatId, evento = 'detectado') {
         
         return {
             id: chatId,
-            nome: chat.name,
+            nome: chat.name || 'N/A',
             participantes: chat.participants ? chat.participants.length : 0,
             monitorado: isGrupoMonitorado
         };
@@ -693,7 +754,10 @@ async function processarFila() {
         const item = filaMensagens.shift();
 
         try {
-            await client.sendMessage(ENCAMINHAMENTO_CONFIG.numeroDestino, item.conteudo);
+            await withRetry(async () => {
+                await client.sendMessage(ENCAMINHAMENTO_CONFIG.numeroDestino, item.conteudo);
+            });
+            
             console.log(`✅ Encaminhado: ${item.conteudo.substring(0, 50)}...`);
 
             if (filaMensagens.length > 0) {
@@ -719,30 +783,22 @@ client.on('qr', (qr) => {
 });
 
 client.on('ready', async () => {
-    try {
-        console.log('✅ Bot ATACADO conectado e pronto!');
-        console.log('🧠 IA WhatsApp ATACADO ativa!');
-        console.log('📦 Sistema inteligente: Cálculo automático de megas!');
-        console.log('📊 Google Sheets ATACADO configurado!');
-        console.log('🔄 Bot de Divisão ATIVO - Múltiplos números automático!');
-        console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
-        
-        // Verificar informações do cliente
-        const clientInfo = await client.info;
-        console.log(`📱 Bot conectado como: ${clientInfo?.pushname || 'N/A'} (${clientInfo?.wid?.user || 'N/A'})`);
-        
-        await carregarHistorico();
-        
-        console.log('\n🤖 Monitorando grupos ATACADO:');
-        Object.keys(CONFIGURACAO_GRUPOS).forEach(grupoId => {
-            const config = CONFIGURACAO_GRUPOS[grupoId];
-            console.log(`   📋 ${config.nome} (${grupoId})`);
-        });
-        
-        console.log('\n🔧 Comandos admin: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
-    } catch (error) {
-        console.error('❌ Erro durante inicialização ready:', error);
-    }
+    console.log('✅ Event ready fired! Bot ATACADO conectado e pronto!');
+    console.log('🧠 IA WhatsApp ATACADO ativa!');
+    console.log('📦 Sistema inteligente: Cálculo automático de megas!');
+    console.log('📊 Google Sheets ATACADO configurado!');
+    console.log('🔄 Bot de Divisão ATIVO - Múltiplos números automático!');
+    console.log(`🔗 URL: ${GOOGLE_SHEETS_CONFIG_ATACADO.scriptUrl}`);
+    
+    await carregarHistorico();
+    
+    console.log('\n🤖 Monitorando grupos ATACADO:');
+    Object.keys(CONFIGURACAO_GRUPOS).forEach(grupoId => {
+        const config = CONFIGURACAO_GRUPOS[grupoId];
+        console.log(`   📋 ${config.nome} (${grupoId})`);
+    });
+    
+    console.log('\n🔧 Comandos admin: .ia .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual');
 });
 
 client.on('group-join', async (notification) => {
@@ -816,6 +872,11 @@ Bem-vindo(a) ao *${configGrupo.nome}*!
 
 client.on('message', async (message) => {
     try {
+        // Proteção adicional contra contextos destruídos
+        if (!client.pupBrowser || !client.pupPage) {
+            console.log('⚠️ Cliente não está pronto, ignorando mensagem');
+            return;
+        }
         const isPrivado = !message.from.endsWith('@g.us');
         const isAdmin = isAdministrador(message.from);
 
@@ -1312,8 +1373,60 @@ client.on('message', async (message) => {
     }
 });
 
-client.on('disconnected', (reason) => {
+// Variável para controlar reconexão
+let reconnecting = false;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+
+client.on('disconnected', async (reason) => {
     console.log('❌ Bot atacado desconectado:', reason);
+    
+    if (!reconnecting && reconnectAttempts < maxReconnectAttempts) {
+        reconnecting = true;
+        reconnectAttempts++;
+        
+        console.log(`🔄 Tentando reconectar... (Tentativa ${reconnectAttempts}/${maxReconnectAttempts})`);
+        
+        setTimeout(async () => {
+            try {
+                await client.initialize();
+                console.log('✅ Reconectado com sucesso!');
+                reconnecting = false;
+                reconnectAttempts = 0;
+            } catch (error) {
+                console.error('❌ Falha na reconexão:', error);
+                reconnecting = false;
+                
+                if (reconnectAttempts >= maxReconnectAttempts) {
+                    console.log('❌ Máximo de tentativas de reconexão atingido. Reinicialize manualmente.');
+                }
+            }
+        }, 5000 * reconnectAttempts); // Delay progressivo
+    }
+});
+
+// Evento para detectar quando a sessão é destruída
+client.on('auth_failure', (message) => {
+    console.error('❌ Falha na autenticação:', message);
+    reconnectAttempts = 0; // Reset para permitir novas tentativas
+});
+
+// Capturar erros do Puppeteer
+client.on('change_state', (state) => {
+    console.log('🔄 Estado do cliente mudou para:', state);
+});
+
+// Adicionar tratamento para erros de protocolo
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Promise rejeitada:', reason);
+    
+    // Se for erro de contexto destruído, tentar reconectar
+    if (reason && reason.message && reason.message.includes('Execution context was destroyed')) {
+        console.log('🔄 Erro de contexto detectado, forçando reconexão...');
+        if (!reconnecting) {
+            client.emit('disconnected', 'Execution context destroyed');
+        }
+    }
 });
 
 // === INICIALIZAÇÃO ===
@@ -1340,9 +1453,6 @@ process.on('uncaughtException', (error) => {
     console.error('❌ Erro não capturado:', error);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Promise rejeitada:', reason);
-});
 
 process.on('SIGINT', async () => {
     console.log('\n💾 Salvando antes de sair...');
