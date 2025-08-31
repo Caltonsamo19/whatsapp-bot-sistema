@@ -519,8 +519,9 @@ class WhatsAppBotDivisao {
             headers: { 'Content-Type': 'application/json' }
         });
         
-        if (!response.data || !response.data.includes('Sucesso')) {
-            throw new Error(`Erro ao salvar pedido: ${response.data}`);
+        const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        if (!response.data || !responseText.includes('Sucesso')) {
+            throw new Error(`Erro ao salvar pedido: ${responseText}`);
         }
         
         console.log(`📋 DIVISÃO: Pedido salvo - ${referencia}|${megas}|${numero}`);
