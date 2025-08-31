@@ -1153,6 +1153,34 @@ client.on('message', async (message) => {
             }
         }
 
+        // === COMANDOS BÁSICOS (PARA TODAS AS MENSAGENS) ===
+        const textoMensagem = message.body ? message.body.toLowerCase().trim() : '';
+        
+        if (textoMensagem === 'teste') {
+            await message.reply('🤖 Bot funcionando normalmente!');
+            return;
+        }
+        
+        if (textoMensagem === 'tabela') {
+            const configGrupoBasico = getConfiguracaoGrupo(message.from);
+            if (configGrupoBasico && configGrupoBasico.tabela) {
+                await message.reply(configGrupoBasico.tabela);
+            } else {
+                await message.reply('❌ Tabela não configurada para este grupo.');
+            }
+            return;
+        }
+        
+        if (textoMensagem === 'pagamento') {
+            const configGrupoBasico = getConfiguracaoGrupo(message.from);
+            if (configGrupoBasico && configGrupoBasico.pagamento) {
+                await message.reply(configGrupoBasico.pagamento);
+            } else {
+                await message.reply('❌ Informações de pagamento não configuradas para este grupo.');
+            }
+            return;
+        }
+
         // === PROCESSAMENTO DE GRUPOS ===
         if (!message.from.endsWith('@g.us') || !isGrupoMonitorado(message.from)) {
             return;
@@ -1161,34 +1189,6 @@ client.on('message', async (message) => {
         const configGrupo = getConfiguracaoGrupo(message.from);
         if (!configGrupo || message.fromMe) {
             return;
-        }
-
-        // ============================================================================
-        // NOVA LÓGICA: BOT DE DIVISÃO TEM PRIORIDADE ABSOLUTA
-        // Processa ANTES da IA para aplicar filtros inteligentes
-        // ============================================================================
-        
-        const remetente = message.author || message.from;
-        const resultadoDivisao = await botDivisao.processarMensagem(message, remetente, message.from);
-        
-        if (resultadoDivisao) {
-            console.log('🔄 DIVISÃO: Mensagem processada pelo bot de divisão');
-            
-            // Se o bot de divisão retornou uma resposta, enviar
-            if (resultadoDivisao.resposta) {
-                await message.reply(resultadoDivisao.resposta);
-            }
-            
-            // Se foi processado com sucesso, não continuar para o bot original
-            if (resultadoDivisao.processado) {
-                console.log(`✅ DIVISÃO: ${resultadoDivisao.sucessos}/${resultadoDivisao.total} pedidos criados`);
-                return; // IMPORTANTE: Sair aqui, não processar no bot original
-            }
-            
-            // Se retornou uma resposta mas não foi processado, também sair
-            if (resultadoDivisao.resposta) {
-                return;
-            }
         }
 
         // === MODERAÇÃO ===
@@ -1331,6 +1331,30 @@ client.on('message', async (message) => {
                 `🤖 *Sistema atacado - valor integral!*`
             );
             return;
+        }
+
+        // === BOT DE DIVISÃO (ANTES DA IA) ===
+        const remetente = message.author || message.from;
+        const resultadoDivisao = await botDivisao.processarMensagem(message, remetente, message.from);
+        
+        if (resultadoDivisao) {
+            console.log('🔄 DIVISÃO: Mensagem processada pelo bot de divisão');
+            
+            // Se o bot de divisão retornou uma resposta, enviar
+            if (resultadoDivisao.resposta) {
+                await message.reply(resultadoDivisao.resposta);
+            }
+            
+            // Se foi processado com sucesso, não continuar para o bot original
+            if (resultadoDivisao.processado) {
+                console.log(`✅ DIVISÃO: ${resultadoDivisao.sucessos}/${resultadoDivisao.total} pedidos criados`);
+                return; // IMPORTANTE: Sair aqui, não processar no bot original
+            }
+            
+            // Se retornou uma resposta mas não foi processado, também sair
+            if (resultadoDivisao.resposta) {
+                return;
+            }
         }
 
         // === PROCESSAMENTO COM IA ===
