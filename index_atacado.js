@@ -1219,6 +1219,7 @@ client.on('message', async (message) => {
                     console.log(`📝 Legenda da imagem detectada: ${legendaImagem.substring(0, 50)}...`);
                 }
                 
+                const remetente = message.author || message.from;
                 const resultadoIA = await ia.processarMensagemBot(media.data, remetente, 'imagem', configGrupo, legendaImagem);
                 
                 // === VERIFICAÇÃO ESPECIAL: SE A IA DETECTOU MÚLTIPLOS NÚMEROS ===

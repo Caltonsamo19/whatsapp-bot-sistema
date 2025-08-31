@@ -506,10 +506,13 @@ class WhatsAppBotDivisao {
         const timestamp = new Date().toLocaleString('pt-BR');
         const dadosCompletos = `${referencia}|${megas}|${numero}|${timestamp}`;
         
+        // Debug dos parâmetros
+        console.log(`🔍 DIVISÃO: Debug envio - grupoId: ${grupoId}, referencia: ${referencia}, megas: ${megas}, numero: ${numero}`);
+        
         const dados = {
             grupo_id: grupoId,
             timestamp: timestamp,
-            transacao: dadosCompletos,
+            dados: dadosCompletos,  // Mudança: 'transacao' para 'dados'
             sender: "WhatsApp-Bot-Divisao",
             message: `Pedido dividido: ${dadosCompletos}`
         };
@@ -532,10 +535,13 @@ class WhatsAppBotDivisao {
         const timestamp = new Date().toLocaleString('pt-BR');
         const dadosCompletos = `${referencia}|${valor}|${numero}|${timestamp}`;
         
+        // Debug dos parâmetros
+        console.log(`🔍 DIVISÃO: Debug pagamento - grupoId: ${grupoId}, referencia: ${referencia}, valor: ${valor}, numero: ${numero}`);
+        
         const dados = {
             grupo_id: grupoId,
             timestamp: timestamp,
-            transacao: dadosCompletos,
+            dados: dadosCompletos,  // Mudança: 'transacao' para 'dados'
             sender: "WhatsApp-Bot-Divisao",
             message: `Pagamento dividido: ${dadosCompletos}`
         };
