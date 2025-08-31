@@ -694,12 +694,13 @@ Se não conseguires ler a imagem ou extrair os dados:
                 };
               }
             } else {
-              // Múltiplos números detectados - não permitido no sistema atacado
+              // Múltiplos números detectados - redirecionar para bot de divisão
               console.log(`   ❌ ATACADO: Múltiplos números na legenda não permitidos`);
               return {
                 sucesso: false,
                 tipo: 'multiplos_numeros_nao_permitido',
                 numeros: numeros,
+                comprovativo: comprovante, // INCLUIR dados do comprovativo
                 mensagem: 'Sistema atacado aceita apenas UM número por vez.'
               };
             }

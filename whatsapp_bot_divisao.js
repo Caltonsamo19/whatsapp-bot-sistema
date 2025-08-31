@@ -289,24 +289,33 @@ class WhatsAppBotDivisao {
     // === BUSCAR COMPROVATIVO NO HISTÓRICO (SIMULADO) ===
     async buscarComprovanteRecenteHist(remetente) {
         console.log(`🔍 DIVISÃO: Buscando comprovativo para remetente: ${remetente}`);
-        console.log(`📋 DIVISÃO: Comprovativos memorizados:`, Object.keys(this.comprovantesMemorizados));
+        
+        // Mostrar detalhes dos comprovativos memorizados
+        const chaves = Object.keys(this.comprovantesMemorizados);
+        console.log(`📋 DIVISÃO: ${chaves.length} comprovativos memorizados:`);
+        chaves.forEach(chave => {
+            const comp = this.comprovantesMemorizados[chave];
+            const idade = ((Date.now() - comp.timestamp) / 60000).toFixed(1);
+            console.log(`   • ${chave}: ${comp.referencia} (${comp.valor}MT) - ${idade}min atrás`);
+        });
         
         // Normalizar o remetente atual para busca
         const remetenteNormalizado = this.normalizarRemetente(remetente);
-        console.log(`🔄 DIVISÃO: Remetente normalizado para busca: ${remetenteNormalizado}`);
+        console.log(`🔄 DIVISÃO: Remetente original: ${remetente}`);
+        console.log(`🔄 DIVISÃO: Remetente normalizado: ${remetenteNormalizado}`);
         
         // Buscar usando a chave normalizada
         const comprovativo = this.comprovantesMemorizados[remetenteNormalizado];
         // Verificar se ainda está dentro do prazo (30 min)
         if (comprovativo && (Date.now() - comprovativo.timestamp) <= 1800000) {
             console.log(`✅ DIVISÃO: Comprovativo encontrado dentro do prazo!`);
-            console.log(`   Ref: ${comprovativo.referencia}, Valor: ${comprovativo.valor}MT`);
+            console.log(`   Ref: ${comprovativo.referencia}, Valor: ${comprovativo.valor}MT, Fonte: ${comprovativo.fonte || 'não definida'}`);
             return comprovativo;
         } else if (comprovativo) {
             const minutosExpiracao = (Date.now() - comprovativo.timestamp) / 60000;
             console.log(`❌ DIVISÃO: Comprovativo encontrado mas expirado (${minutosExpiracao.toFixed(1)} min)`);
         } else {
-            console.log(`❌ DIVISÃO: Nenhum comprovativo encontrado para este remetente`);
+            console.log(`❌ DIVISÃO: Nenhum comprovativo encontrado para remetente normalizado "${remetenteNormalizado}"`);
         }
         
         return null;

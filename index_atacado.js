@@ -1226,6 +1226,22 @@ client.on('message', async (message) => {
                 if (resultadoIA.tipo === 'multiplos_numeros_nao_permitido') {
                     console.log('🔄 IA detectou múltiplos números em imagem, redirecionando para bot de divisão...');
                     
+                    // SE HAZ COMPROVATIVO DA IMAGEM, MEMORIZAR NO BOT DE DIVISÃO
+                    if (resultadoIA.comprovativo) {
+                        console.log(`💰 Memorizando comprovativo da imagem: ${resultadoIA.comprovativo.referencia} - ${resultadoIA.comprovativo.valor}MT`);
+                        
+                        // Memorizar comprovativo no bot de divisão
+                        const remetenteNormalizado = botDivisao.normalizarRemetente(remetente);
+                        botDivisao.comprovantesMemorizados[remetenteNormalizado] = {
+                            referencia: resultadoIA.comprovativo.referencia,
+                            valor: parseInt(resultadoIA.comprovativo.valor),
+                            timestamp: Date.now(),
+                            grupoId: message.from,
+                            fonte: 'imagem_com_multiplos_numeros'
+                        };
+                        console.log(`✅ Comprovativo memorizado para ${remetenteNormalizado}`);
+                    }
+                    
                     // Criar mensagem simulada com os números detectados
                     const mensagemNumeros = resultadoIA.numeros.join('\n');
                     const messageSimulada = {
