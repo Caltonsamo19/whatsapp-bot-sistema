@@ -195,33 +195,75 @@ class WhatsAppBotDivisao {
         return matches && matches.length > 0;
     }
     
-    // === EXTRAIR MÚLTIPLOS NÚMEROS ===
+    // === EXTRAIR MÚLTIPLOS NÚMEROS (MODIFICADO - APENAS FINAL DA MENSAGEM) ===
     extrairMultiplosNumeros(mensagem, grupoId = null) {
         const regex = /(?:\+258\s*)?8[0-9]{8}/g;
         const matches = mensagem.match(regex) || [];
         
         if (matches.length === 0) return null;
         
-        // Limpar e filtrar números válidos
-        const numerosLimpos = matches.map(num => this.limparNumero(num))
-                                    .filter(num => num && /^8[0-9]{8}$/.test(num));
+        console.log(`📱 DIVISÃO: Números brutos encontrados: [${matches.join(', ')}]`);
+        
+        const tamanhoMensagem = mensagem.length;
+        const limiteInicioFinal = tamanhoMensagem * 0.7; // Últimos 30% da mensagem
+        
+        // NOVA LÓGICA: Filtrar apenas números que estão no final da mensagem
+        const numerosNoFinal = [];
+        
+        for (const numeroOriginal of matches) {
+            const numeroLimpo = this.limparNumero(numeroOriginal);
+            if (!numeroLimpo || !/^8[0-9]{8}$/.test(numeroLimpo)) continue;
+            
+            const posicao = mensagem.indexOf(numeroOriginal);
+            const percentualPosicao = (posicao / tamanhoMensagem) * 100;
+            
+            console.log(`📱 DIVISÃO: Analisando ${numeroLimpo} na posição ${posicao}/${tamanhoMensagem} (${percentualPosicao.toFixed(1)}%)`);
+            
+            // NOVA REGRA: Apenas números que estão no final da mensagem (>70%)
+            if (posicao < limiteInicioFinal) {
+                console.log(`❌ DIVISÃO: REJEITADO por estar no meio/início da mensagem: ${numeroLimpo} (posição ${percentualPosicao.toFixed(1)}%)`);
+                continue;
+            }
+            
+            // Verificação adicional de contexto de pagamento
+            const contextoBefore = mensagem.substring(Math.max(0, posicao - 30), posicao).toLowerCase();
+            const contextoAfter = mensagem.substring(posicao + numeroOriginal.length, posicao + numeroOriginal.length + 30).toLowerCase();
+            
+            const indicadoresPagamento = [
+                'transferiste', 'taxa foi', 'para o número', 'para número', 'para conta',
+                'conta de', 'beneficiário', 'destinatario', 'nome:', 'para 8',
+                'enviaste para', 'pagamento para', 'destinatário'
+            ];
+            
+            const eNumeroPagamento = indicadoresPagamento.some(indicador => 
+                contextoBefore.includes(indicador) || contextoAfter.includes(indicador)
+            );
+            
+            if (eNumeroPagamento) {
+                console.log(`❌ DIVISÃO: REJEITADO por contexto de pagamento mesmo estando no final: ${numeroLimpo}`);
+                continue;
+            }
+            
+            numerosNoFinal.push(numeroLimpo);
+            console.log(`✅ DIVISÃO: ACEITO por estar no final da mensagem (${percentualPosicao.toFixed(1)}%): ${numeroLimpo}`);
+        }
         
         // Remover duplicatas
-        const numerosUnicos = [...new Set(numerosLimpos)];
+        const numerosUnicos = [...new Set(numerosNoFinal)];
         
-        // === FILTRAR NÚMEROS QUE NÃO SÃO PARA DIVISÃO ===
-        const numerosFiltrados = this.filtrarNumerosComprovante(numerosUnicos, mensagem, grupoId);
+        // === FILTRAR NÚMEROS DE PAGAMENTO DO GRUPO ===
+        const numerosFiltrados = this.filtrarNumerosPagamentoGrupo(numerosUnicos, grupoId);
         
-        console.log(`📱 DIVISÃO: ${numerosUnicos.length} números únicos encontrados: [${numerosUnicos.join(', ')}]`);
+        console.log(`📱 DIVISÃO: ${numerosUnicos.length} números únicos no final: [${numerosUnicos.join(', ')}]`);
         console.log(`📱 DIVISÃO: ${numerosFiltrados.length} números aceitos para divisão: [${numerosFiltrados.join(', ')}]`);
         
         return numerosFiltrados.length > 0 ? numerosFiltrados : null;
     }
     
-    // === FILTRAR NÚMEROS DE COMPROVANTE ===
-    filtrarNumerosComprovante(numeros, mensagem, grupoId = null) {
+    // === FILTRAR NÚMEROS DE PAGAMENTO DO GRUPO ===
+    filtrarNumerosPagamentoGrupo(numeros, grupoId = null) {
         return numeros.filter(numero => {
-            // 1. VERIFICAR SE É NÚMERO DE PAGAMENTO DO GRUPO
+            // VERIFICAR SE É NÚMERO DE PAGAMENTO DO GRUPO
             if (grupoId && this.CONFIGURACAO_GRUPOS[grupoId] && this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento) {
                 const numerosPagamentoGrupo = this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento;
                 // Testar número completo e versões sem prefixo
@@ -231,48 +273,20 @@ class WhatsAppBotDivisao {
                 if (numerosPagamentoGrupo.includes(numero) || 
                     numerosPagamentoGrupo.includes(numeroSemPrefixo) || 
                     numerosPagamentoGrupo.includes(numeroCompleto)) {
-                    console.log(`🚫 DIVISÃO: ${numero} ignorado (número de pagamento do grupo: ${numerosPagamentoGrupo})`);
+                    console.log(`🚫 DIVISÃO: ${numero} ignorado (número de pagamento do grupo)`);
                     return false;
                 }
             }
             
-            // 2. CONTEXTOS ESPECÍFICOS DE PAGAMENTO
-            const contextosPagamento = [
-                new RegExp(`para\\s+${numero}\\s*[-,]`, 'i'),        // "para 840326152 - VASCO" ou "para 840326152, nome"
-                new RegExp(`conta\\s+${numero}`, 'i'),               // "conta 840326152"
-                new RegExp(`M-Pesa.*?${numero}.*?-`, 'i'),           // "M-Pesa ... 840326152 - NOME"
-                new RegExp(`eMola.*?${numero}.*?-`, 'i'),            // "eMola ... 840326152 - NOME"
-                new RegExp(`${numero}\\s*-\\s*(VASCO|Mahumane|Alice|Natacha)`, 'i'), // "840326152 - NOME"
-                new RegExp(`Transferiste.*?para\\s+${numero}\\s*-`, 'i') // "Transferiste ... para 840326152 - NOME"
-            ];
-            
-            // Verificar contextos específicos apenas se não há múltiplos números
-            if (numeros.length === 1) {
-                for (const padrao of contextosPagamento) {
-                    if (padrao.test(mensagem)) {
-                        console.log(`🚫 DIVISÃO: ${numero} ignorado (contexto de pagamento específico)`);
-                        return false;
-                    }
-                }
-            } else {
-                // Para múltiplos números, verificar apenas padrões muito específicos
-                const contextosMuitoEspecificos = [
-                    new RegExp(`Transferiste.*?para\\s+${numero}\\s*-`, 'i'), // "Transferiste ... para 840326152 - NOME"
-                    new RegExp(`para\\s+${numero}\\s*-\\s*(VASCO|Mahumane|Alice|Natacha)`, 'i') // "para 840326152 - NOME_ESPECÍFICO"
-                ];
-                
-                for (const padrao of contextosMuitoEspecificos) {
-                    if (padrao.test(mensagem)) {
-                        console.log(`🚫 DIVISÃO: ${numero} ignorado (contexto muito específico de pagamento)`);
-                        return false;
-                    }
-                }
-                
-                console.log(`✅ DIVISÃO: ${numero} aceito (múltiplos números detectados - filtro permissivo)`);
-            }
-            
+            console.log(`✅ DIVISÃO: ${numero} aceito para divisão`);
             return true; // Número válido para divisão
         });
+    }
+    
+    // === FILTRAR NÚMEROS DE COMPROVANTE (MANTIDA PARA COMPATIBILIDADE) ===
+    filtrarNumerosComprovante(numeros, mensagem, grupoId = null) {
+        // Esta função agora apenas chama a nova função simplificada
+        return this.filtrarNumerosPagamentoGrupo(numeros, grupoId);
     }
     
     // === LIMPAR NÚMERO ===
