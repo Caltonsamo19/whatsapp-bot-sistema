@@ -315,12 +315,32 @@ async function enviarParaGoogleSheets(dadosCompletos, grupoId, timestamp) {
             }
         });
         
+        // Log detalhado da resposta para debug
+        console.log(`🔍 DEBUG Google Sheets Response:`, {
+            status: response.status,
+            statusText: response.statusText,
+            data: response.data,
+            dataType: typeof response.data,
+            hasSuccess: response.data?.success,
+            hasError: response.data?.error
+        });
+        
         if (response.data && response.data.success) {
             console.log(`✅ Google Sheets: Dados enviados! Row: ${response.data.row}`);
             console.log(`📋 Dados inseridos: ${response.data.dados}`);
             return { sucesso: true, row: response.data.row };
+        } else if (response.data && response.data.duplicado) {
+            // Caso especial: Pagamento duplicado
+            console.log(`⚠️ Google Sheets: Pagamento duplicado - ${response.data.referencia}`);
+            return { 
+                sucesso: false, 
+                duplicado: true, 
+                referencia: response.data.referencia,
+                erro: `Pagamento duplicado: ${response.data.referencia}` 
+            };
         } else {
-            throw new Error(response.data?.error || 'Resposta inválida');
+            const errorMsg = response.data?.error || `Resposta inválida: ${JSON.stringify(response.data)}`;
+            throw new Error(errorMsg);
         }
         
     } catch (error) {
@@ -441,7 +461,7 @@ function calcularValorEsperadoDosMegas(megas, grupoId) {
 }
 
 // === FUNÇÃO PRINCIPAL PARA TASKER (SEM VERIFICAÇÃO - JÁ VERIFICADO ANTES) ===
-async function enviarParaTasker(referencia, megas, numero, grupoId) {
+async function enviarParaTasker(referencia, megas, numero, grupoId, messageContext = null) {
     const timestamp = new Date().toLocaleString('pt-BR', {
         year: 'numeric',
         month: '2-digit', 
@@ -480,6 +500,27 @@ async function enviarParaTasker(referencia, megas, numero, grupoId) {
         dadosParaTasker[dadosParaTasker.length - 1].metodo = 'google_sheets';
         dadosParaTasker[dadosParaTasker.length - 1].row = resultado.row;
         console.log(`✅ [${grupoNome}] Enviado para Google Sheets! Row: ${resultado.row}`);
+    } else if (resultado.duplicado) {
+        // Caso especial: Pagamento duplicado
+        console.log(`⚠️ [${grupoNome}] Pagamento DUPLICADO detectado: ${resultado.referencia}`);
+        dadosParaTasker[dadosParaTasker.length - 1].metodo = 'duplicado';
+        dadosParaTasker[dadosParaTasker.length - 1].status = 'duplicado';
+        
+        // Notificar no WhatsApp se houver contexto da mensagem
+        if (messageContext) {
+            try {
+                await messageContext.reply(
+                    `⚠️ *PAGAMENTO DUPLICADO*\n\n` +
+                    `🔍 **Referência:** ${resultado.referencia}\n` +
+                    `📋 Este pagamento já foi processado anteriormente\n\n` +
+                    `✅ **Não é necessário reenviar**\n` +
+                    `💡 O pedido original já está na fila de processamento`
+                );
+            } catch (error) {
+                console.error(`❌ Erro ao enviar notificação de duplicado:`, error);
+            }
+        }
+        
     } else {
         console.log(`🔄 [${grupoNome}] Google Sheets falhou, usando WhatsApp backup...`);
         enviarViaWhatsAppTasker(dadosCompletos, grupoNome);
@@ -1404,7 +1445,7 @@ client.on('message', async (message) => {
                         if (!valorEsperado) {
                             console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
                             
-                            await enviarParaTasker(referencia, megasConvertido, numero, message.from);
+                            await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
                             await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                             
                             if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -1444,7 +1485,7 @@ client.on('message', async (message) => {
                         console.log(`✅ INDIVIDUAL: Pagamento confirmado para screenshot! Processando...`);
                         
                         // 3. Se pagamento confirmado, processar normalmente
-                        await enviarParaTasker(referencia, megasConvertido, numero, message.from);
+                        await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
                         await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                         
                         if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -1587,7 +1628,7 @@ client.on('message', async (message) => {
                 if (!valorEsperado) {
                     console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
                     
-                    await enviarParaTasker(referencia, megasConvertido, numero, message.from);
+                    await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
                     await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                     
                     if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -1627,7 +1668,7 @@ client.on('message', async (message) => {
                 console.log(`✅ INDIVIDUAL: Pagamento confirmado para texto! Processando...`);
                 
                 // 3. Se pagamento confirmado, processar normalmente
-                await enviarParaTasker(referencia, megasConvertido, numero, message.from);
+                await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
                 await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                 
                 if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
