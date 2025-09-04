@@ -197,8 +197,12 @@ class WhatsAppBotDivisao {
         ];
         
         const patternsValor = [
-            /Transferiste\s+(\d+(?:[.,]\d+)?)MT/i,
-            /(\d+(?:[.,]\d+)?)\s*MT/i
+            // Padrão específico para "Transferiste" com vírgulas como separador de milhares
+            /Transferiste\s+(\d+(?:,\d{3})*(?:\.\d+)?)MT/i,  // 1,250.00MT ou 1,000MT
+            /Transferiste\s+(\d+,\d{3}(?:\.\d{2})?)MT/i,      // 1,250.00MT específico
+            /Transferiste\s+(\d+(?:[.,]\d+)?)MT/i,            // Padrão original como fallback
+            // Padrão genérico como última opção (pode pegar outros valores na mensagem)
+            /(\d+(?:,\d{3})*(?:\.\d+)?)\s*MT/i               // 1,250.00 MT (genérico)
         ];
         
         let referencia = null;
