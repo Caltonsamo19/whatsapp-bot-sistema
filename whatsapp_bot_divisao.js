@@ -246,25 +246,146 @@ class WhatsAppBotDivisao {
     
     // === EXTRAIR MÚLTIPLOS NÚMEROS ===
     extrairMultiplosNumeros(mensagem, grupoId = null) {
+        // 1. SEPARAR MENSAGEM DE CONFIRMAÇÃO DOS PEDIDOS
+        const partesPedidos = this.separarConfirmacaoDosPedidos(mensagem);
+        
+        console.log(`📱 DIVISÃO: Confirmação encontrada: ${partesPedidos.temConfirmacao ? 'SIM' : 'NÃO'}`);
+        console.log(`📱 DIVISÃO: Parte pedidos: "${partesPedidos.partePedidos.substring(0, 100)}..."`);
+        
+        // 2. EXTRAIR NÚMEROS APENAS DA PARTE DOS PEDIDOS
         const regex = /(?:\+258\s*)?8[0-9]{8}/g;
-        const matches = mensagem.match(regex) || [];
+        const matches = partesPedidos.partePedidos.match(regex) || [];
         
-        if (matches.length === 0) return null;
+        if (matches.length === 0) {
+            console.log(`❌ DIVISÃO: Nenhum número encontrado na parte dos pedidos`);
+            return null;
+        }
         
-        // Limpar e filtrar números válidos
+        // 3. LIMPAR E FILTRAR NÚMEROS VÁLIDOS
         const numerosLimpos = matches.map(num => this.limparNumero(num))
                                     .filter(num => num && /^8[0-9]{8}$/.test(num));
         
-        // Remover duplicatas
+        // 4. REMOVER DUPLICATAS
         const numerosUnicos = [...new Set(numerosLimpos)];
         
-        // === FILTRAR NÚMEROS QUE NÃO SÃO PARA DIVISÃO ===
-        const numerosFiltrados = this.filtrarNumerosComprovante(numerosUnicos, mensagem, grupoId);
+        // 5. FILTRAR NÚMEROS DE PAGAMENTO DO GRUPO (ainda necessário)
+        const numerosFiltrados = this.filtrarNumerosPagamentoGrupo(numerosUnicos, grupoId);
         
-        console.log(`📱 DIVISÃO: ${numerosUnicos.length} números únicos encontrados: [${numerosUnicos.join(', ')}]`);
-        console.log(`📱 DIVISÃO: ${numerosFiltrados.length} números aceitos para divisão: [${numerosFiltrados.join(', ')}]`);
+        console.log(`📱 DIVISÃO: ${matches.length} números encontrados na parte pedidos`);
+        console.log(`📱 DIVISÃO: ${numerosLimpos.length} números válidos após limpeza`);
+        console.log(`📱 DIVISÃO: ${numerosUnicos.length} números únicos: [${numerosUnicos.join(', ')}]`);
+        console.log(`📱 DIVISÃO: ${numerosFiltrados.length} números finais aceitos: [${numerosFiltrados.join(', ')}]`);
         
         return numerosFiltrados.length > 0 ? numerosFiltrados : null;
+    }
+    
+    // === SEPARAR CONFIRMAÇÃO DOS PEDIDOS ===
+    separarConfirmacaoDosPedidos(mensagem) {
+        // Detectar se há mensagem de confirmação
+        const temConfirmacao = /^(confirmado|id\s)/i.test(mensagem.trim());
+        
+        if (!temConfirmacao) {
+            // Se não há confirmação, toda mensagem é considerada parte dos pedidos
+            return {
+                temConfirmacao: false,
+                parteConfirmacao: '',
+                partePedidos: mensagem
+            };
+        }
+        
+        // Padrões que indicam o FIM da mensagem de confirmação
+        const padroesFimConfirmacao = [
+            // Fim por ponto seguido de quebra de linha ou espaço
+            /\.\s*\n/,
+            /\.\s*$/,
+            
+            // Fim por "Saldo" (comum em mensagens M-Pesa/eMola)
+            /saldo[\s\S]*?\n/i,
+            /saldo[\s\S]*?$/i,
+            
+            // Fim por "Taxa" ou "Tarifa"
+            /taxa[\s\S]*?\n/i,
+            /taxa[\s\S]*?$/i,
+            /tarifa[\s\S]*?\n/i,
+            /tarifa[\s\S]*?$/i,
+            
+            // Fim por "Obrigado" ou "Agradecemos"
+            /obrigad[oa][\s\S]*?\n/i,
+            /obrigad[oa][\s\S]*?$/i,
+            /agradecemos[\s\S]*?\n/i,
+            /agradecemos[\s\S]*?$/i,
+            
+            // Fim por timestamps ou identificadores técnicos
+            /\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}/,
+            /ref[\s\.:]*[A-Z0-9]{8,}/i,
+            
+            // Fim por linhas de separação ou divisória
+            /[-=_]{3,}/,
+            
+            // Fim por padrões específicos de fim de SMS
+            /fim\s*$/i,
+            /\s*\*\s*$/,
+            
+            // Quebra natural - duas quebras de linha consecutivas
+            /\n\s*\n/
+        ];
+        
+        let posicaoFim = mensagem.length; // Por padrão, toda mensagem é confirmação
+        let padraoEncontrado = 'fim da mensagem';
+        
+        // Encontrar o primeiro padrão que indica fim da confirmação
+        for (const padrao of padroesFimConfirmacao) {
+            const match = mensagem.search(padrao);
+            if (match !== -1 && match < posicaoFim) {
+                posicaoFim = match;
+                const matchContent = mensagem.match(padrao);
+                if (matchContent) {
+                    posicaoFim = match + matchContent[0].length;
+                }
+                padraoEncontrado = padrao.source;
+                break;
+            }
+        }
+        
+        const parteConfirmacao = mensagem.substring(0, posicaoFim).trim();
+        const partePedidos = mensagem.substring(posicaoFim).trim();
+        
+        console.log(`🔍 DIVISÃO: Confirmação detectada - separação por: ${padraoEncontrado}`);
+        console.log(`📄 DIVISÃO: Parte confirmação (${parteConfirmacao.length} chars): "${parteConfirmacao.substring(0, 80)}..."`);
+        console.log(`📋 DIVISÃO: Parte pedidos (${partePedidos.length} chars): "${partePedidos.substring(0, 80)}..."`);
+        
+        return {
+            temConfirmacao: true,
+            parteConfirmacao,
+            partePedidos
+        };
+    }
+    
+    // === FILTRAR APENAS NÚMEROS DE PAGAMENTO DO GRUPO ===
+    filtrarNumerosPagamentoGrupo(numeros, grupoId) {
+        if (!grupoId || !this.CONFIGURACAO_GRUPOS[grupoId] || !this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento) {
+            return numeros; // Se não há configuração, aceita todos
+        }
+        
+        const numerosPagamentoGrupo = this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento;
+        
+        return numeros.filter(numero => {
+            // Testar número completo e versões sem prefixo
+            const numeroSemPrefixo = numero.length > 9 ? numero.substring(numero.length - 9) : numero;
+            const numeroCompleto = numero.startsWith('258') ? numero : '258' + numero;
+            
+            const ehNumeroPagamento = numerosPagamentoGrupo.includes(numero) || 
+                                     numerosPagamentoGrupo.includes(numeroSemPrefixo) || 
+                                     numerosPagamentoGrupo.includes(numeroCompleto);
+            
+            if (ehNumeroPagamento) {
+                console.log(`🚫 DIVISÃO: ${numero} ignorado (número de pagamento do grupo)`);
+                return false;
+            }
+            
+            console.log(`✅ DIVISÃO: ${numero} aceito para divisão`);
+            return true;
+        });
     }
     
     // === FILTRAR NÚMEROS DE COMPROVANTE ===
