@@ -329,16 +329,37 @@ async function enviarParaGoogleSheets(dadosCompletos, grupoId, timestamp) {
     }
 }
 
+// === FUNÇÃO PARA NORMALIZAR VALORES (remove vírgulas e converte) ===
+function normalizarValor(valor) {
+    if (typeof valor === 'number') {
+        return valor;
+    }
+    
+    if (typeof valor === 'string') {
+        // Remove vírgulas separadoras de milhares e converte para número
+        const valorLimpo = valor.replace(/,(?=\d{3})/g, ''); // Remove vírgulas seguidas de exatamente 3 dígitos
+        const valorNumerico = parseFloat(valorLimpo.replace(',', '.')); // Converte vírgula decimal para ponto
+        
+        // Se for número inteiro, remove decimais
+        return (valorNumerico % 1 === 0) ? parseInt(valorNumerico) : valorNumerico;
+    }
+    
+    return valor;
+}
+
 // === FUNÇÃO PARA VERIFICAR PAGAMENTO (reutiliza mesma lógica da divisão) ===
 async function verificarPagamentoIndividual(referencia, valorEsperado) {
     try {
-        console.log(`🔍 INDIVIDUAL: Verificando pagamento ${referencia} - ${valorEsperado}MT`);
+        // Normalizar valor antes da verificação
+        const valorNormalizado = normalizarValor(valorEsperado);
+        
+        console.log(`🔍 INDIVIDUAL: Verificando pagamento ${referencia} - ${valorNormalizado}MT (original: ${valorEsperado})`);
         
         // Usar mesma URL e estrutura do bot de divisão
         const response = await axios.post(botDivisao.SCRIPTS_CONFIG.PAGAMENTOS, {
             action: "buscar_por_referencia",
             referencia: referencia,
-            valor: valorEsperado
+            valor: valorNormalizado
         }, {
             timeout: 15000,
             headers: {
@@ -1376,14 +1397,15 @@ client.on('message', async (message) => {
                         const pagamentoConfirmado = await verificarPagamentoIndividual(referencia, valorEsperado);
                         
                         if (!pagamentoConfirmado) {
-                            console.log(`❌ INDIVIDUAL: Pagamento não confirmado para screenshot - ${referencia} (${valorEsperado}MT)`);
+                            const valorNormalizado = normalizarValor(valorEsperado);
+                            console.log(`❌ INDIVIDUAL: Pagamento não confirmado para screenshot - ${referencia} (${valorNormalizado}MT)`);
                             
                             await message.reply(
                                 `⏳ *AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO*\n\n` +
                                 `💰 Referência: ${referencia}\n` +
                                 `📊 Megas: ${megas}\n` +
                                 `📱 Número: ${numero}\n` +
-                                `💳 Valor esperado: ${valorEsperado}MT\n\n` +
+                                `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
                                 `🔍 Aguardando confirmação do pagamento na planilha...\n` +
                                 `⏱️ Tente novamente em alguns minutos.`
                             );
@@ -1406,7 +1428,7 @@ client.on('message', async (message) => {
                             `💰 Referência: ${referencia}\n` +
                             `📊 Megas: ${megas}\n` +
                             `📱 Número: ${numero}\n` +
-                            `💳 Pagamento: ${valorEsperado}MT confirmado\n\n` +
+                            `💳 Pagamento: ${normalizarValor(valorEsperado)}MT confirmado\n\n` +
                             `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
                         );
                         return;
@@ -1549,14 +1571,15 @@ client.on('message', async (message) => {
                 const pagamentoConfirmado = await verificarPagamentoIndividual(referencia, valorEsperado);
                 
                 if (!pagamentoConfirmado) {
-                    console.log(`❌ INDIVIDUAL: Pagamento não confirmado para texto - ${referencia} (${valorEsperado}MT)`);
+                    const valorNormalizado = normalizarValor(valorEsperado);
+                    console.log(`❌ INDIVIDUAL: Pagamento não confirmado para texto - ${referencia} (${valorNormalizado}MT)`);
                     
                     await message.reply(
                         `⏳ *AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO*\n\n` +
                         `💰 Referência: ${referencia}\n` +
                         `📊 Megas: ${megas}\n` +
                         `📱 Número: ${numero}\n` +
-                        `💳 Valor esperado: ${valorEsperado}MT\n\n` +
+                        `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
                         `🔍 Aguardando confirmação do pagamento na planilha...\n` +
                         `⏱️ Tente novamente em alguns minutos.`
                     );
@@ -1579,7 +1602,7 @@ client.on('message', async (message) => {
                     `💰 Referência: ${referencia}\n` +
                     `📊 Megas: ${megas}\n` +
                     `📱 Número: ${numero}\n` +
-                    `💳 Pagamento: ${valorEsperado}MT confirmado\n\n` +
+                    `💳 Pagamento: ${normalizarValor(valorEsperado)}MT confirmado\n\n` +
                     `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
                 );
                 return;
