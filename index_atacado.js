@@ -329,7 +329,68 @@ async function enviarParaGoogleSheets(dadosCompletos, grupoId, timestamp) {
     }
 }
 
-// === FUNÇÃO PRINCIPAL PARA TASKER ===
+// === FUNÇÃO PARA VERIFICAR PAGAMENTO (reutiliza mesma lógica da divisão) ===
+async function verificarPagamentoIndividual(referencia, valorEsperado) {
+    try {
+        console.log(`🔍 INDIVIDUAL: Verificando pagamento ${referencia} - ${valorEsperado}MT`);
+        
+        // Usar mesma URL e estrutura do bot de divisão
+        const response = await axios.post(botDivisao.SCRIPTS_CONFIG.PAGAMENTOS, {
+            action: "buscar_por_referencia",
+            referencia: referencia,
+            valor: valorEsperado
+        }, {
+            timeout: 15000,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.data && response.data.encontrado) {
+            console.log(`✅ INDIVIDUAL: Pagamento encontrado!`);
+            return true;
+        }
+        
+        console.log(`❌ INDIVIDUAL: Pagamento não encontrado`);
+        return false;
+        
+    } catch (error) {
+        console.error(`❌ INDIVIDUAL: Erro ao verificar pagamento:`, error.message);
+        return false;
+    }
+}
+
+// === FUNÇÃO PARA CALCULAR VALOR ESPERADO BASEADO NOS MEGAS ===
+function calcularValorEsperadoDosMegas(megas, grupoId) {
+    try {
+        const configGrupo = getConfiguracaoGrupo(grupoId);
+        if (!configGrupo || !configGrupo.precos) {
+            console.log(`⚠️ INDIVIDUAL: Grupo ${grupoId} não tem tabela de preços configurada`);
+            return null;
+        }
+        
+        // Converter megas para número se for string
+        const megasNum = typeof megas === 'string' ? 
+            parseInt(megas.replace(/[^\d]/g, '')) : parseInt(megas);
+        
+        // Buscar o preço correspondente na tabela
+        const valorEncontrado = configGrupo.precos[megasNum];
+        
+        if (valorEncontrado) {
+            console.log(`💰 INDIVIDUAL: ${megasNum}MB = ${valorEncontrado}MT`);
+            return valorEncontrado;
+        }
+        
+        console.log(`⚠️ INDIVIDUAL: Não encontrou preço para ${megasNum}MB na tabela`);
+        return null;
+        
+    } catch (error) {
+        console.error(`❌ INDIVIDUAL: Erro ao calcular valor:`, error);
+        return null;
+    }
+}
+
+// === FUNÇÃO PRINCIPAL PARA TASKER (SEM VERIFICAÇÃO - JÁ VERIFICADO ANTES) ===
 async function enviarParaTasker(referencia, megas, numero, grupoId) {
     const timestamp = new Date().toLocaleString('pt-BR', {
         year: 'numeric',
@@ -346,7 +407,7 @@ async function enviarParaTasker(referencia, megas, numero, grupoId) {
     
     const grupoNome = getConfiguracaoGrupo(grupoId)?.nome || 'Desconhecido';
     
-    console.log(`📊 ENVIANDO DADOS SIMPLIFICADOS:`);
+    console.log(`📊 ENVIANDO DADOS (PAGAMENTO JÁ VERIFICADO):`);
     console.log(`   📋 Dados: ${dadosCompletos}`);
     console.log(`   📍 Grupo: ${grupoNome} (${grupoId})`);
     console.log(`   ⏰ Timestamp: ${timestamp}`);
@@ -1284,6 +1345,54 @@ client.on('message', async (message) => {
                         // Converter megas para formato numérico
                         const megasConvertido = converterMegasParaNumero(megas);
                         
+                        // === NOVA VERIFICAÇÃO: CONFIRMAR PAGAMENTO ANTES DE PROCESSAR ===
+                        console.log(`🔍 INDIVIDUAL: Verificando pagamento antes de processar screenshot...`);
+                        
+                        // 1. Calcular valor esperado baseado nos megas
+                        const valorEsperado = calcularValorEsperadoDosMegas(megasConvertido, message.from);
+                        
+                        if (!valorEsperado) {
+                            console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
+                            
+                            await enviarParaTasker(referencia, megasConvertido, numero, message.from);
+                            await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
+                            
+                            if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
+                                const timestampMensagem = new Date().toLocaleString('pt-BR');
+                                adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
+                            }
+                            
+                            await message.reply(
+                                `✅ *Screenshot + Número processados!*\n\n` +
+                                `💰 Referência: ${referencia}\n` +
+                                `📊 Megas: ${megas}\n` +
+                                `📱 Número: ${numero}\n\n` +
+                                `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
+                            );
+                            return;
+                        }
+                        
+                        // 2. Verificar se pagamento existe
+                        const pagamentoConfirmado = await verificarPagamentoIndividual(referencia, valorEsperado);
+                        
+                        if (!pagamentoConfirmado) {
+                            console.log(`❌ INDIVIDUAL: Pagamento não confirmado para screenshot - ${referencia} (${valorEsperado}MT)`);
+                            
+                            await message.reply(
+                                `⏳ *AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO*\n\n` +
+                                `💰 Referência: ${referencia}\n` +
+                                `📊 Megas: ${megas}\n` +
+                                `📱 Número: ${numero}\n` +
+                                `💳 Valor esperado: ${valorEsperado}MT\n\n` +
+                                `🔍 Aguardando confirmação do pagamento na planilha...\n` +
+                                `⏱️ Tente novamente em alguns minutos.`
+                            );
+                            return;
+                        }
+                        
+                        console.log(`✅ INDIVIDUAL: Pagamento confirmado para screenshot! Processando...`);
+                        
+                        // 3. Se pagamento confirmado, processar normalmente
                         await enviarParaTasker(referencia, megasConvertido, numero, message.from);
                         await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                         
@@ -1296,7 +1405,8 @@ client.on('message', async (message) => {
                             `✅ *Screenshot + Número processados!*\n\n` +
                             `💰 Referência: ${referencia}\n` +
                             `📊 Megas: ${megas}\n` +
-                            `📱 Número: ${numero}\n\n` +
+                            `📱 Número: ${numero}\n` +
+                            `💳 Pagamento: ${valorEsperado}MT confirmado\n\n` +
                             `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
                         );
                         return;
@@ -1408,6 +1518,54 @@ client.on('message', async (message) => {
                 // Converter megas para formato numérico
                 const megasConvertido = converterMegasParaNumero(megas);
                 
+                // === NOVA VERIFICAÇÃO: CONFIRMAR PAGAMENTO ANTES DE PROCESSAR ===
+                console.log(`🔍 INDIVIDUAL: Verificando pagamento antes de processar texto...`);
+                
+                // 1. Calcular valor esperado baseado nos megas
+                const valorEsperado = calcularValorEsperadoDosMegas(megasConvertido, message.from);
+                
+                if (!valorEsperado) {
+                    console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
+                    
+                    await enviarParaTasker(referencia, megasConvertido, numero, message.from);
+                    await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
+                    
+                    if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
+                        const timestampMensagem = new Date().toLocaleString('pt-BR');
+                        adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
+                    }
+                    
+                    await message.reply(
+                        `✅ *Pedido processado!*\n\n` +
+                        `💰 Referência: ${referencia}\n` +
+                        `📊 Megas: ${megas}\n` +
+                        `📱 Número: ${numero}\n\n` +
+                        `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
+                    );
+                    return;
+                }
+                
+                // 2. Verificar se pagamento existe
+                const pagamentoConfirmado = await verificarPagamentoIndividual(referencia, valorEsperado);
+                
+                if (!pagamentoConfirmado) {
+                    console.log(`❌ INDIVIDUAL: Pagamento não confirmado para texto - ${referencia} (${valorEsperado}MT)`);
+                    
+                    await message.reply(
+                        `⏳ *AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO*\n\n` +
+                        `💰 Referência: ${referencia}\n` +
+                        `📊 Megas: ${megas}\n` +
+                        `📱 Número: ${numero}\n` +
+                        `💳 Valor esperado: ${valorEsperado}MT\n\n` +
+                        `🔍 Aguardando confirmação do pagamento na planilha...\n` +
+                        `⏱️ Tente novamente em alguns minutos.`
+                    );
+                    return;
+                }
+                
+                console.log(`✅ INDIVIDUAL: Pagamento confirmado para texto! Processando...`);
+                
+                // 3. Se pagamento confirmado, processar normalmente
                 await enviarParaTasker(referencia, megasConvertido, numero, message.from);
                 await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                 
@@ -1420,7 +1578,8 @@ client.on('message', async (message) => {
                     `✅ *Pedido processado!*\n\n` +
                     `💰 Referência: ${referencia}\n` +
                     `📊 Megas: ${megas}\n` +
-                    `📱 Número: ${numero}\n\n` +
+                    `📱 Número: ${numero}\n` +
+                    `💳 Pagamento: ${valorEsperado}MT confirmado\n\n` +
                     `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
                 );
                 return;
