@@ -269,8 +269,13 @@ class WhatsAppBotDivisao {
     
     // === FILTRAR NÚMEROS DE COMPROVANTE ===
     filtrarNumerosComprovante(numeros, mensagem, grupoId = null) {
+        // 1. IDENTIFICAR NÚMERO QUE RECEBEU O PAGAMENTO (da mensagem de confirmação)
+        const numeroReceptorPagamento = this.identificarNumeroReceptorPagamento(mensagem);
+        
+        console.log(`🔍 DIVISÃO: Número receptor de pagamento identificado: ${numeroReceptorPagamento || 'nenhum'}`);
+        
         return numeros.filter(numero => {
-            // 1. VERIFICAR SE É NÚMERO DE PAGAMENTO DO GRUPO
+            // 2. VERIFICAR SE É NÚMERO DE PAGAMENTO DO GRUPO
             if (grupoId && this.CONFIGURACAO_GRUPOS[grupoId] && this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento) {
                 const numerosPagamentoGrupo = this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento;
                 // Testar número completo e versões sem prefixo
@@ -280,48 +285,59 @@ class WhatsAppBotDivisao {
                 if (numerosPagamentoGrupo.includes(numero) || 
                     numerosPagamentoGrupo.includes(numeroSemPrefixo) || 
                     numerosPagamentoGrupo.includes(numeroCompleto)) {
-                    console.log(`🚫 DIVISÃO: ${numero} ignorado (número de pagamento do grupo: ${numerosPagamentoGrupo})`);
+                    console.log(`🚫 DIVISÃO: ${numero} ignorado (número de pagamento do grupo)`);
                     return false;
                 }
             }
             
-            // 2. CONTEXTOS ESPECÍFICOS DE PAGAMENTO
-            const contextosPagamento = [
-                new RegExp(`para\\s+${numero}\\s*[-,]`, 'i'),        // "para 840326152 - VASCO" ou "para 840326152, nome"
-                new RegExp(`conta\\s+${numero}`, 'i'),               // "conta 840326152"
-                new RegExp(`M-Pesa.*?${numero}.*?-`, 'i'),           // "M-Pesa ... 840326152 - NOME"
-                new RegExp(`eMola.*?${numero}.*?-`, 'i'),            // "eMola ... 840326152 - NOME"
-                new RegExp(`${numero}\\s*-\\s*(VASCO|Mahumane|Alice|Natacha)`, 'i'), // "840326152 - NOME"
-                new RegExp(`Transferiste.*?para\\s+${numero}\\s*-`, 'i') // "Transferiste ... para 840326152 - NOME"
-            ];
-            
-            // Verificar contextos específicos apenas se não há múltiplos números
-            if (numeros.length === 1) {
-                for (const padrao of contextosPagamento) {
-                    if (padrao.test(mensagem)) {
-                        console.log(`🚫 DIVISÃO: ${numero} ignorado (contexto de pagamento específico)`);
-                        return false;
-                    }
-                }
-            } else {
-                // Para múltiplos números, verificar apenas padrões muito específicos
-                const contextosMuitoEspecificos = [
-                    new RegExp(`Transferiste.*?para\\s+${numero}\\s*-`, 'i'), // "Transferiste ... para 840326152 - NOME"
-                    new RegExp(`para\\s+${numero}\\s*-\\s*(VASCO|Mahumane|Alice|Natacha)`, 'i') // "para 840326152 - NOME_ESPECÍFICO"
-                ];
-                
-                for (const padrao of contextosMuitoEspecificos) {
-                    if (padrao.test(mensagem)) {
-                        console.log(`🚫 DIVISÃO: ${numero} ignorado (contexto muito específico de pagamento)`);
-                        return false;
-                    }
-                }
-                
-                console.log(`✅ DIVISÃO: ${numero} aceito (múltiplos números detectados - filtro permissivo)`);
+            // 3. IGNORAR APENAS O NÚMERO QUE RECEBEU O PAGAMENTO
+            if (numeroReceptorPagamento && 
+                (numero === numeroReceptorPagamento || 
+                 numero === numeroReceptorPagamento.replace(/^258/, '') ||
+                 ('258' + numero) === numeroReceptorPagamento)) {
+                console.log(`🚫 DIVISÃO: ${numero} ignorado (número que recebeu o pagamento)`);
+                return false;
             }
             
-            return true; // Número válido para divisão
+            // 4. TODOS OS OUTROS NÚMEROS SÃO ACEITOS (mesmo que sejam 10+)
+            console.log(`✅ DIVISÃO: ${numero} aceito para divisão`);
+            return true;
         });
+    }
+    
+    // === IDENTIFICAR NÚMERO QUE RECEBEU O PAGAMENTO ===
+    identificarNumeroReceptorPagamento(mensagem) {
+        // Padrões para identificar o número receptor na mensagem de confirmação
+        const padroesPagamento = [
+            // M-Pesa patterns
+            /M-Pesa.*?(\d{9})\s*-/i,                                    // "M-Pesa ... 840326152 - NOME"
+            /para\s+(\d{9})\s*-/i,                                      // "para 840326152 - NOME"
+            /Transferiste.*?para\s+(\d{9})\s*-/i,                       // "Transferiste ... para 840326152 - NOME"
+            
+            // eMola patterns
+            /eMola.*?(\d{9})\s*-/i,                                     // "eMola ... 840326152 - NOME"
+            /conta\s+(\d{9})/i,                                         // "conta 840326152"
+            
+            // Padrões gerais de transferência
+            /(?:transferiu|transferiste|enviou|pagou).*?(\d{9})\s*[-,]/i, // Verbos de transferência seguidos de número
+            /destinatário.*?(\d{9})/i,                                   // "destinatário 840326152"
+            /beneficiário.*?(\d{9})/i,                                   // "beneficiário 840326152"
+            
+            // Padrão: número seguido de hífen e nome conhecido
+            /(\d{9})\s*-\s*(?:VASCO|Mahumane|Alice|Natacha|Admin|Conta)/i
+        ];
+        
+        for (const padrao of padroesPagamento) {
+            const match = mensagem.match(padrao);
+            if (match) {
+                const numeroEncontrado = this.limparNumero(match[1]);
+                console.log(`🎯 DIVISÃO: Número receptor encontrado: ${numeroEncontrado} (padrão: ${padrao.source})`);
+                return numeroEncontrado;
+            }
+        }
+        
+        console.log(`❌ DIVISÃO: Nenhum número receptor identificado na mensagem`);
+        return null;
     }
     
     // === LIMPAR NÚMERO ===
