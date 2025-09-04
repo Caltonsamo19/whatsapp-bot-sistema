@@ -336,12 +336,41 @@ function normalizarValor(valor) {
     }
     
     if (typeof valor === 'string') {
-        // Remove vírgulas separadoras de milhares e converte para número
-        const valorLimpo = valor.replace(/,(?=\d{3})/g, ''); // Remove vírgulas seguidas de exatamente 3 dígitos
-        const valorNumerico = parseFloat(valorLimpo.replace(',', '.')); // Converte vírgula decimal para ponto
+        let valorLimpo = valor.trim();
         
-        // Se for número inteiro, remove decimais
-        return (valorNumerico % 1 === 0) ? parseInt(valorNumerico) : valorNumerico;
+        // Casos especiais: valores com múltiplos zeros após vírgula (ex: "1,0000" = 1000MT)
+        // Padrão: número seguido de vírgula e só zeros
+        const regexZerosAposVirgula = /^(\d+),0+$/;
+        const matchZeros = valorLimpo.match(regexZerosAposVirgula);
+        if (matchZeros) {
+            // "1,0000" significa 1000 meticais (vírgula + zeros = multiplicador de milhares)
+            const baseNumero = parseInt(matchZeros[1]);
+            const numeroZeros = valorLimpo.split(',')[1].length;
+            // Para "1,0000": base=1, zeros=4, então 1 * 1000 = 1000
+            const multiplicador = numeroZeros >= 3 ? 1000 : Math.pow(10, numeroZeros);
+            return baseNumero * multiplicador;
+        }
+        
+        // Detectar se vírgula é separador de milhares ou decimal
+        const temVirgulaSeguida3Digitos = /,\d{3}($|\D)/.test(valorLimpo);
+        
+        if (temVirgulaSeguida3Digitos) {
+            // Vírgula como separador de milhares: "1,000" ou "10,500.50"
+            valorLimpo = valorLimpo.replace(/,(?=\d{3}($|\D))/g, '');
+        } else {
+            // Vírgula como separador decimal: "1,50" → "1.50"
+            valorLimpo = valorLimpo.replace(',', '.');
+        }
+        
+        const valorNumerico = parseFloat(valorLimpo);
+        
+        if (isNaN(valorNumerico)) {
+            console.warn(`⚠️ Valor não pôde ser normalizado: "${valor}"`);
+            return valor;
+        }
+        
+        // Retorna inteiro se não tem decimais significativos
+        return (Math.abs(valorNumerico % 1) < 0.0001) ? Math.round(valorNumerico) : valorNumerico;
     }
     
     return valor;
@@ -1543,8 +1572,17 @@ client.on('message', async (message) => {
                 // === NOVA VERIFICAÇÃO: CONFIRMAR PAGAMENTO ANTES DE PROCESSAR ===
                 console.log(`🔍 INDIVIDUAL: Verificando pagamento antes de processar texto...`);
                 
-                // 1. Calcular valor esperado baseado nos megas
-                const valorEsperado = calcularValorEsperadoDosMegas(megasConvertido, message.from);
+                // 1. Usar valor do comprovante se disponível, senão calcular
+                let valorEsperado;
+                if (resultadoIA.valorPago && resultadoIA.valorPago > 0) {
+                    // Se a IA extraiu o valor do comprovante, usar esse valor
+                    valorEsperado = normalizarValor(resultadoIA.valorPago);
+                    console.log(`💰 INDIVIDUAL: Usando valor do comprovante: ${valorEsperado}MT`);
+                } else {
+                    // Senão, calcular baseado nos megas
+                    valorEsperado = calcularValorEsperadoDosMegas(megasConvertido, message.from);
+                    console.log(`💰 INDIVIDUAL: Calculando valor baseado nos megas: ${valorEsperado}MT`);
+                }
                 
                 if (!valorEsperado) {
                     console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
