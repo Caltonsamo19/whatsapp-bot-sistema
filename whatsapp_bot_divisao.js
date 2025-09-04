@@ -214,6 +214,12 @@ class WhatsAppBotDivisao {
             const numeroLimpo = this.limparNumero(numeroOriginal);
             if (!numeroLimpo || !/^8[0-9]{8}$/.test(numeroLimpo)) continue;
             
+            // *** FILTRAR NÚMEROS DE PAGAMENTO DO GRUPO IMEDIATAMENTE ***
+            if (this.ehNumeroPagamentoGrupo(numeroLimpo, grupoId)) {
+                console.log(`🚫 DIVISÃO: ${numeroLimpo} ignorado (número de pagamento do grupo)`);
+                continue; // Pula este número completamente
+            }
+            
             const posicao = mensagem.indexOf(numeroOriginal);
             const percentualPosicao = (posicao / tamanhoMensagem) * 100;
             
@@ -306,16 +312,12 @@ class WhatsAppBotDivisao {
             }
         }
         
-        // Remover duplicatas
+        // Remover duplicatas (números de pagamento já foram filtrados)
         const numerosUnicos = [...new Set(numerosValidos)];
         
-        // === FILTRAR NÚMEROS DE PAGAMENTO DO GRUPO ===
-        const numerosFiltrados = this.filtrarNumerosPagamentoGrupo(numerosUnicos, grupoId);
+        console.log(`📱 DIVISÃO: ${numerosUnicos.length} números finais aceitos para divisão: [${numerosUnicos.join(', ')}]`);
         
-        console.log(`📱 DIVISÃO: ${numerosUnicos.length} números únicos processados: [${numerosUnicos.join(', ')}]`);
-        console.log(`📱 DIVISÃO: ${numerosFiltrados.length} números aceitos para divisão: [${numerosFiltrados.join(', ')}]`);
-        
-        return numerosFiltrados.length > 0 ? numerosFiltrados : null;
+        return numerosUnicos.length > 0 ? numerosUnicos : null;
     }
     
     // Função auxiliar para verificar blocos consecutivos na divisão
@@ -349,7 +351,29 @@ class WhatsAppBotDivisao {
         return ehConsecutivo;
     }
     
-    // === FILTRAR NÚMEROS DE PAGAMENTO DO GRUPO ===
+    // === VERIFICAR SE É NÚMERO DE PAGAMENTO DO GRUPO ===
+    ehNumeroPagamentoGrupo(numero, grupoId) {
+        if (!grupoId || !this.CONFIGURACAO_GRUPOS[grupoId] || !this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento) {
+            return false;
+        }
+        
+        const numerosPagamentoGrupo = this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento;
+        // Testar número completo e versões sem prefixo
+        const numeroSemPrefixo = numero.length > 9 ? numero.substring(numero.length - 9) : numero;
+        const numeroCompleto = numero.startsWith('258') ? numero : '258' + numero;
+        
+        const ehPagamento = numerosPagamentoGrupo.includes(numero) || 
+                           numerosPagamentoGrupo.includes(numeroSemPrefixo) || 
+                           numerosPagamentoGrupo.includes(numeroCompleto);
+        
+        if (ehPagamento) {
+            console.log(`🚫 DIVISÃO: ${numero} é número de pagamento do grupo [${numerosPagamentoGrupo.join(', ')}]`);
+        }
+        
+        return ehPagamento;
+    }
+
+    // === FILTRAR NÚMEROS DE PAGAMENTO DO GRUPO (MANTIDA PARA COMPATIBILIDADE) ===
     filtrarNumerosPagamentoGrupo(numeros, grupoId = null) {
         return numeros.filter(numero => {
             // VERIFICAR SE É NÚMERO DE PAGAMENTO DO GRUPO
@@ -710,16 +734,57 @@ class WhatsAppBotDivisao {
         console.log(`🔍 DIVISÃO-VALIDAÇÃO: Buscando pagamento ${referencia} - ${valorEsperado}MT`);
         
         try {
+            // USAR API EXISTENTE: buscar_por_referencia primeiro, depois buscar similares se não encontrar
+            console.log(`🔍 DIVISÃO-VALIDAÇÃO: Tentando busca exata primeiro...`);
+            
+            const responseExata = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
+                action: "buscar_por_referencia",
+                referencia: referencia,
+                valor: valorEsperado
+            }, {
+                timeout: 15000,
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            // Se encontrou exato, retornar
+            if (responseExata.data && responseExata.data.encontrado) {
+                console.log(`✅ DIVISÃO-VALIDAÇÃO: Referência EXATA encontrada via API existente!`);
+                const valorPago = responseExata.data.valor || valorEsperado;
+                
+                if (Math.abs(valorPago - valorEsperado) <= 5) {
+                    return { 
+                        encontrado: true, 
+                        pagamento: { referencia: referencia, valor: valorPago }, 
+                        matchType: 'exato',
+                        valorPago: valorPago 
+                    };
+                } else {
+                    return { 
+                        encontrado: false, 
+                        erro: `Valor incorreto. Pago: ${valorPago}MT, Esperado: ${valorEsperado}MT`,
+                        referenciaEncontrada: referencia 
+                    };
+                }
+            }
+            
+            // Se não encontrou exato, usar a API de buscar todos (se existir)
+            console.log(`⚠️ DIVISÃO-VALIDAÇÃO: Não encontrou exato, tentando buscar similares...`);
+            
             const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
-                action: "buscar_pagamentos_todos", // Buscar todos os pagamentos para fazer matching
+                action: "buscar_pagamentos_todos", // Tentar buscar todos para matching similar
             }, {
                 timeout: 20000,
                 headers: { 'Content-Type': 'application/json' }
             });
             
             if (!response.data || !response.data.pagamentos) {
-                console.log(`❌ DIVISÃO-VALIDAÇÃO: Erro na resposta da planilha`);
-                return { encontrado: false, erro: "Erro ao acessar planilha de pagamentos" };
+                console.log(`⚠️ DIVISÃO-VALIDAÇÃO: API buscar_pagamentos_todos não disponível, usando apenas busca exata`);
+                // Se a API de buscar todos não existe, retornar que não encontrou
+                return { 
+                    encontrado: false, 
+                    erro: "Pagamento não encontrado na planilha (busca exata não retornou resultado)",
+                    detalhes: "API de busca similar não está disponível"
+                };
             }
             
             const pagamentos = response.data.pagamentos;
