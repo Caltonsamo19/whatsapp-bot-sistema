@@ -1345,7 +1345,7 @@ client.on('message', async (message) => {
                         const remetenteNormalizado = botDivisao.normalizarRemetente(remetente);
                         botDivisao.comprovantesMemorizados[remetenteNormalizado] = {
                             referencia: resultadoIA.comprovativo.referencia,
-                            valor: parseInt(resultadoIA.comprovativo.valor),
+                            valor: normalizarValor(resultadoIA.comprovativo.valor),
                             timestamp: Date.now(),
                             grupoId: message.from,
                             fonte: 'imagem_com_multiplos_numeros'

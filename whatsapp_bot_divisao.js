@@ -57,6 +57,53 @@ class WhatsAppBotDivisao {
         console.log('🔄 Bot de Divisão inicializado - Múltiplos números automático!');
     }
     
+    // === FUNÇÃO PARA NORMALIZAR VALORES INTERNO ===
+    normalizarValorInterno(valor) {
+        if (typeof valor === 'number') {
+            return valor;
+        }
+        
+        if (typeof valor === 'string') {
+            let valorLimpo = valor.trim();
+            
+            // Casos especiais: valores com múltiplos zeros após vírgula (ex: "1,0000" = 1000MT)
+            // Padrão: número seguido de vírgula e só zeros
+            const regexZerosAposVirgula = /^(\d+),0+$/;
+            const matchZeros = valorLimpo.match(regexZerosAposVirgula);
+            if (matchZeros) {
+                // "1,0000" significa 1000 meticais (vírgula + zeros = multiplicador de milhares)
+                const baseNumero = parseInt(matchZeros[1]);
+                const numeroZeros = valorLimpo.split(',')[1].length;
+                // Para "1,0000": base=1, zeros=4, então 1 * 1000 = 1000
+                const multiplicador = numeroZeros >= 3 ? 1000 : Math.pow(10, numeroZeros);
+                return baseNumero * multiplicador;
+            }
+            
+            // Detectar se vírgula é separador de milhares ou decimal
+            const temVirgulaSeguida3Digitos = /,\d{3}($|\D)/.test(valorLimpo);
+            
+            if (temVirgulaSeguida3Digitos) {
+                // Vírgula como separador de milhares: "1,000" ou "10,500.50"
+                valorLimpo = valorLimpo.replace(/,(?=\d{3}($|\D))/g, '');
+            } else {
+                // Vírgula como separador decimal: "1,50" → "1.50"
+                valorLimpo = valorLimpo.replace(',', '.');
+            }
+            
+            const valorNumerico = parseFloat(valorLimpo);
+            
+            if (isNaN(valorNumerico)) {
+                console.warn(`⚠️ DIVISÃO: Valor não pôde ser normalizado: "${valor}"`);
+                return valor;
+            }
+            
+            // Retorna inteiro se não tem decimais significativos
+            return (Math.abs(valorNumerico % 1) < 0.0001) ? Math.round(valorNumerico) : valorNumerico;
+        }
+        
+        return valor;
+    }
+    
     // === FUNÇÃO PRINCIPAL - PROCESSAR MENSAGEM ===
     async processarMensagem(message, remetente, grupoId) {
         try {
@@ -170,9 +217,7 @@ class WhatsAppBotDivisao {
         for (const pattern of patternsValor) {
             const match = mensagem.match(pattern);
             if (match) {
-                valor = parseFloat(match[1].replace(',', '.'));
-                // Se for número inteiro, remover decimais
-                if (valor % 1 === 0) valor = parseInt(valor);
+                valor = this.normalizarValorInterno(match[1]);
                 break;
             }
         }
