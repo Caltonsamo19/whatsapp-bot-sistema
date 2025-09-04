@@ -730,11 +730,144 @@ class WhatsAppBotDivisao {
     }
     
     // Função para buscar pagamento com matching inteligente (adaptada para divisão)
+    // === CALCULAR DISTÂNCIA DE EDIÇÃO (LEVENSHTEIN) ===
+    calcularDistanciaEdicao(str1, str2) {
+        if (!str1 || !str2) return Math.max(str1?.length || 0, str2?.length || 0);
+        
+        const matrix = [];
+        
+        // Inicializar matriz
+        for (let i = 0; i <= str2.length; i++) {
+            matrix[i] = [i];
+        }
+        for (let j = 0; j <= str1.length; j++) {
+            matrix[0][j] = j;
+        }
+        
+        // Calcular distância
+        for (let i = 1; i <= str2.length; i++) {
+            for (let j = 1; j <= str1.length; j++) {
+                if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1, // substituição
+                        matrix[i][j - 1] + 1,     // inserção
+                        matrix[i - 1][j] + 1      // remoção
+                    );
+                }
+            }
+        }
+        
+        return matrix[str2.length][str1.length];
+    }
+
+    // === GERAR VARIAÇÕES INTELIGENTES DE REFERÊNCIA ===
+    gerarVariacoesReferencia(referencia) {
+        if (!referencia || referencia.length < 3) return [referencia];
+        
+        const variacoes = new Set([referencia]); // Original primeiro
+        
+        // PRIORIDADE MÁXIMA: TRANSPOSIÇÕES (muito comum)
+        for (let i = 0; i < referencia.length - 1; i++) {
+            const charsArray = referencia.split('');
+            [charsArray[i], charsArray[i + 1]] = [charsArray[i + 1], charsArray[i]];
+            variacoes.add(charsArray.join(''));
+        }
+        
+        // Caracteres mais prováveis em referências  
+        const charsComuns = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        
+        // 1. SUBSTITUIÇÕES ESTRATÉGICAS
+        
+        // PRIMEIRO: Erros visuais comuns (1↔I, 0↔O, etc.)
+        const errosVisuais = {
+            'I': ['1', 'l'], '1': ['I', 'l'], 'l': ['1', 'I'],
+            'O': ['0'], '0': ['O'], 
+            '5': ['S'], 'S': ['5'],
+            '2': ['Z'], 'Z': ['2']
+        };
+        
+        for (let pos = 0; pos < referencia.length; pos++) {
+            const charAtual = referencia[pos];
+            if (errosVisuais[charAtual]) {
+                for (const charTroca of errosVisuais[charAtual]) {
+                    const variacao = referencia.substring(0, pos) + charTroca + referencia.substring(pos + 1);
+                    variacoes.add(variacao);
+                }
+            }
+        }
+        
+        // SEGUNDO: Posições finais (mais comuns)
+        for (let pos = referencia.length - 1; pos >= Math.max(0, referencia.length - 4); pos--) {
+            for (const char of charsComuns) {
+                if (char !== referencia[pos] && variacoes.size < 80) {
+                    const variacao = referencia.substring(0, pos) + char + referencia.substring(pos + 1);
+                    variacoes.add(variacao);
+                }
+            }
+        }
+        
+        // TERCEIRO: Posições iniciais  
+        for (let pos = 0; pos < Math.min(4, referencia.length) && variacoes.size < 120; pos++) {
+            for (const char of charsComuns) {
+                if (char !== referencia[pos] && variacoes.size < 120) {
+                    const variacao = referencia.substring(0, pos) + char + referencia.substring(pos + 1);
+                    variacoes.add(variacao);
+                }
+            }
+        }
+        
+        // (Transposições já feitas acima com prioridade máxima)
+        
+        // 3. REMOÇÕES (caractere a menos) - priorizando final
+        for (let i = referencia.length - 1; i >= 0 && variacoes.size < 140; i--) {
+            const variacao = referencia.substring(0, i) + referencia.substring(i + 1);
+            if (variacao.length >= referencia.length - 2) {
+                variacoes.add(variacao);
+            }
+        }
+        
+        // 4. INSERÇÕES (caractere a mais) - MUITO PRIORITÁRIAS no final
+        const charsInsercao = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        
+        // PRIMEIRO: Inserções no final (mais comum) - LOGO APÓS TRANSPOSIÇÕES  
+        for (const char of '0123456789') { // Priorizar números primeiro
+            const variacao = referencia + char;
+            variacoes.add(variacao);
+        }
+        for (const char of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') { // Depois letras
+            if (variacoes.size >= 60) break; // Limite menor para deixar espaço
+            const variacao = referencia + char;
+            variacoes.add(variacao);
+        }
+        
+        // DEPOIS: Outras inserções
+        for (let pos = referencia.length - 1; pos >= 0; pos--) {
+            for (const char of charsInsercao) {
+                if (variacoes.size >= 220) break;
+                const variacao = referencia.substring(0, pos) + char + referencia.substring(pos);
+                if (variacao.length <= referencia.length + 2) {
+                    variacoes.add(variacao);
+                }
+            }
+        }
+        
+        // Converter para array e filtrar por distância
+        const resultado = Array.from(variacoes).filter(variacao => {
+            const distancia = this.calcularDistanciaEdicao(referencia, variacao);
+            return distancia <= 2;
+        }).slice(0, 80); // Limitar a 80 variações mais relevantes
+        
+        console.log(`🔄 DIVISÃO: Geradas ${resultado.length} variações inteligentes para ${referencia}`);
+        return resultado;
+    }
+
     async buscarPagamentoComMatchingDivisao(referencia, valorEsperado) {
         console.log(`🔍 DIVISÃO-VALIDAÇÃO: Buscando pagamento ${referencia} - ${valorEsperado}MT`);
         
         try {
-            // USAR API EXISTENTE: buscar_por_referencia primeiro, depois buscar similares se não encontrar
+            // 1. BUSCA EXATA PRIMEIRO
             console.log(`🔍 DIVISÃO-VALIDAÇÃO: Tentando busca exata primeiro...`);
             
             const responseExata = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
@@ -748,7 +881,7 @@ class WhatsAppBotDivisao {
             
             // Se encontrou exato, retornar
             if (responseExata.data && responseExata.data.encontrado) {
-                console.log(`✅ DIVISÃO-VALIDAÇÃO: Referência EXATA encontrada via API existente!`);
+                console.log(`✅ DIVISÃO-VALIDAÇÃO: Referência EXATA encontrada!`);
                 const valorPago = responseExata.data.valor || valorEsperado;
                 
                 if (Math.abs(valorPago - valorEsperado) <= 5) {
@@ -767,107 +900,56 @@ class WhatsAppBotDivisao {
                 }
             }
             
-            // Se não encontrou exato, usar a API de buscar todos (se existir)
-            console.log(`⚠️ DIVISÃO-VALIDAÇÃO: Não encontrou exato, tentando buscar similares...`);
+            // 2. BUSCA SIMILAR (ATÉ 2 DIFERENÇAS)
+            console.log(`🔄 DIVISÃO-VALIDAÇÃO: Busca exata não encontrou - Tentando busca similar...`);
             
-            const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
-                action: "buscar_pagamentos_todos", // Tentar buscar todos para matching similar
-            }, {
-                timeout: 20000,
-                headers: { 'Content-Type': 'application/json' }
-            });
+            const variacoes = this.gerarVariacoesReferencia(referencia);
+            console.log(`🔄 DIVISÃO-VALIDAÇÃO: Testando ${variacoes.length} variações...`);
             
-            if (!response.data || !response.data.pagamentos) {
-                console.log(`⚠️ DIVISÃO-VALIDAÇÃO: API buscar_pagamentos_todos não disponível, usando apenas busca exata`);
-                // Se a API de buscar todos não existe, retornar que não encontrou
-                return { 
-                    encontrado: false, 
-                    erro: "Pagamento não encontrado na planilha (busca exata não retornou resultado)",
-                    detalhes: "API de busca similar não está disponível"
-                };
-            }
-            
-            const pagamentos = response.data.pagamentos;
-            console.log(`📊 DIVISÃO-VALIDAÇÃO: ${pagamentos.length} pagamentos encontrados na planilha`);
-            
-            // 1. BUSCA EXATA primeiro
-            const pagamentoExato = pagamentos.find(p => 
-                p.referencia && p.referencia.toLowerCase() === referencia.toLowerCase()
-            );
-            
-            if (pagamentoExato) {
-                console.log(`✅ DIVISÃO-VALIDAÇÃO: Referência EXATA encontrada: ${pagamentoExato.referencia}`);
-                const valorPago = parseFloat(pagamentoExato.valor) || 0;
+            for (const variacao of variacoes) {
+                if (variacao === referencia) continue; // Já testamos a exata
                 
-                if (Math.abs(valorPago - valorEsperado) <= 5) { // Tolerância de 5MT
-                    console.log(`✅ DIVISÃO-VALIDAÇÃO: Valor correto - Pago: ${valorPago}MT, Esperado: ${valorEsperado}MT`);
-                    return { 
-                        encontrado: true, 
-                        pagamento: pagamentoExato, 
-                        matchType: 'exato',
-                        valorPago: valorPago 
-                    };
-                } else {
-                    console.log(`❌ DIVISÃO-VALIDAÇÃO: Valor incorreto - Pago: ${valorPago}MT, Esperado: ${valorEsperado}MT`);
-                    return { 
-                        encontrado: false, 
-                        erro: `Valor incorreto. Pago: ${valorPago}MT, Esperado: ${valorEsperado}MT`,
-                        referenciaEncontrada: pagamentoExato.referencia 
-                    };
-                }
-            }
-            
-            // 2. BUSCA SIMILAR se não encontrou exato
-            console.log(`⚠️ DIVISÃO-VALIDAÇÃO: Referência exata não encontrada, buscando similares...`);
-            
-            const candidatos = [];
-            
-            for (const pagamento of pagamentos) {
-                if (!pagamento.referencia) continue;
-                
-                const diferencas = this.calcularDiferencasReferencia(referencia, pagamento.referencia);
-                
-                if (diferencas <= 2 && diferencas > 0) { // 1 ou 2 diferenças
-                    candidatos.push({
-                        pagamento: pagamento,
-                        diferencas: diferencas,
-                        valorPago: parseFloat(pagamento.valor) || 0
+                try {
+                    const responseSimilar = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
+                        action: "buscar_por_referencia",
+                        referencia: variacao,
+                        valor: valorEsperado
+                    }, {
+                        timeout: 10000,
+                        headers: { 'Content-Type': 'application/json' }
                     });
-                    console.log(`🔍 DIVISÃO-VALIDAÇÃO: Candidato similar: ${pagamento.referencia} (${diferencas} diferenças)`);
+                    
+                    if (responseSimilar.data && responseSimilar.data.encontrado) {
+                        const valorPago = responseSimilar.data.valor || valorEsperado;
+                        
+                        if (Math.abs(valorPago - valorEsperado) <= 5) {
+                            console.log(`✅ DIVISÃO-VALIDAÇÃO: Referência SIMILAR encontrada!`);
+                            console.log(`   Original: ${referencia} → Encontrada: ${variacao}`);
+                            
+                            return { 
+                                encontrado: true, 
+                                pagamento: { referencia: variacao, valor: valorPago }, 
+                                matchType: 'similar',
+                                referenciaOriginal: referencia,
+                                valorPago: valorPago 
+                            };
+                        }
+                    }
+                    
+                } catch (errorVariacao) {
+                    // Erro em variação específica - continuar com próxima
+                    console.log(`⚠️ Erro ao testar variação ${variacao}: ${errorVariacao.message}`);
+                    continue;
                 }
             }
             
-            if (candidatos.length === 0) {
-                console.log(`❌ DIVISÃO-VALIDAÇÃO: Nenhuma referência similar encontrada`);
-                return { encontrado: false, erro: "Pagamento não encontrado na planilha" };
-            }
+            console.log(`❌ DIVISÃO-VALIDAÇÃO: Nenhuma referência similar encontrada`);
             
-            // Ordenar candidatos por menor número de diferenças
-            candidatos.sort((a, b) => a.diferencas - b.diferencas);
-            
-            // Verificar o melhor candidato
-            const melhorCandidato = candidatos[0];
-            console.log(`🎯 DIVISÃO-VALIDAÇÃO: Melhor candidato: ${melhorCandidato.pagamento.referencia} (${melhorCandidato.diferencas} diferenças)`);
-            
-            if (Math.abs(melhorCandidato.valorPago - valorEsperado) <= 5) { // Tolerância de 5MT
-                console.log(`✅ DIVISÃO-VALIDAÇÃO: Referência SIMILAR aceita com valor correto`);
-                return { 
-                    encontrado: true, 
-                    pagamento: melhorCandidato.pagamento, 
-                    matchType: 'similar',
-                    diferencas: melhorCandidato.diferencas,
-                    valorPago: melhorCandidato.valorPago,
-                    referenciaOriginal: referencia,
-                    referenciaEncontrada: melhorCandidato.pagamento.referencia
-                };
-            } else {
-                console.log(`❌ DIVISÃO-VALIDAÇÃO: Referência similar encontrada mas valor incorreto`);
-                return { 
-                    encontrado: false, 
-                    erro: `Referência similar encontrada (${melhorCandidato.pagamento.referencia}) mas valor incorreto. Pago: ${melhorCandidato.valorPago}MT, Esperado: ${valorEsperado}MT`,
-                    referenciaEncontrada: melhorCandidato.pagamento.referencia 
-                };
-            }
+            return { 
+                encontrado: false, 
+                erro: "Pagamento não encontrado na planilha (incluindo variações similares)",
+                detalhes: "Verifique se a referência está correta e se o pagamento foi processado"
+            };
             
         } catch (error) {
             console.error(`❌ DIVISÃO-VALIDAÇÃO: Erro ao buscar pagamento:`, error.message);
@@ -911,7 +993,7 @@ class WhatsAppBotDivisao {
         
         let mensagemSucesso = `Pagamento validado com sucesso!`;
         if (resultadoBusca.matchType === 'similar') {
-            mensagemSucesso += ` (Referência similar: ${resultadoBusca.referenciaEncontrada})`;
+            mensagemSucesso += ` (Referência similar: ${resultadoBusca.pagamento.referencia})`;
         }
         
         return {
@@ -924,8 +1006,8 @@ class WhatsAppBotDivisao {
             mensagem: mensagemSucesso,
             detalhes: {
                 referenciaOriginal: referencia,
-                referenciaEncontrada: resultadoBusca.referenciaEncontrada || referencia,
-                diferencas: resultadoBusca.diferencas || 0
+                referenciaEncontrada: resultadoBusca.pagamento.referencia,
+                matchType: resultadoBusca.matchType || 'exato'
             }
         };
     }
