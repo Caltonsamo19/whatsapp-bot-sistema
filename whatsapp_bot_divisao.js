@@ -880,24 +880,24 @@ class WhatsAppBotDivisao {
     
     // === ENVIAR PARA PLANILHA DE PEDIDOS ===
     async enviarParaPlanilhaPedidos(referencia, megas, numero, grupoId) {
+        console.log(`📋 DIVISÃO: Enviando pedido ${referencia}|${megas}|${numero}`);
+        
+        const timestamp = new Date().toLocaleString('pt-BR');
+        const dadosCompletos = `${referencia}|${megas}|${numero}|${timestamp}`;
+        
+        const dados = {
+            grupo_id: grupoId,
+            timestamp: timestamp,
+            dados: dadosCompletos,  // Para pedidos usar 'dados'
+            sender: "WhatsApp-Bot-Divisao",
+            message: `Pedido dividido: ${dadosCompletos}`
+        };
+        
+        console.log(`📋 DIVISÃO: Dados:`, JSON.stringify(dados));
+        
         try {
-            console.log(`📋 DIVISÃO: Enviando pedido ${referencia}|${megas}|${numero}`);
-            
-            const timestamp = new Date().toLocaleString('pt-BR');
-            const dadosCompletos = `${referencia}|${megas}|${numero}|${timestamp}`;
-            
-            const dados = {
-                grupo_id: grupoId,
-                timestamp: timestamp,
-                dados: dadosCompletos,  // Para pedidos usar 'dados'
-                sender: "WhatsApp-Bot-Divisao",
-                message: `Pedido dividido: ${dadosCompletos}`
-            };
-            
-            console.log(`📋 DIVISÃO: Dados:`, JSON.stringify(dados));
-            
             const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
-                timeout: 20000, // Aumentado para 20 segundos
+                timeout: 30000, // Aumentado para 30 segundos (Google Apps Script pode ser lento)
                 headers: { 'Content-Type': 'application/json' },
                 retry: 2 // Tentar novamente se falhar
             });
@@ -925,7 +925,7 @@ class WhatsAppBotDivisao {
                 console.log(`🔄 DIVISÃO: Tentando reenviar pedido após timeout...`);
                 try {
                     const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
-                        timeout: 30000, // 30 segundos na segunda tentativa
+                        timeout: 45000, // 45 segundos na segunda tentativa
                         headers: { 'Content-Type': 'application/json' }
                     });
                     
@@ -946,24 +946,25 @@ class WhatsAppBotDivisao {
     
     // === ENVIAR PARA PLANILHA DE PAGAMENTOS ===
     async enviarParaPlanilhaPagamentos(referencia, valor, numero, grupoId) {
+        console.log(`💰 DIVISÃO: Enviando pagamento ${referencia}|${valor}|${numero}`);
+        
+        const timestamp = new Date().toLocaleString('pt-BR');
+        const dadosCompletos = `${referencia}|${valor}|${numero}|${timestamp}`;
+        
+        const dados = {
+            grupo_id: grupoId,
+            timestamp: timestamp,
+            transacao: dadosCompletos,  // Para pagamentos usar 'transacao'
+            sender: "WhatsApp-Bot-Divisao",
+            message: `Pagamento dividido: ${dadosCompletos}`
+        };
+        
+        console.log(`💰 DIVISÃO: Dados:`, JSON.stringify(dados));
+        
         try {
-            console.log(`💰 DIVISÃO: Enviando pagamento ${referencia}|${valor}|${numero}`);
-            
-            const timestamp = new Date().toLocaleString('pt-BR');
-            const dadosCompletos = `${referencia}|${valor}|${numero}|${timestamp}`;
-            
-            const dados = {
-                grupo_id: grupoId,
-                timestamp: timestamp,
-                transacao: dadosCompletos,  // Para pagamentos usar 'transacao'
-                sender: "WhatsApp-Bot-Divisao",
-                message: `Pagamento dividido: ${dadosCompletos}`
-            };
-            
-            console.log(`💰 DIVISÃO: Dados:`, JSON.stringify(dados));
             
             const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, dados, {
-                timeout: 20000, // Aumentado para 20 segundos  
+                timeout: 30000, // Aumentado para 30 segundos (Google Apps Script pode ser lento)
                 headers: { 'Content-Type': 'application/json' },
                 retry: 2 // Tentar novamente se falhar
             });
@@ -1005,7 +1006,7 @@ class WhatsAppBotDivisao {
                 console.log(`🔄 DIVISÃO: Tentando reenviar pagamento após timeout...`);
                 try {
                     const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, dados, {
-                        timeout: 30000, // 30 segundos na segunda tentativa
+                        timeout: 45000, // 45 segundos na segunda tentativa
                         headers: { 'Content-Type': 'application/json' }
                     });
                     
