@@ -521,6 +521,10 @@ async function enviarParaTasker(referencia, megas, numero, grupoId, messageConte
             }
         }
         
+        // ⚠️ PARAR PROCESSAMENTO AQUI - NÃO CONTINUAR
+        console.log(`🛑 DIVISÃO: Processamento interrompido devido a duplicado`);
+        return null; // Retorna null para indicar que foi duplicado
+        
     } else {
         console.log(`🔄 [${grupoNome}] Google Sheets falhou, usando WhatsApp backup...`);
         enviarViaWhatsAppTasker(dadosCompletos, grupoNome);
@@ -1445,7 +1449,11 @@ client.on('message', async (message) => {
                         if (!valorEsperado) {
                             console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
                             
-                            await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
+                            const resultadoEnvio = await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
+                            if (resultadoEnvio === null) {
+                                console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
+                                return; // Para aqui se for duplicado
+                            }
                             await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                             
                             if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -1485,7 +1493,11 @@ client.on('message', async (message) => {
                         console.log(`✅ INDIVIDUAL: Pagamento confirmado para screenshot! Processando...`);
                         
                         // 3. Se pagamento confirmado, processar normalmente
-                        await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
+                        const resultadoEnvio = await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
+                        if (resultadoEnvio === null) {
+                            console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
+                            return; // Para aqui se for duplicado
+                        }
                         await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                         
                         if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -1628,7 +1640,11 @@ client.on('message', async (message) => {
                 if (!valorEsperado) {
                     console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
                     
-                    await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
+                    const resultadoEnvio = await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
+                    if (resultadoEnvio === null) {
+                        console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
+                        return; // Para aqui se for duplicado
+                    }
                     await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                     
                     if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -1668,7 +1684,11 @@ client.on('message', async (message) => {
                 console.log(`✅ INDIVIDUAL: Pagamento confirmado para texto! Processando...`);
                 
                 // 3. Se pagamento confirmado, processar normalmente
-                await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
+                const resultadoEnvio = await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
+                if (resultadoEnvio === null) {
+                    console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
+                    return; // Para aqui se for duplicado
+                }
                 await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                 
                 if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
