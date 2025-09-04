@@ -1007,38 +1007,53 @@ client.on('message', async (message) => {
                         resultado += `❌ Sem resposta da API\n`;
                     }
                     
-                    // Testar API de buscar todos (se existir)
-                    resultado += `\n**2. API buscar_pagamentos_todos:**\n`;
-                    try {
-                        console.log(`🧪 TESTE: Buscando via buscar_pagamentos_todos`);
-                        const responseTodos = await axios.post(urlPagamentos, {
-                            action: "buscar_pagamentos_todos"
-                        }, {
-                            timeout: 10000,
-                            headers: { 'Content-Type': 'application/json' }
-                        });
+                    // Testar busca similar se não encontrar
+                    if (!responseExata.data.encontrado) {
+                        resultado += `\n**2. Testando busca similar:**\n`;
                         
-                        if (responseTodos.data && responseTodos.data.pagamentos) {
-                            resultado += `✅ API disponível\n`;
-                            resultado += `📊 ${responseTodos.data.pagamentos.length} pagamentos retornados\n`;
+                        try {
+                            const botDivisao = new WhatsAppBotDivisao();
+                            const variacoes = botDivisao.gerarVariacoesReferencia(referencia);
                             
-                            // Procurar a referência na lista
-                            const encontrado = responseTodos.data.pagamentos.find(p => 
-                                p.referencia && p.referencia.toLowerCase() === referencia.toLowerCase()
-                            );
+                            resultado += `📊 Geradas ${variacoes.length} variações da referência\n`;
+                            resultado += `🔍 Primeiras 5: ${variacoes.slice(0, 5).join(', ')}\n`;
+                            resultado += `💡 Sistema pode encontrar referências similares automaticamente\n`;
                             
-                            if (encontrado) {
-                                resultado += `🎯 **REFERÊNCIA ENCONTRADA NA LISTA!**\n`;
-                                resultado += `💰 Valor: ${encontrado.valor || 'N/A'}MT\n`;
-                            } else {
-                                resultado += `❌ Referência não encontrada na lista\n`;
+                            // Testar algumas variações
+                            let variacaoEncontrada = null;
+                            for (let i = 0; i < Math.min(5, variacoes.length); i++) {
+                                const variacao = variacoes[i];
+                                try {
+                                    const testVariacao = await axios.post(urlPagamentos, {
+                                        action: "buscar_por_referencia",
+                                        referencia: variacao,
+                                        valor: 125
+                                    }, {
+                                        timeout: 5000,
+                                        headers: { 'Content-Type': 'application/json' }
+                                    });
+                                    
+                                    if (testVariacao.data && testVariacao.data.encontrado) {
+                                        variacaoEncontrada = variacao;
+                                        break;
+                                    }
+                                } catch (e) {
+                                    // Continuar testando outras variações
+                                    continue;
+                                }
                             }
-                        } else {
-                            resultado += `❌ API não retornou dados esperados\n`;
-                            resultado += `📄 Dados: ${JSON.stringify(responseTodos.data, null, 2)}\n`;
+                            
+                            if (variacaoEncontrada) {
+                                resultado += `🎯 **VARIAÇÃO SIMILAR ENCONTRADA:** ${variacaoEncontrada}\n`;
+                            } else {
+                                resultado += `❌ Nenhuma variação similar encontrada nas primeiras 5 tentativas\n`;
+                            }
+                            
+                        } catch (errorSimilar) {
+                            resultado += `❌ Erro ao testar busca similar: ${errorSimilar.message}\n`;
                         }
-                    } catch (error) {
-                        resultado += `❌ API não disponível: ${error.message}\n`;
+                    } else {
+                        resultado += `\n✅ **Pagamento encontrado - busca similar não necessária**\n`;
                     }
                     
                     await message.reply(resultado);
