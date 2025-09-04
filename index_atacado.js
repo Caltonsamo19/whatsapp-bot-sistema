@@ -821,7 +821,7 @@ client.on('ready', async () => {
         console.log(`   📋 ${config.nome} (${grupoId})`);
     });
     
-    console.log('\n🔧 Comandos admin: .ia .divisao .test_busca .test_pagamento .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo');
+    console.log('\n🔧 Comandos admin: .ia .divisao .test_busca .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo');
 });
 
 client.on('group-join', async (notification) => {
@@ -964,107 +964,6 @@ client.on('message', async (message) => {
             }
 
             // === COMANDOS GOOGLE SHEETS ===
-            if (comando.startsWith('.test_pagamento ')) {
-                const referencia = comando.replace('.test_pagamento ', '').trim();
-                if (!referencia) {
-                    await message.reply('❌ Use: .test_pagamento REFERENCIA\nExemplo: .test_pagamento CHC0H0X6HK2');
-                    return;
-                }
-                
-                try {
-                    await message.reply(`🔍 Testando busca de pagamento: ${referencia}\n⏳ Aguarde...`);
-                    
-                    // Usar as URLs do bot de divisão (as corretas)
-                    const urlPagamentos = 'https://script.google.com/macros/s/AKfycbzzifHGu1JXc2etzG3vqK5Jd3ihtULKezUTQQIDJNsr6tXx3CmVmKkOlsld0x1Feo0H/exec';
-                    
-                    // Testar API existente (buscar_por_referencia)
-                    console.log(`🧪 TESTE: Buscando ${referencia} via buscar_por_referencia`);
-                    const responseExata = await axios.post(urlPagamentos, {
-                        action: "buscar_por_referencia",
-                        referencia: referencia,
-                        valor: 125 // Valor teste
-                    }, {
-                        timeout: 10000,
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    
-                    let resultado = `🧪 **TESTE DE BUSCA DE PAGAMENTO**\n\n`;
-                    resultado += `📋 **Referência:** ${referencia}\n`;
-                    resultado += `🔗 **URL:** ${urlPagamentos}\n\n`;
-                    resultado += `**1. API buscar_por_referencia:**\n`;
-                    
-                    if (responseExata.data) {
-                        resultado += `✅ Resposta recebida\n`;
-                        resultado += `📄 Dados: ${JSON.stringify(responseExata.data, null, 2)}\n`;
-                        
-                        if (responseExata.data.encontrado) {
-                            resultado += `🎯 **PAGAMENTO ENCONTRADO!**\n`;
-                            resultado += `💰 Valor: ${responseExata.data.valor || 'N/A'}MT\n`;
-                        } else {
-                            resultado += `❌ Pagamento não encontrado\n`;
-                        }
-                    } else {
-                        resultado += `❌ Sem resposta da API\n`;
-                    }
-                    
-                    // Testar busca similar se não encontrar
-                    if (!responseExata.data.encontrado) {
-                        resultado += `\n**2. Testando busca similar:**\n`;
-                        
-                        try {
-                            const botDivisao = new WhatsAppBotDivisao();
-                            const variacoes = botDivisao.gerarVariacoesReferencia(referencia);
-                            
-                            resultado += `📊 Geradas ${variacoes.length} variações da referência\n`;
-                            resultado += `🔍 Primeiras 5: ${variacoes.slice(0, 5).join(', ')}\n`;
-                            resultado += `💡 Sistema pode encontrar referências similares automaticamente\n`;
-                            
-                            // Testar algumas variações
-                            let variacaoEncontrada = null;
-                            for (let i = 0; i < Math.min(5, variacoes.length); i++) {
-                                const variacao = variacoes[i];
-                                try {
-                                    const testVariacao = await axios.post(urlPagamentos, {
-                                        action: "buscar_por_referencia",
-                                        referencia: variacao,
-                                        valor: 125
-                                    }, {
-                                        timeout: 5000,
-                                        headers: { 'Content-Type': 'application/json' }
-                                    });
-                                    
-                                    if (testVariacao.data && testVariacao.data.encontrado) {
-                                        variacaoEncontrada = variacao;
-                                        break;
-                                    }
-                                } catch (e) {
-                                    // Continuar testando outras variações
-                                    continue;
-                                }
-                            }
-                            
-                            if (variacaoEncontrada) {
-                                resultado += `🎯 **VARIAÇÃO SIMILAR ENCONTRADA:** ${variacaoEncontrada}\n`;
-                            } else {
-                                resultado += `❌ Nenhuma variação similar encontrada nas primeiras 5 tentativas\n`;
-                            }
-                            
-                        } catch (errorSimilar) {
-                            resultado += `❌ Erro ao testar busca similar: ${errorSimilar.message}\n`;
-                        }
-                    } else {
-                        resultado += `\n✅ **Pagamento encontrado - busca similar não necessária**\n`;
-                    }
-                    
-                    await message.reply(resultado);
-                    
-                } catch (error) {
-                    console.error('❌ Erro no teste de pagamento:', error);
-                    await message.reply(`❌ Erro no teste: ${error.message}`);
-                }
-                return;
-            }
-            
             if (comando === '.test_sheets') {
                 console.log(`🧪 Testando Google Sheets...`);
                 

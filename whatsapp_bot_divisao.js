@@ -195,188 +195,33 @@ class WhatsAppBotDivisao {
         return matches && matches.length > 0;
     }
     
-    // === EXTRAIR MÚLTIPLOS NÚMEROS (LÓGICA INTELIGENTE PARA MÚLTIPLOS) ===
+    // === EXTRAIR MÚLTIPLOS NÚMEROS ===
     extrairMultiplosNumeros(mensagem, grupoId = null) {
         const regex = /(?:\+258\s*)?8[0-9]{8}/g;
         const matches = mensagem.match(regex) || [];
         
         if (matches.length === 0) return null;
         
-        console.log(`📱 DIVISÃO: ${matches.length} números brutos encontrados: [${matches.join(', ')}]`);
+        // Limpar e filtrar números válidos
+        const numerosLimpos = matches.map(num => this.limparNumero(num))
+                                    .filter(num => num && /^8[0-9]{8}$/.test(num));
         
-        const tamanhoMensagem = mensagem.length;
+        // Remover duplicatas
+        const numerosUnicos = [...new Set(numerosLimpos)];
         
-        // === NOVA LÓGICA INTELIGENTE ===
-        // 1. Limpar e identificar posições de todos os números
-        const numerosComPosicao = [];
+        // === FILTRAR NÚMEROS QUE NÃO SÃO PARA DIVISÃO ===
+        const numerosFiltrados = this.filtrarNumerosComprovante(numerosUnicos, mensagem, grupoId);
         
-        for (const numeroOriginal of matches) {
-            const numeroLimpo = this.limparNumero(numeroOriginal);
-            if (!numeroLimpo || !/^8[0-9]{8}$/.test(numeroLimpo)) continue;
-            
-            // *** FILTRAR NÚMEROS DE PAGAMENTO DO GRUPO IMEDIATAMENTE ***
-            if (this.ehNumeroPagamentoGrupo(numeroLimpo, grupoId)) {
-                console.log(`🚫 DIVISÃO: ${numeroLimpo} ignorado (número de pagamento do grupo)`);
-                continue; // Pula este número completamente
-            }
-            
-            const posicao = mensagem.indexOf(numeroOriginal);
-            const percentualPosicao = (posicao / tamanhoMensagem) * 100;
-            
-            numerosComPosicao.push({
-                numeroLimpo,
-                numeroOriginal,
-                posicao,
-                percentualPosicao
-            });
-        }
+        console.log(`📱 DIVISÃO: ${numerosUnicos.length} números únicos encontrados: [${numerosUnicos.join(', ')}]`);
+        console.log(`📱 DIVISÃO: ${numerosFiltrados.length} números aceitos para divisão: [${numerosFiltrados.join(', ')}]`);
         
-        if (numerosComPosicao.length === 0) return null;
-        
-        // 2. Verificar se existe bloco consecutivo de 3+ números
-        const ehBlocoConsecutivo = numerosComPosicao.length >= 3 && this.verificarBlocoConsecutivoDivisao(mensagem, numerosComPosicao);
-        
-        console.log(`📱 DIVISÃO: É bloco consecutivo de múltiplos números: ${ehBlocoConsecutivo}`);
-        
-        const numerosValidos = [];
-        const limiteInicioFinal = tamanhoMensagem * 0.7; // Últimos 30% da mensagem
-        
-        if (ehBlocoConsecutivo) {
-            // CASO ESPECIAL: 3+ números consecutivos - aceitar todos exceto os claramente de pagamento
-            console.log(`🎯 DIVISÃO: Processando bloco consecutivo de ${numerosComPosicao.length} números...`);
-            
-            for (const numeroInfo of numerosComPosicao) {
-                const numeroLimpo = numeroInfo.numeroLimpo;
-                const posicao = numeroInfo.posicao;
-                
-                const contextoBefore = mensagem.substring(Math.max(0, posicao - 50), posicao).toLowerCase();
-                const contextoAfter = mensagem.substring(posicao + numeroInfo.numeroOriginal.length, posicao + numeroInfo.numeroOriginal.length + 50).toLowerCase();
-                
-                // Verificar apenas contextos MUITO específicos de pagamento
-                const indicadoresPagamentoEspecificos = [
-                    'transferiste', 'enviaste para', 'para o número', 'conta de', 'beneficiário',
-                    'destinatário', 'pagamento para', 'para conta'
-                ];
-                
-                const eNumeroPagamento = indicadoresPagamentoEspecificos.some(indicador => 
-                    contextoBefore.includes(indicador) && contextoBefore.includes(numeroLimpo)
-                );
-                
-                if (eNumeroPagamento) {
-                    console.log(`❌ DIVISÃO: REJEITADO do bloco por contexto específico de pagamento: ${numeroLimpo}`);
-                    continue;
-                }
-                
-                numerosValidos.push(numeroLimpo);
-                console.log(`✅ DIVISÃO: ACEITO do bloco consecutivo (${numeroInfo.percentualPosicao.toFixed(1)}%): ${numeroLimpo}`);
-            }
-            
-        } else {
-            // CASO NORMAL: 1-2 números - usar lógica de posição restritiva
-            console.log(`📋 DIVISÃO: Processando números individuais com lógica de posição...`);
-            
-            for (const numeroInfo of numerosComPosicao) {
-                const numeroLimpo = numeroInfo.numeroLimpo;
-                const posicao = numeroInfo.posicao;
-                const percentualPosicao = numeroInfo.percentualPosicao;
-                
-                console.log(`📱 DIVISÃO: Analisando ${numeroLimpo} na posição ${posicao}/${tamanhoMensagem} (${percentualPosicao.toFixed(1)}%)`);
-                
-                // Aplicar regra restritiva de posição para números individuais
-                if (posicao < limiteInicioFinal) {
-                    console.log(`❌ DIVISÃO: REJEITADO por estar no meio/início da mensagem: ${numeroLimpo} (posição ${percentualPosicao.toFixed(1)}%)`);
-                    continue;
-                }
-                
-                // Verificação adicional de contexto de pagamento
-                const contextoBefore = mensagem.substring(Math.max(0, posicao - 30), posicao).toLowerCase();
-                const contextoAfter = mensagem.substring(posicao + numeroInfo.numeroOriginal.length, posicao + numeroInfo.numeroOriginal.length + 30).toLowerCase();
-                
-                const indicadoresPagamento = [
-                    'transferiste', 'taxa foi', 'para o número', 'para número', 'para conta',
-                    'conta de', 'beneficiário', 'destinatario', 'nome:', 'para 8',
-                    'enviaste para', 'pagamento para', 'destinatário'
-                ];
-                
-                const eNumeroPagamento = indicadoresPagamento.some(indicador => 
-                    contextoBefore.includes(indicador) || contextoAfter.includes(indicador)
-                );
-                
-                if (eNumeroPagamento) {
-                    console.log(`❌ DIVISÃO: REJEITADO por contexto de pagamento: ${numeroLimpo}`);
-                    continue;
-                }
-                
-                numerosValidos.push(numeroLimpo);
-                console.log(`✅ DIVISÃO: ACEITO por estar no final da mensagem (${percentualPosicao.toFixed(1)}%): ${numeroLimpo}`);
-            }
-        }
-        
-        // Remover duplicatas (números de pagamento já foram filtrados)
-        const numerosUnicos = [...new Set(numerosValidos)];
-        
-        console.log(`📱 DIVISÃO: ${numerosUnicos.length} números finais aceitos para divisão: [${numerosUnicos.join(', ')}]`);
-        
-        return numerosUnicos.length > 0 ? numerosUnicos : null;
+        return numerosFiltrados.length > 0 ? numerosFiltrados : null;
     }
     
-    // Função auxiliar para verificar blocos consecutivos na divisão
-    verificarBlocoConsecutivoDivisao(mensagem, numerosComPosicao) {
-        if (numerosComPosicao.length < 3) return false;
-        
-        // Ordenar por posição
-        const posicoes = [...numerosComPosicao].sort((a, b) => a.posicao - b.posicao);
-        
-        // Verificar se há pelo menos 3 números próximos (com no máximo 50 caracteres entre eles)
-        let numerosConsecutivos = 1;
-        let maiorSequencia = 1;
-        
-        for (let i = 1; i < posicoes.length; i++) {
-            const fimAnterior = posicoes[i-1].posicao + posicoes[i-1].numeroOriginal.length;
-            const inicioAtual = posicoes[i].posicao;
-            const distancia = inicioAtual - fimAnterior;
-            
-            // Se a distância é pequena (máx 50 caracteres), considera consecutivo
-            if (distancia <= 50) {
-                numerosConsecutivos++;
-                maiorSequencia = Math.max(maiorSequencia, numerosConsecutivos);
-            } else {
-                numerosConsecutivos = 1;
-            }
-        }
-        
-        const ehConsecutivo = maiorSequencia >= 3;
-        console.log(`📊 DIVISÃO: Maior sequência consecutiva: ${maiorSequencia} números (limite: 3)`);
-        
-        return ehConsecutivo;
-    }
-    
-    // === VERIFICAR SE É NÚMERO DE PAGAMENTO DO GRUPO ===
-    ehNumeroPagamentoGrupo(numero, grupoId) {
-        if (!grupoId || !this.CONFIGURACAO_GRUPOS[grupoId] || !this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento) {
-            return false;
-        }
-        
-        const numerosPagamentoGrupo = this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento;
-        // Testar número completo e versões sem prefixo
-        const numeroSemPrefixo = numero.length > 9 ? numero.substring(numero.length - 9) : numero;
-        const numeroCompleto = numero.startsWith('258') ? numero : '258' + numero;
-        
-        const ehPagamento = numerosPagamentoGrupo.includes(numero) || 
-                           numerosPagamentoGrupo.includes(numeroSemPrefixo) || 
-                           numerosPagamentoGrupo.includes(numeroCompleto);
-        
-        if (ehPagamento) {
-            console.log(`🚫 DIVISÃO: ${numero} é número de pagamento do grupo [${numerosPagamentoGrupo.join(', ')}]`);
-        }
-        
-        return ehPagamento;
-    }
-
-    // === FILTRAR NÚMEROS DE PAGAMENTO DO GRUPO (MANTIDA PARA COMPATIBILIDADE) ===
-    filtrarNumerosPagamentoGrupo(numeros, grupoId = null) {
+    // === FILTRAR NÚMEROS DE COMPROVANTE ===
+    filtrarNumerosComprovante(numeros, mensagem, grupoId = null) {
         return numeros.filter(numero => {
-            // VERIFICAR SE É NÚMERO DE PAGAMENTO DO GRUPO
+            // 1. VERIFICAR SE É NÚMERO DE PAGAMENTO DO GRUPO
             if (grupoId && this.CONFIGURACAO_GRUPOS[grupoId] && this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento) {
                 const numerosPagamentoGrupo = this.CONFIGURACAO_GRUPOS[grupoId].numerosPagamento;
                 // Testar número completo e versões sem prefixo
@@ -386,20 +231,48 @@ class WhatsAppBotDivisao {
                 if (numerosPagamentoGrupo.includes(numero) || 
                     numerosPagamentoGrupo.includes(numeroSemPrefixo) || 
                     numerosPagamentoGrupo.includes(numeroCompleto)) {
-                    console.log(`🚫 DIVISÃO: ${numero} ignorado (número de pagamento do grupo)`);
+                    console.log(`🚫 DIVISÃO: ${numero} ignorado (número de pagamento do grupo: ${numerosPagamentoGrupo})`);
                     return false;
                 }
             }
             
-            console.log(`✅ DIVISÃO: ${numero} aceito para divisão`);
+            // 2. CONTEXTOS ESPECÍFICOS DE PAGAMENTO
+            const contextosPagamento = [
+                new RegExp(`para\\s+${numero}\\s*[-,]`, 'i'),        // "para 840326152 - VASCO" ou "para 840326152, nome"
+                new RegExp(`conta\\s+${numero}`, 'i'),               // "conta 840326152"
+                new RegExp(`M-Pesa.*?${numero}.*?-`, 'i'),           // "M-Pesa ... 840326152 - NOME"
+                new RegExp(`eMola.*?${numero}.*?-`, 'i'),            // "eMola ... 840326152 - NOME"
+                new RegExp(`${numero}\\s*-\\s*(VASCO|Mahumane|Alice|Natacha)`, 'i'), // "840326152 - NOME"
+                new RegExp(`Transferiste.*?para\\s+${numero}\\s*-`, 'i') // "Transferiste ... para 840326152 - NOME"
+            ];
+            
+            // Verificar contextos específicos apenas se não há múltiplos números
+            if (numeros.length === 1) {
+                for (const padrao of contextosPagamento) {
+                    if (padrao.test(mensagem)) {
+                        console.log(`🚫 DIVISÃO: ${numero} ignorado (contexto de pagamento específico)`);
+                        return false;
+                    }
+                }
+            } else {
+                // Para múltiplos números, verificar apenas padrões muito específicos
+                const contextosMuitoEspecificos = [
+                    new RegExp(`Transferiste.*?para\\s+${numero}\\s*-`, 'i'), // "Transferiste ... para 840326152 - NOME"
+                    new RegExp(`para\\s+${numero}\\s*-\\s*(VASCO|Mahumane|Alice|Natacha)`, 'i') // "para 840326152 - NOME_ESPECÍFICO"
+                ];
+                
+                for (const padrao of contextosMuitoEspecificos) {
+                    if (padrao.test(mensagem)) {
+                        console.log(`🚫 DIVISÃO: ${numero} ignorado (contexto muito específico de pagamento)`);
+                        return false;
+                    }
+                }
+                
+                console.log(`✅ DIVISÃO: ${numero} aceito (múltiplos números detectados - filtro permissivo)`);
+            }
+            
             return true; // Número válido para divisão
         });
-    }
-    
-    // === FILTRAR NÚMEROS DE COMPROVANTE (MANTIDA PARA COMPATIBILIDADE) ===
-    filtrarNumerosComprovante(numeros, mensagem, grupoId = null) {
-        // Esta função agora apenas chama a nova função simplificada
-        return this.filtrarNumerosPagamentoGrupo(numeros, grupoId);
     }
     
     // === LIMPAR NÚMERO ===
@@ -462,24 +335,17 @@ class WhatsAppBotDivisao {
         try {
             console.log(`🔄 DIVISÃO: Iniciando processamento de ${comprovativo.referencia}`);
             
-            // 1. VALIDAR PAGAMENTO COM MATCHING INTELIGENTE
-            console.log(`🔐 DIVISÃO: Iniciando validação de pagamento...`);
+            // 1. CONFIRMAR PAGAMENTO EXISTE
+            const pagamentoExiste = await this.buscarPagamentoNaPlanilha(
+                comprovativo.referencia, 
+                comprovativo.valor
+            );
             
-            const validacao = await this.validarPagamentoDivisao(comprovativo.referencia, numeros, grupoId);
-            
-            if (!validacao.valido) {
-                console.log(`❌ DIVISÃO: Validação falhou - ${validacao.erro}`);
+            if (!pagamentoExiste) {
+                console.log(`⏳ DIVISÃO: Pagamento não encontrado, aguardando...`);
                 return {
-                    resposta: `❌ *PAGAMENTO NÃO VALIDADO*\n\n💰 Referência: ${comprovativo.referencia}\n💳 Valor esperado: ${validacao.valorEsperado || comprovativo.valor}MT\n\n🔍 ${validacao.erro}\n\n${validacao.detalhes ? `📋 ${validacao.detalhes}\n\n` : ''}💡 Verifique se o pagamento foi processado corretamente.`
+                    resposta: `⏳ *PAGAMENTO NÃO ENCONTRADO*\n\n💰 Referência: ${comprovativo.referencia}\n💳 Valor: ${comprovativo.valor}MT\n\n🔍 Aguardando confirmação do pagamento...`
                 };
-            }
-            
-            console.log(`✅ DIVISÃO: Pagamento validado - ${validacao.mensagem}`);
-            
-            // Atualizar valor do comprovativo se necessário (caso tenha sido encontrado similar)
-            if (validacao.valorPago !== parseFloat(comprovativo.valor)) {
-                console.log(`🔄 DIVISÃO: Atualizando valor de ${comprovativo.valor}MT para ${validacao.valorPago}MT`);
-                comprovativo.valor = validacao.valorPago;
             }
             
             console.log(`✅ DIVISÃO: Pagamento confirmado!`);
@@ -713,353 +579,6 @@ class WhatsAppBotDivisao {
         }
     }
     
-    // === SISTEMA DE VALIDAÇÃO PARA DIVISÃO ===
-    
-    // Função para calcular diferenças entre referências (mesmo que no index.js)
-    calcularDiferencasReferencia(ref1, ref2) {
-        if (ref1.length !== ref2.length) return 999; // Só aceita mesmo comprimento
-        
-        let diferencas = 0;
-        for (let i = 0; i < ref1.length; i++) {
-            if (ref1[i].toLowerCase() !== ref2[i].toLowerCase()) {
-                diferencas++;
-                if (diferencas > 2) return diferencas; // Early exit se > 2
-            }
-        }
-        return diferencas;
-    }
-    
-    // Função para buscar pagamento com matching inteligente (adaptada para divisão)
-    // === CALCULAR DISTÂNCIA DE EDIÇÃO (LEVENSHTEIN) ===
-    calcularDistanciaEdicao(str1, str2) {
-        if (!str1 || !str2) return Math.max(str1?.length || 0, str2?.length || 0);
-        
-        const matrix = [];
-        
-        // Inicializar matriz
-        for (let i = 0; i <= str2.length; i++) {
-            matrix[i] = [i];
-        }
-        for (let j = 0; j <= str1.length; j++) {
-            matrix[0][j] = j;
-        }
-        
-        // Calcular distância
-        for (let i = 1; i <= str2.length; i++) {
-            for (let j = 1; j <= str1.length; j++) {
-                if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-                    matrix[i][j] = matrix[i - 1][j - 1];
-                } else {
-                    matrix[i][j] = Math.min(
-                        matrix[i - 1][j - 1] + 1, // substituição
-                        matrix[i][j - 1] + 1,     // inserção
-                        matrix[i - 1][j] + 1      // remoção
-                    );
-                }
-            }
-        }
-        
-        return matrix[str2.length][str1.length];
-    }
-
-    // === GERAR VARIAÇÕES INTELIGENTES DE REFERÊNCIA ===
-    gerarVariacoesReferencia(referencia) {
-        if (!referencia || referencia.length < 3) return [referencia];
-        
-        const variacoes = new Set([referencia]); // Original primeiro
-        
-        // PRIORIDADE MÁXIMA: TRANSPOSIÇÕES (muito comum)
-        for (let i = 0; i < referencia.length - 1; i++) {
-            const charsArray = referencia.split('');
-            [charsArray[i], charsArray[i + 1]] = [charsArray[i + 1], charsArray[i]];
-            variacoes.add(charsArray.join(''));
-        }
-        
-        // Caracteres mais prováveis em referências  
-        const charsComuns = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        
-        // 1. SUBSTITUIÇÕES ESTRATÉGICAS
-        
-        // PRIMEIRO: Erros visuais comuns (1↔I, 0↔O, etc.)
-        const errosVisuais = {
-            'I': ['1', 'l'], '1': ['I', 'l'], 'l': ['1', 'I'],
-            'O': ['0'], '0': ['O'], 
-            '5': ['S'], 'S': ['5'],
-            '2': ['Z'], 'Z': ['2']
-        };
-        
-        for (let pos = 0; pos < referencia.length; pos++) {
-            const charAtual = referencia[pos];
-            if (errosVisuais[charAtual]) {
-                for (const charTroca of errosVisuais[charAtual]) {
-                    const variacao = referencia.substring(0, pos) + charTroca + referencia.substring(pos + 1);
-                    variacoes.add(variacao);
-                }
-            }
-        }
-        
-        // SEGUNDO: Posições finais (mais comuns)
-        for (let pos = referencia.length - 1; pos >= Math.max(0, referencia.length - 4); pos--) {
-            for (const char of charsComuns) {
-                if (char !== referencia[pos] && variacoes.size < 80) {
-                    const variacao = referencia.substring(0, pos) + char + referencia.substring(pos + 1);
-                    variacoes.add(variacao);
-                }
-            }
-        }
-        
-        // TERCEIRO: Posições iniciais  
-        for (let pos = 0; pos < Math.min(4, referencia.length) && variacoes.size < 120; pos++) {
-            for (const char of charsComuns) {
-                if (char !== referencia[pos] && variacoes.size < 120) {
-                    const variacao = referencia.substring(0, pos) + char + referencia.substring(pos + 1);
-                    variacoes.add(variacao);
-                }
-            }
-        }
-        
-        // (Transposições já feitas acima com prioridade máxima)
-        
-        // 3. REMOÇÕES (caractere a menos) - priorizando final
-        for (let i = referencia.length - 1; i >= 0 && variacoes.size < 140; i--) {
-            const variacao = referencia.substring(0, i) + referencia.substring(i + 1);
-            if (variacao.length >= referencia.length - 2) {
-                variacoes.add(variacao);
-            }
-        }
-        
-        // 4. INSERÇÕES (caractere a mais) - MUITO PRIORITÁRIAS no final
-        const charsInsercao = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        
-        // PRIMEIRO: Inserções no final (mais comum) - LOGO APÓS TRANSPOSIÇÕES  
-        for (const char of '0123456789') { // Priorizar números primeiro
-            const variacao = referencia + char;
-            variacoes.add(variacao);
-        }
-        for (const char of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') { // Depois letras
-            if (variacoes.size >= 60) break; // Limite menor para deixar espaço
-            const variacao = referencia + char;
-            variacoes.add(variacao);
-        }
-        
-        // DEPOIS: Outras inserções
-        for (let pos = referencia.length - 1; pos >= 0; pos--) {
-            for (const char of charsInsercao) {
-                if (variacoes.size >= 220) break;
-                const variacao = referencia.substring(0, pos) + char + referencia.substring(pos);
-                if (variacao.length <= referencia.length + 2) {
-                    variacoes.add(variacao);
-                }
-            }
-        }
-        
-        // Converter para array e filtrar por distância
-        const resultado = Array.from(variacoes).filter(variacao => {
-            const distancia = this.calcularDistanciaEdicao(referencia, variacao);
-            return distancia <= 2;
-        }).slice(0, 80); // Limitar a 80 variações mais relevantes
-        
-        console.log(`🔄 DIVISÃO: Geradas ${resultado.length} variações inteligentes para ${referencia}`);
-        return resultado;
-    }
-
-    async buscarPagamentoComMatchingDivisao(referencia, valorEsperado) {
-        console.log(`🔍 DIVISÃO-VALIDAÇÃO: Buscando pagamento ${referencia} - ${valorEsperado}MT`);
-        
-        try {
-            // 1. BUSCA EXATA PRIMEIRO
-            console.log(`🔍 DIVISÃO-VALIDAÇÃO: Tentando busca exata primeiro...`);
-            
-            const responseExata = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
-                action: "buscar_por_referencia",
-                referencia: referencia,
-                valor: valorEsperado
-            }, {
-                timeout: 15000,
-                headers: { 'Content-Type': 'application/json' }
-            });
-            
-            // Se encontrou exato, retornar
-            if (responseExata.data && responseExata.data.encontrado) {
-                console.log(`✅ DIVISÃO-VALIDAÇÃO: Referência EXATA encontrada!`);
-                const valorPago = responseExata.data.valor || valorEsperado;
-                
-                if (Math.abs(valorPago - valorEsperado) <= 5) {
-                    return { 
-                        encontrado: true, 
-                        pagamento: { referencia: referencia, valor: valorPago }, 
-                        matchType: 'exato',
-                        valorPago: valorPago 
-                    };
-                } else {
-                    return { 
-                        encontrado: false, 
-                        erro: `Valor incorreto. Pago: ${valorPago}MT, Esperado: ${valorEsperado}MT`,
-                        referenciaEncontrada: referencia 
-                    };
-                }
-            }
-            
-            // 2. BUSCA SIMILAR (ATÉ 2 DIFERENÇAS)
-            console.log(`🔄 DIVISÃO-VALIDAÇÃO: Busca exata não encontrou - Tentando busca similar...`);
-            
-            const variacoes = this.gerarVariacoesReferencia(referencia);
-            console.log(`🔄 DIVISÃO-VALIDAÇÃO: Testando ${variacoes.length} variações...`);
-            
-            for (const variacao of variacoes) {
-                if (variacao === referencia) continue; // Já testamos a exata
-                
-                try {
-                    const responseSimilar = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
-                        action: "buscar_por_referencia",
-                        referencia: variacao,
-                        valor: valorEsperado
-                    }, {
-                        timeout: 10000,
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    
-                    if (responseSimilar.data && responseSimilar.data.encontrado) {
-                        const valorPago = responseSimilar.data.valor || valorEsperado;
-                        
-                        if (Math.abs(valorPago - valorEsperado) <= 5) {
-                            console.log(`✅ DIVISÃO-VALIDAÇÃO: Referência SIMILAR encontrada!`);
-                            console.log(`   Original: ${referencia} → Encontrada: ${variacao}`);
-                            
-                            return { 
-                                encontrado: true, 
-                                pagamento: { referencia: variacao, valor: valorPago }, 
-                                matchType: 'similar',
-                                referenciaOriginal: referencia,
-                                valorPago: valorPago 
-                            };
-                        }
-                    }
-                    
-                } catch (errorVariacao) {
-                    // Erro em variação específica - continuar com próxima
-                    console.log(`⚠️ Erro ao testar variação ${variacao}: ${errorVariacao.message}`);
-                    continue;
-                }
-            }
-            
-            console.log(`❌ DIVISÃO-VALIDAÇÃO: Nenhuma referência similar encontrada`);
-            
-            return { 
-                encontrado: false, 
-                erro: "Pagamento não encontrado na planilha (incluindo variações similares)",
-                detalhes: "Verifique se a referência está correta e se o pagamento foi processado"
-            };
-            
-        } catch (error) {
-            console.error(`❌ DIVISÃO-VALIDAÇÃO: Erro ao buscar pagamento:`, error.message);
-            return { encontrado: false, erro: "Erro de conexão com a planilha" };
-        }
-    }
-    
-    // Função principal de validação para divisão
-    async validarPagamentoDivisao(referencia, numeros, grupoId) {
-        console.log(`\n🔐 DIVISÃO-VALIDAÇÃO: Iniciando validação de pagamento`);
-        console.log(`📋 Referência: ${referencia}`);
-        console.log(`📱 Números: ${numeros.join(', ')}`);
-        console.log(`🏢 Grupo: ${grupoId}`);
-        
-        // 1. Calcular valor esperado baseado na configuração do grupo
-        const valorEsperado = this.calcularValorEsperadoDivisao(numeros, grupoId);
-        if (!valorEsperado) {
-            return {
-                valido: false,
-                erro: "Não foi possível calcular valor esperado para este grupo",
-                detalhes: "Verifique se o grupo está configurado corretamente"
-            };
-        }
-        
-        // 2. Buscar pagamento na planilha com matching
-        const resultadoBusca = await this.buscarPagamentoComMatchingDivisao(referencia, valorEsperado.valorTotal);
-        
-        if (!resultadoBusca.encontrado) {
-            return {
-                valido: false,
-                erro: resultadoBusca.erro,
-                valorEsperado: valorEsperado.valorTotal,
-                detalhes: resultadoBusca.referenciaEncontrada ? 
-                    `Referência encontrada: ${resultadoBusca.referenciaEncontrada}` : 
-                    "Nenhuma referência similar encontrada"
-            };
-        }
-        
-        // 3. Validação bem-sucedida
-        console.log(`✅ DIVISÃO-VALIDAÇÃO CONCLUÍDA COM SUCESSO`);
-        
-        let mensagemSucesso = `Pagamento validado com sucesso!`;
-        if (resultadoBusca.matchType === 'similar') {
-            mensagemSucesso += ` (Referência similar: ${resultadoBusca.pagamento.referencia})`;
-        }
-        
-        return {
-            valido: true,
-            pagamento: resultadoBusca.pagamento,
-            valorPago: resultadoBusca.valorPago,
-            valorEsperado: valorEsperado.valorTotal,
-            valorPorNumero: valorEsperado.valorPorNumero,
-            matchType: resultadoBusca.matchType,
-            mensagem: mensagemSucesso,
-            detalhes: {
-                referenciaOriginal: referencia,
-                referenciaEncontrada: resultadoBusca.pagamento.referencia,
-                matchType: resultadoBusca.matchType || 'exato'
-            }
-        };
-    }
-    
-    // Função para calcular valor esperado na divisão
-    calcularValorEsperadoDivisao(numeros, grupoId) {
-        const configGrupo = this.CONFIGURACAO_GRUPOS[grupoId];
-        if (!configGrupo || !configGrupo.precos) {
-            console.log(`❌ DIVISÃO-VALIDAÇÃO: Grupo ${grupoId} não configurado`);
-            return null;
-        }
-        
-        const numNumeros = numeros.length;
-        console.log(`📊 DIVISÃO-VALIDAÇÃO: Calculando valor para ${numNumeros} número(s)`);
-        
-        // Buscar valores que sejam múltiplos do número de números
-        const opcoesDivisao = [];
-        
-        for (const [megas, preco] of Object.entries(configGrupo.precos)) {
-            if (preco % numNumeros === 0) { // Divisível exatamente
-                opcoesDivisao.push({
-                    precoTotal: preco,
-                    precoPorNumero: preco / numNumeros,
-                    megas: parseInt(megas)
-                });
-            }
-        }
-        
-        if (opcoesDivisao.length > 0) {
-            // Usar a primeira opção válida
-            const opcaoEscolhida = opcoesDivisao[0];
-            console.log(`✅ DIVISÃO-VALIDAÇÃO: Valor esperado calculado: ${opcaoEscolhida.precoTotal}MT (${opcaoEscolhida.precoPorNumero}MT por número)`);
-            return {
-                valorTotal: opcaoEscolhida.precoTotal,
-                valorPorNumero: opcaoEscolhida.precoPorNumero,
-                opcoes: opcoesDivisao
-            };
-        }
-        
-        // Se não encontrou divisão exata, usar valor estimado
-        const precos = Object.values(configGrupo.precos);
-        const precoMedio = precos.reduce((sum, p) => sum + p, 0) / precos.length;
-        const valorEstimado = Math.round(precoMedio * numNumeros / 50) * 50; // Arredondar para 50s
-        
-        console.log(`⚠️ DIVISÃO-VALIDAÇÃO: Usando valor estimado: ${valorEstimado}MT`);
-        return {
-            valorTotal: valorEstimado,
-            valorPorNumero: Math.round(valorEstimado / numNumeros),
-            estimado: true
-        };
-    }
-
     // === BUSCAR PAGAMENTO NA PLANILHA ===
     async buscarPagamentoNaPlanilha(referencia, valorEsperado) {
         try {
