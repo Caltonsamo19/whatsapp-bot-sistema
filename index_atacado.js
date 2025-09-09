@@ -1432,13 +1432,42 @@ client.on('message', async (message) => {
                         return;
                         
                     } else if (resultadoIA.tipo === 'numero_processado') {
-                        const dadosCompletos = resultadoIA.dadosCompletos;
-                        const [referencia, megas, numero] = dadosCompletos.split('|');
-                        const nomeContato = message._data.notifyName || 'N/A';
-                        const autorMensagem = message.author || 'Desconhecido';
-                        
-                        // Converter megas para formato numérico
-                        const megasConvertido = converterMegasParaNumero(megas);
+                        // NOVA LÓGICA: Verificar se houve subdivisão
+                        if (resultadoIA.subdividido && resultadoIA.pedidosSubdivididos) {
+                            console.log(`🔧 ATACADO: Processando ${resultadoIA.pedidosSubdivididos.length} pedidos subdivididos...`);
+                            
+                            // Processar cada pedido subdividido separadamente
+                            for (let i = 0; i < resultadoIA.pedidosSubdivididos.length; i++) {
+                                const pedidoSubdividido = resultadoIA.pedidosSubdivididos[i];
+                                const [referenciaSubdiv, megasSubdiv, numeroSubdiv] = pedidoSubdividido.split('|');
+                                
+                                console.log(`   📦 ATACADO: Processando bloco ${i + 1}/${resultadoIA.pedidosSubdivididos.length}: ${referenciaSubdiv} - ${Math.floor(megasSubdiv/1024)}GB`);
+                                
+                                const nomeContato = message._data.notifyName || 'N/A';
+                                const autorMensagem = message.author || 'Desconhecido';
+                                const megasConvertido = converterMegasParaNumero(megasSubdiv);
+                                
+                                // Processar este bloco como pedido individual
+                                await processarPedidoIndividual(pedidoSubdividido, megasConvertido, referenciaSubdiv, numeroSubdiv, nomeContato, autorMensagem, message);
+                            }
+                            
+                            // Mensagem final sobre subdivisão
+                            await message.reply(`✅ *DIVISÃO CONCLUÍDA!*\n\n🔧 **${Math.floor(converterMegasParaNumero(resultadoIA.megas)/1024)}GB subdividido** em **${resultadoIA.pedidosSubdivididos.length} blocos de máx 10GB**\n\n📦 **Blocos criados:**\n${resultadoIA.pedidosSubdivididos.map((p, i) => `• ${p.split('|')[0]}: ${Math.floor(p.split('|')[1]/1024)}GB`).join('\n')}\n\n⚙️ *Sistema processa max 10GB por bloco*\n⏳ *Transferências serão executadas em instantes...*`);
+                            return;
+                            
+                        } else {
+                            // LÓGICA ORIGINAL: Pedido único (≤10GB)
+                            const dadosCompletos = resultadoIA.dadosCompletos;
+                            const [referencia, megas, numero] = dadosCompletos.split('|');
+                            const nomeContato = message._data.notifyName || 'N/A';
+                            const autorMensagem = message.author || 'Desconhecido';
+                            
+                            // Converter megas para formato numérico
+                            const megasConvertido = converterMegasParaNumero(megas);
+                            
+                            // Processar como pedido único
+                            await processarPedidoIndividual(dadosCompletos, megasConvertido, referencia, numero, nomeContato, autorMensagem, message);
+                        }
                         
                         // === NOVA VERIFICAÇÃO: CONFIRMAR PAGAMENTO ANTES DE PROCESSAR ===
                         console.log(`🔍 INDIVIDUAL: Verificando pagamento antes de processar screenshot...`);
@@ -1840,5 +1869,61 @@ process.on('SIGINT', async () => {
     process.exit(0);
 
 });
+
+// === NOVA FUNÇÃO: PROCESSAR PEDIDO INDIVIDUAL (EVITA DUPLICAÇÃO) ===
+async function processarPedidoIndividual(dadosCompletos, megasConvertido, referencia, numero, nomeContato, autorMensagem, message) {
+    console.log(`📝 INDIVIDUAL: Processando pedido individual: ${referencia} - ${Math.floor(megasConvertido/1024)}GB para ${numero}`);
+    
+    // 1. Calcular valor esperado baseado nos megas
+    const valorEsperado = calcularValorEsperadoDosMegas(megasConvertido, message.from);
+    
+    if (!valorEsperado) {
+        console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
+        
+        const resultadoEnvio = await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
+        if (resultadoEnvio === null) {
+            console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado para ${referencia}`);
+            return; // Para aqui se for duplicado
+        }
+        await registrarComprador(message.from, numero, nomeContato, Math.floor(megasConvertido/1024) + 'GB');
+        
+        if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
+            const timestampMensagem = new Date().toLocaleString('pt-BR');
+            const configGrupo = CONFIGURACAO_GRUPOS[message.from] || { nome: 'Grupo' };
+            adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
+        }
+        
+        console.log(`✅ INDIVIDUAL: ${referencia} processado sem verificação de pagamento`);
+        return;
+    }
+    
+    // 2. Verificar se pagamento existe
+    const pagamentoConfirmado = await verificarPagamentoIndividual(referencia, valorEsperado);
+    
+    if (!pagamentoConfirmado) {
+        const valorNormalizado = normalizarValor(valorEsperado);
+        console.log(`❌ INDIVIDUAL: Pagamento não confirmado para ${referencia} (${valorNormalizado}MT)`);
+        return; // Não processar se pagamento não confirmado
+    }
+    
+    console.log(`✅ INDIVIDUAL: Pagamento confirmado para ${referencia}! Processando...`);
+    
+    // 3. Se pagamento confirmado, processar normalmente
+    const resultadoEnvio = await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
+    if (resultadoEnvio === null) {
+        console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado para ${referencia}`);
+        return; // Para aqui se for duplicado
+    }
+    
+    await registrarComprador(message.from, numero, nomeContato, Math.floor(megasConvertido/1024) + 'GB');
+    
+    if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
+        const timestampMensagem = new Date().toLocaleString('pt-BR');
+        const configGrupo = CONFIGURACAO_GRUPOS[message.from] || { nome: 'Grupo' };
+        adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
+    }
+    
+    console.log(`✅ INDIVIDUAL: ${referencia} processado com sucesso - ${Math.floor(megasConvertido/1024)}GB para ${numero}`);
+}
 
 

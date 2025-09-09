@@ -674,14 +674,26 @@ Se não conseguires ler a imagem ou extrair os dados:
               const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
               
               if (megasCalculados) {
-                const dadosCompletos = `${comprovante.referencia}|${megasCalculados.quantidade}|${numeros[0]}`;
-                console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${dadosCompletos}`);
+                // NOVA LÓGICA: SEMPRE aplicar subdivisão se necessário (>10GB)
+                const pedidosFinais = this.aplicarSubdivisaoSeNecessario(
+                  comprovante.referencia, 
+                  megasCalculados.quantidade, 
+                  numeros[0]
+                );
+                
+                console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${pedidosFinais.length} bloco(s)`);
+                pedidosFinais.forEach((pedido, i) => {
+                  console.log(`      📦 Bloco ${i + 1}: ${pedido} (${Math.floor(pedido.split('|')[1]/1024)}GB)`);
+                });
+                
                 return { 
                   sucesso: true, 
-                  dadosCompletos: dadosCompletos,
+                  dadosCompletos: pedidosFinais.length === 1 ? pedidosFinais[0] : pedidosFinais,
+                  pedidosSubdivididos: pedidosFinais,
                   tipo: 'numero_processado',
                   numero: numeros[0],
                   megas: megasCalculados.megas,
+                  subdividido: pedidosFinais.length > 1,
                   fonte: 'imagem_com_legenda'
                 };
               } else {
@@ -1064,6 +1076,65 @@ Se não conseguires extrair, responde:
     status += `🔧 *APENAS IMAGENS:* Foram melhoradas drasticamente\n`;
     
     return status;
+  }
+  
+  // === NOVA FUNCIONALIDADE: SUBDIVISÃO EM BLOCOS DE 10GB PARA IMAGENS ===
+  aplicarSubdivisaoSeNecessario(referenciaBase, megasTotal, numero) {
+    console.log(`🔧 ATACADO: Verificando se ${megasTotal}MB (${Math.floor(megasTotal/1024)}GB) precisa subdivisão...`);
+    
+    // Se for 10GB ou menos, não precisa subdividir
+    if (megasTotal <= 10240) {
+      console.log(`   ✅ ATACADO: ${Math.floor(megasTotal/1024)}GB ≤ 10GB - Não precisa subdividir`);
+      return [`${referenciaBase}|${megasTotal}|${numero}`];
+    }
+    
+    // Precisa subdividir em blocos de 10GB
+    const numeroBlocos = Math.ceil(megasTotal / 10240);
+    const megasPorBloco = Math.floor(megasTotal / numeroBlocos);
+    const megasRestante = megasTotal % numeroBlocos;
+    
+    console.log(`   🔧 ATACADO: ${Math.floor(megasTotal/1024)}GB → ${numeroBlocos} blocos de ~${Math.floor(megasPorBloco/1024)}GB`);
+    
+    const pedidosSubdivididos = [];
+    
+    // Criar subdivisões
+    for (let i = 0; i < numeroBlocos; i++) {
+      let megasBloco = megasPorBloco;
+      
+      // Distribuir resto nos primeiros blocos
+      if (i < megasRestante) {
+        megasBloco += 1;
+      }
+      
+      // Garantir que nenhum bloco exceda 10GB
+      if (megasBloco > 10240) {
+        megasBloco = 10240;
+      }
+      
+      const novaReferencia = referenciaBase + String(i + 1);
+      const pedidoSubdividido = `${novaReferencia}|${megasBloco}|${numero}`;
+      
+      pedidosSubdivididos.push(pedidoSubdividido);
+      
+      console.log(`      📦 ATACADO: Bloco ${i + 1}/${numeroBlocos}: ${novaReferencia} - ${Math.floor(megasBloco/1024)}GB (${megasBloco}MB)`);
+    }
+    
+    // Validar se a subdivisão preservou o total
+    const totalSubdividido = pedidosSubdivididos.reduce((sum, pedido) => {
+      const megasPedido = parseInt(pedido.split('|')[1]);
+      return sum + megasPedido;
+    }, 0);
+    
+    if (Math.abs(megasTotal - totalSubdividido) > 5) {
+      console.error(`❌ ATACADO: Erro na subdivisão! Original: ${megasTotal}MB, Subdividido: ${totalSubdividido}MB`);
+      // Em caso de erro, retornar pedido original
+      return [`${referenciaBase}|${megasTotal}|${numero}`];
+    }
+    
+    console.log(`✅ ATACADO: Subdivisão concluída com sucesso!`);
+    console.log(`   📊 ${Math.floor(megasTotal/1024)}GB → ${pedidosSubdivididos.length} blocos (máx 10GB cada)`);
+    
+    return pedidosSubdivididos;
   }
 }
 
