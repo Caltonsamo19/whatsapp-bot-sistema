@@ -536,8 +536,31 @@ class WhatsAppBotDivisao {
             
             console.log(`✅ DIVISÃO: Pagamento confirmado!`);
             
-            // 2. CALCULAR DIVISÃO
-            const divisao = this.calcularDivisaoPorPrioridade(comprovativo.valor, numeros, grupoId);
+            // 2. VALIDAR SE O VALOR EXISTE NA TABELA DE PREÇOS (NOVA VALIDAÇÃO CRÍTICA)
+            const configGrupo = this.CONFIGURACAO_GRUPOS[grupoId];
+            if (!configGrupo || !configGrupo.precos) {
+                return {
+                    resposta: `❌ *GRUPO NÃO CONFIGURADO*\n\n🚫 Grupo ${grupoId} não tem tabela de preços configurada.`
+                };
+            }
+            
+            const valoresValidos = Object.values(configGrupo.precos);
+            const valorExisteNaTabela = valoresValidos.includes(comprovativo.valor);
+            
+            if (!valorExisteNaTabela) {
+                console.error(`❌ DIVISÃO: Valor ${comprovativo.valor}MT não existe na tabela de preços do grupo`);
+                console.log(`📋 DIVISÃO: Valores válidos: ${valoresValidos.join(', ')}MT`);
+                
+                return {
+                    resposta: `❌ *VALOR DESCONHECIDO*\n\n💰 **${comprovativo.valor}MT** não existe na nossa tabela de preços.\n\n📋 **Valores válidos:**\n${valoresValidos.map(v => `• ${v}MT`).join('\n')}\n\n🔄 Faça um novo pagamento com valor correto.`
+                };
+            }
+            
+            console.log(`✅ DIVISÃO: Valor ${comprovativo.valor}MT é válido na tabela de preços`);
+            
+            // 3. CALCULAR DIVISÃO COM ESPECIFICAÇÕES INDIVIDUAIS (NOVA LÓGICA)
+            const mensagemCompleta = message.body || '';
+            const divisao = this.calcularDivisaoComEspecificacoes(comprovativo.valor, numeros, grupoId, mensagemCompleta);
             
             if (!divisao || divisao.length === 0) {
                 return {
@@ -545,42 +568,58 @@ class WhatsAppBotDivisao {
                 };
             }
             
-            // 3. GERAR NOVAS REFERÊNCIAS
-            const novasReferencias = [];
-            for (let i = 0; i < divisao.length; i++) {
-                novasReferencias.push(comprovativo.referencia + String(i + 1).padStart(3, '0'));
+            console.log(`🧮 DIVISÃO: ${divisao.length} divisões calculadas antes da subdivisão`);
+            
+            // 4. SUBDIVIDIR EM BLOCOS DE 10GB (NOVA FUNCIONALIDADE CRÍTICA)
+            const subdivisoes = this.subdividirEmBlocosDE10GB(divisao, comprovativo.referencia);
+            
+            if (!subdivisoes || subdivisoes.length === 0) {
+                return {
+                    resposta: `❌ *ERRO NA SUBDIVISÃO*\n\n🔧 Falha ao subdividir pedidos em blocos de 10GB.\n\n⚙️ Problema técnico interno.`
+                };
             }
             
-            // 4. ENVIAR MENSAGEM INFORMATIVA
+            console.log(`🔧 SUBDIVISÃO: ${divisao.length} divisões → ${subdivisoes.length} blocos finais`);
+            
+            // 5. ENVIAR MENSAGEM INFORMATIVA (ATUALIZADA)
             let mensagemResposta = `🔄 *MÚLTIPLOS NÚMEROS DETECTADOS!*\n\n`;
             mensagemResposta += `💰 **${comprovativo.referencia}** - ${comprovativo.valor}MT\n`;
             mensagemResposta += `📱 **${numeros.length} números** serão processados\n\n`;
-            mensagemResposta += `⚡ **Divisão automática:**\n`;
             
+            // Mostrar divisão original (antes da subdivisão)
+            mensagemResposta += `⚡ **Divisão calculada:**\n`;
             divisao.forEach((item, i) => {
                 mensagemResposta += `   • ${item.numero}: ${item.megasTexto} (${item.valorMT}MT)\n`;
             });
             
-            mensagemResposta += `\n⏳ *Criando pedidos separados...*`;
+            // Se houve subdivisões, informar
+            if (subdivisoes.length > divisao.length) {
+                mensagemResposta += `\n🔧 **Subdividindo em blocos de 10GB:**\n`;
+                mensagemResposta += `   📦 ${divisao.length} divisões → ${subdivisoes.length} blocos\n`;
+                mensagemResposta += `   ⚙️ Sistema processa max 10GB por pedido\n`;
+            }
+            
+            mensagemResposta += `\n⏳ *Criando ${subdivisoes.length} pedidos separados...*`;
             
             // Enviar mensagem
             await message.reply(mensagemResposta);
             
-            // 5. CRIAR REGISTROS DIVIDIDOS
+            // 6. CRIAR REGISTROS SUBDIVIDIDOS (NOVA LÓGICA)
             let sucessos = 0;
             let duplicados = 0;
             let pedidosDuplicados = [];
             
-            for (let i = 0; i < divisao.length; i++) {
-                const { numero, megas, valorMT } = divisao[i];
-                const novaRef = novasReferencias[i];
+            for (let i = 0; i < subdivisoes.length; i++) {
+                const { numero, megas, valorMT, referenciaFinal } = subdivisoes[i];
+                
+                console.log(`📝 DIVISÃO: Processando ${i + 1}/${subdivisoes.length}: ${referenciaFinal} - ${megas/1024}GB (${valorMT}MT) para ${numero}`);
                 
                 try {
                     // PEDIDO na planilha de pedidos
-                    const resultadoPedido = await this.enviarParaPlanilhaPedidos(novaRef, megas, numero, grupoId);
+                    const resultadoPedido = await this.enviarParaPlanilhaPedidos(referenciaFinal, megas, numero, grupoId);
                     
                     // PAGAMENTO na planilha de pagamentos  
-                    const resultadoPagamento = await this.enviarParaPlanilhaPagamentos(novaRef, valorMT, numero, grupoId);
+                    const resultadoPagamento = await this.enviarParaPlanilhaPagamentos(referenciaFinal, valorMT, numero, grupoId);
                     
                     // Verificar se foram duplicados (tanto pedido quanto pagamento)
                     const pedidoDuplicado = resultadoPedido && resultadoPedido.duplicado;
@@ -589,38 +628,38 @@ class WhatsAppBotDivisao {
                     if (pedidoDuplicado || pagamentoDuplicado) {
                         duplicados++;
                         pedidosDuplicados.push({
-                            referencia: novaRef,
+                            referencia: referenciaFinal,
                             numero: numero,
                             status: pedidoDuplicado ? resultadoPedido.status : 
                                    (pagamentoDuplicado ? resultadoPagamento.status : 'Existente')
                         });
-                        console.log(`⚠️ DIVISÃO: ${novaRef} já existia (duplicado)`);
+                        console.log(`⚠️ DIVISÃO: ${referenciaFinal} já existia (duplicado)`);
                     } else {
                         sucessos++;
-                        console.log(`✅ DIVISÃO: ${novaRef} criado com sucesso`);
+                        console.log(`✅ DIVISÃO: ${referenciaFinal} criado com sucesso`);
                     }
                     
                 } catch (error) {
-                    console.error(`❌ DIVISÃO: Erro ao processar ${novaRef}:`, error);
+                    console.error(`❌ DIVISÃO: Erro ao processar ${referenciaFinal}:`, error);
                     
                     // Se o erro for relacionado a duplicata, tratar como duplicado
                     if (error.message && (error.message.includes('Duplicado') || error.message.includes('já existe'))) {
                         duplicados++;
                         pedidosDuplicados.push({
-                            referencia: novaRef,
+                            referencia: referenciaFinal,
                             numero: numero,
                             status: 'Existente'
                         });
-                        console.log(`⚠️ DIVISÃO: ${novaRef} já existia (duplicado - detectado por erro)`);
+                        console.log(`⚠️ DIVISÃO: ${referenciaFinal} já existia (duplicado - detectado por erro)`);
                     } else {
                         // Erro real - não incrementar contadores, apenas registrar
-                        console.error(`❌ DIVISÃO: Erro não relacionado a duplicata em ${novaRef}:`, error.message);
+                        console.error(`❌ DIVISÃO: Erro não relacionado a duplicata em ${referenciaFinal}:`, error.message);
                         // Você pode adicionar uma variável para contar erros se necessário
                     }
                 }
             }
             
-            // 6. LIMPAR DADOS E RESPONDER
+            // 7. LIMPAR DADOS E RESPONDER
             const remetenteLimpeza = this.normalizarRemetente(message.author || message.from);
             delete this.comprovantesMemorizados[remetenteLimpeza];
             
@@ -629,9 +668,11 @@ class WhatsAppBotDivisao {
             
             if (sucessos > 0 && duplicados === 0) {
                 // Todos criados com sucesso
+                const referenciasCriadas = subdivisoes.map(sub => sub.referenciaFinal);
                 mensagemFinal = `✅ *DIVISÃO CONCLUÍDA!*\n\n` +
-                    `🎯 **${sucessos}/${divisao.length} pedidos criados**\n` +
-                    `📊 Referências: ${novasReferencias.join(', ')}\n\n` +
+                    `🎯 **${sucessos}/${subdivisoes.length} blocos criados**\n` +
+                    `📦 **Blocos criados:** ${referenciasCriadas.slice(0, 10).join(', ')}${referenciasCriadas.length > 10 ? '...' : ''}\n` +
+                    `🔧 **Máximo 10GB por bloco** (compatível com sistema de transferência)\n\n` +
                     `⏳ *O sistema principal processará as transferências em instantes...*`;
                     
             } else if (sucessos === 0 && duplicados > 0) {
@@ -713,7 +754,7 @@ class WhatsAppBotDivisao {
                         pedidos.map(p => `• ${p.referencia} (${p.numero})`).join('\n') + '\n\n';
                 });
                 
-                mensagemFinal += `📊 **Resumo:** ${sucessos} novos + ${duplicados} existentes = ${sucessos + duplicados}/${divisao.length} total`;
+                mensagemFinal += `📊 **Resumo:** ${sucessos} novos + ${duplicados} existentes = ${sucessos + duplicados}/${subdivisoes.length} blocos totais`;
                     
             } else {
                 // Erro geral - fornecer mais contexto
@@ -751,7 +792,9 @@ class WhatsAppBotDivisao {
                 processado: true, 
                 sucessos, 
                 duplicados, 
-                total: divisao.length,
+                total: subdivisoes.length,
+                divisoesOriginais: divisao.length,
+                blocosFinais: subdivisoes.length,
                 pedidosDuplicados: pedidosDuplicados
             };
             
@@ -795,8 +838,8 @@ class WhatsAppBotDivisao {
         }
     }
     
-    // === CALCULAR DIVISÃO POR PRIORIDADE ===
-    calcularDivisaoPorPrioridade(valorTotal, numeros, grupoId) {
+    // === CALCULAR DIVISÃO COM ESPECIFICAÇÕES INDIVIDUAIS ===
+    calcularDivisaoComEspecificacoes(valorTotal, numeros, grupoId, mensagemCompleta = '') {
         try {
             const configGrupo = this.CONFIGURACAO_GRUPOS[grupoId];
             if (!configGrupo || !configGrupo.precos) {
@@ -804,12 +847,139 @@ class WhatsAppBotDivisao {
                 return null;
             }
             
-            // Converter valor para megas total
-            let megasTotal = null;
+            console.log(`🧮 DIVISÃO: Iniciando cálculo com especificações para ${numeros.length} números`);
+            
+            // 1. EXTRAIR ESPECIFICAÇÕES INDIVIDUAIS DA MENSAGEM
+            const especificacoes = this.extrairEspecificacoes(mensagemCompleta, numeros);
+            
+            // 2. VERIFICAR SE TEM ESPECIFICAÇÕES VÁLIDAS
+            const numerosComEspecificacao = Object.keys(especificacoes);
+            
+            if (numerosComEspecificacao.length > 0) {
+                console.log(`🎯 DIVISÃO: Usando especificações individuais para ${numerosComEspecificacao.length}/${numeros.length} números`);
+                return this.calcularDivisaoPorEspecificacoes(valorTotal, numeros, especificacoes, configGrupo);
+            } else {
+                console.log(`⚖️ DIVISÃO: Nenhuma especificação encontrada, usando divisão por prioridade`);
+                return this.calcularDivisaoPorPrioridade(valorTotal, numeros, grupoId);
+            }
+            
+        } catch (error) {
+            console.error(`❌ DIVISÃO: Erro no cálculo com especificações:`, error);
+            return null;
+        }
+    }
+    
+    // === CALCULAR DIVISÃO POR ESPECIFICAÇÕES INDIVIDUAIS ===
+    calcularDivisaoPorEspecificacoes(valorTotal, numeros, especificacoes, configGrupo) {
+        try {
+            console.log(`📋 DIVISÃO: Calculando com especificações individuais`);
+            
+            const resultado = [];
+            let valorRestante = valorTotal;
+            let megasRestante = null;
+            
+            // Converter valor total para megas
             for (const [megas, preco] of Object.entries(configGrupo.precos)) {
                 if (preco === valorTotal) {
-                    megasTotal = parseInt(megas);
+                    megasRestante = parseInt(megas);
                     break;
+                }
+            }
+            
+            if (!megasRestante) {
+                console.error(`❌ DIVISÃO: Valor ${valorTotal}MT não encontrado na tabela`);
+                return null;
+            }
+            
+            console.log(`📊 DIVISÃO: ${valorTotal}MT = ${megasRestante}MB total disponível`);
+            
+            // 1. PROCESSAR NÚMEROS COM ESPECIFICAÇÕES
+            for (const numero of numeros) {
+                if (especificacoes[numero]) {
+                    const megasSolicitadas = especificacoes[numero];
+                    
+                    // Encontrar valor em MT correspondente
+                    let valorMT = null;
+                    for (const [megas, preco] of Object.entries(configGrupo.precos)) {
+                        if (parseInt(megas) === megasSolicitadas) {
+                            valorMT = preco;
+                            break;
+                        }
+                    }
+                    
+                    if (valorMT === null) {
+                        console.error(`❌ DIVISÃO: Não encontrou preço para ${megasSolicitadas}MB (${numero})`);
+                        return null;
+                    }
+                    
+                    if (valorMT > valorRestante) {
+                        console.error(`❌ DIVISÃO: Valor insuficiente para ${numero} (precisa ${valorMT}MT, restam ${valorRestante}MT)`);
+                        return null;
+                    }
+                    
+                    resultado.push({
+                        numero: numero,
+                        megas: megasSolicitadas,
+                        megasTexto: `${megasSolicitadas / 1024}GB`,
+                        valorMT: valorMT
+                    });
+                    
+                    valorRestante -= valorMT;
+                    megasRestante -= megasSolicitadas;
+                    
+                    console.log(`   ✅ ${numero}: ${megasSolicitadas/1024}GB (${valorMT}MT) - Restante: ${valorRestante}MT`);
+                }
+            }
+            
+            // 2. PROCESSAR NÚMEROS SEM ESPECIFICAÇÕES (se houver)
+            const numerosSemEspecificacao = numeros.filter(numero => !especificacoes[numero]);
+            
+            if (numerosSemEspecificacao.length > 0 && (valorRestante > 0 || megasRestante > 0)) {
+                console.log(`⚖️ DIVISÃO: Distribuindo restante (${valorRestante}MT/${megasRestante}MB) entre ${numerosSemEspecificacao.length} números`);
+                
+                const divisaoRestante = this.calcularDivisaoPorPrioridade(valorRestante, numerosSemEspecificacao, null, configGrupo, megasRestante);
+                
+                if (divisaoRestante) {
+                    resultado.push(...divisaoRestante);
+                }
+            }
+            
+            // 3. VERIFICAR SE A DIVISÃO ESTÁ CORRETA
+            const somaValores = resultado.reduce((sum, item) => sum + item.valorMT, 0);
+            if (somaValores !== valorTotal) {
+                console.error(`❌ DIVISÃO: Soma ${somaValores}MT ≠ Total ${valorTotal}MT`);
+                return null;
+            }
+            
+            console.log(`✅ DIVISÃO: Cálculo por especificações concluído - ${resultado.length} divisões`);
+            return resultado;
+            
+        } catch (error) {
+            console.error(`❌ DIVISÃO: Erro no cálculo por especificações:`, error);
+            return null;
+        }
+    }
+    
+    // === CALCULAR DIVISÃO POR PRIORIDADE (MANTIDA PARA COMPATIBILIDADE) ===
+    calcularDivisaoPorPrioridade(valorTotal, numeros, grupoId, configGrupo = null, megasDisponivel = null) {
+        try {
+            // Se não recebeu configGrupo, buscar pelo grupoId
+            if (!configGrupo) {
+                configGrupo = this.CONFIGURACAO_GRUPOS[grupoId];
+                if (!configGrupo || !configGrupo.precos) {
+                    console.error(`❌ DIVISÃO: Grupo ${grupoId} não configurado`);
+                    return null;
+                }
+            }
+            
+            // Converter valor para megas total (se não foi fornecido)
+            let megasTotal = megasDisponivel;
+            if (!megasTotal) {
+                for (const [megas, preco] of Object.entries(configGrupo.precos)) {
+                    if (preco === valorTotal) {
+                        megasTotal = parseInt(megas);
+                        break;
+                    }
                 }
             }
             
@@ -862,11 +1032,13 @@ class WhatsAppBotDivisao {
                 });
             }
             
-            // Verificar se a divisão está correta
-            const somaValores = resultado.reduce((sum, item) => sum + item.valorMT, 0);
-            if (somaValores !== valorTotal) {
-                console.error(`❌ DIVISÃO: Soma ${somaValores}MT ≠ Total ${valorTotal}MT`);
-                return null;
+            // Verificar se a divisão está correta (apenas se for divisão completa)
+            if (!megasDisponivel) {
+                const somaValores = resultado.reduce((sum, item) => sum + item.valorMT, 0);
+                if (somaValores !== valorTotal) {
+                    console.error(`❌ DIVISÃO: Soma ${somaValores}MT ≠ Total ${valorTotal}MT`);
+                    return null;
+                }
             }
             
             console.log(`✅ DIVISÃO: Cálculo concluído - ${resultado.length} divisões`);
@@ -874,6 +1046,114 @@ class WhatsAppBotDivisao {
             
         } catch (error) {
             console.error(`❌ DIVISÃO: Erro no cálculo:`, error);
+            return null;
+        }
+    }
+    
+    // === SUBDIVIDIR EM BLOCOS DE 10GB (NOVA FUNCIONALIDADE CRÍTICA) ===
+    subdividirEmBlocosDE10GB(divisoesOriginais, referenciaBase) {
+        try {
+            console.log(`🔧 SUBDIVISÃO: Iniciando subdivisão em blocos de 10GB para ${divisoesOriginais.length} divisões`);
+            
+            const subdivisoes = [];
+            let contadorGlobal = 1;
+            
+            for (const divisao of divisoesOriginais) {
+                const { numero, megas, valorMT } = divisao;
+                
+                // Se for 10GB ou menos, não precisa subdividir
+                if (megas <= 10240) {
+                    subdivisoes.push({
+                        ...divisao,
+                        referenciaFinal: referenciaBase + String(contadorGlobal).padStart(3, '0'),
+                        ehSubdivisao: false,
+                        blocoOriginal: contadorGlobal
+                    });
+                    contadorGlobal++;
+                    console.log(`   ✅ ${numero}: ${megas/1024}GB - Mantido sem subdivisão`);
+                    continue;
+                }
+                
+                // Precisa subdividir em blocos de 10GB
+                const numeroBlocos = Math.ceil(megas / 10240);
+                const megasPorBloco = Math.floor(megas / numeroBlocos);
+                const megasRestante = megas % numeroBlocos;
+                
+                console.log(`   🔧 ${numero}: ${megas/1024}GB → ${numeroBlocos} blocos de ~${megasPorBloco/1024}GB`);
+                
+                // Calcular valor proporcional por bloco
+                const valorPorBloco = Math.floor(valorMT / numeroBlocos);
+                const valorRestante = valorMT - (valorPorBloco * numeroBlocos);
+                
+                // Criar subdivisões
+                for (let i = 0; i < numeroBlocos; i++) {
+                    let megasBloco = megasPorBloco;
+                    let valorBloco = valorPorBloco;
+                    
+                    // Distribuir resto nos primeiros blocos
+                    if (i < megasRestante) {
+                        megasBloco += 1;
+                    }
+                    if (i < valorRestante) {
+                        valorBloco += 1;
+                    }
+                    
+                    // Garantir que nenhum bloco exceda 10GB
+                    if (megasBloco > 10240) {
+                        megasBloco = 10240;
+                    }
+                    
+                    const novaReferencia = referenciaBase + String(contadorGlobal).padStart(3, '0') + String(i + 1);
+                    
+                    subdivisoes.push({
+                        numero: numero,
+                        megas: megasBloco,
+                        megasTexto: `${megasBloco/1024}GB`,
+                        valorMT: valorBloco,
+                        referenciaFinal: novaReferencia,
+                        ehSubdivisao: true,
+                        blocoOriginal: contadorGlobal,
+                        indiceBlocoSubdivisao: i + 1,
+                        totalBlocosSubdivisao: numeroBlocos
+                    });
+                    
+                    console.log(`      📦 Bloco ${i + 1}/${numeroBlocos}: ${novaReferencia} - ${megasBloco/1024}GB (${valorBloco}MT)`);
+                }
+                
+                contadorGlobal++;
+            }
+            
+            // Validar se a subdivisão preservou os totais
+            const megasOriginais = divisoesOriginais.reduce((sum, div) => sum + div.megas, 0);
+            const valorOriginal = divisoesOriginais.reduce((sum, div) => sum + div.valorMT, 0);
+            const megasSubdivididas = subdivisoes.reduce((sum, sub) => sum + sub.megas, 0);
+            const valorSubdividido = subdivisoes.reduce((sum, sub) => sum + sub.valorMT, 0);
+            
+            if (Math.abs(megasOriginais - megasSubdivididas) > 10 || Math.abs(valorOriginal - valorSubdividido) > 5) {
+                console.error(`❌ SUBDIVISÃO: Erro de validação!`);
+                console.error(`   Megas: ${megasOriginais}MB → ${megasSubdivididas}MB (diff: ${megasOriginais - megasSubdivididas}MB)`);
+                console.error(`   Valor: ${valorOriginal}MT → ${valorSubdividido}MT (diff: ${valorOriginal - valorSubdividido}MT)`);
+                return null;
+            }
+            
+            // Verificar se TODOS os blocos são ≤10GB
+            const blocosExcedentes = subdivisoes.filter(sub => sub.megas > 10240);
+            if (blocosExcedentes.length > 0) {
+                console.error(`❌ SUBDIVISÃO: ${blocosExcedentes.length} blocos excedem 10GB:`);
+                blocosExcedentes.forEach(bloco => {
+                    console.error(`   • ${bloco.referenciaFinal}: ${bloco.megas/1024}GB (${bloco.numero})`);
+                });
+                return null;
+            }
+            
+            console.log(`✅ SUBDIVISÃO: Concluída com sucesso!`);
+            console.log(`   📊 ${divisoesOriginais.length} divisões → ${subdivisoes.length} blocos (máx 10GB cada)`);
+            console.log(`   🔍 Validação: ${megasOriginais/1024}GB/${valorOriginal}MT mantidos`);
+            
+            return subdivisoes;
+            
+        } catch (error) {
+            console.error(`❌ SUBDIVISÃO: Erro na subdivisão:`, error);
             return null;
         }
     }
@@ -1083,7 +1363,7 @@ class WhatsAppBotDivisao {
         return remetente; // Se não conseguir normalizar, retorna original
     }
 
-    // === EXTRAIR ESPECIFICAÇÕES DO CLIENTE ===
+    // === EXTRAIR ESPECIFICAÇÕES DO CLIENTE (APRIMORADA) ===
     extrairEspecificacoes(mensagem, numeros) {
         console.log(`🔍 DIVISÃO: Extraindo especificações da mensagem`);
         
@@ -1097,17 +1377,17 @@ class WhatsAppBotDivisao {
             const linha = linhas[i];
             console.log(`   🔍 Linha ${i + 1}: "${linha}"`);
             
-            // Padrão 1: GB e número na mesma linha (ex: "10gb 852118624")
-            const sameLinha = linha.match(/(\d+)\s*gb\s+(\d{9})/i);
+            // Padrão 1: GB e número na mesma linha (ex: "10gb 852118624" ou "852118624 10gb")
+            const sameLinha = linha.match(/(\d+)\s*gb\s+(\d{9})|((\d{9})\s+(\d+)\s*gb)/i);
             if (sameLinha) {
-                const gb = parseInt(sameLinha[1]);
-                const numero = sameLinha[2];
+                const gb = parseInt(sameLinha[1] || sameLinha[5]);
+                const numero = this.limparNumero(sameLinha[2] || sameLinha[4]);
                 
                 if (numeros.includes(numero) && !especificacoes[numero]) {
-                    especificacoes[numero] = gb * 1024;
-                    console.log(`   ✅ Padrão mesma linha: ${numero} → ${gb}GB`);
+                    especificacoes[numero] = gb * 1024; // Converter GB para MB
+                    console.log(`   ✅ Padrão mesma linha: ${numero} → ${gb}GB (${gb * 1024}MB)`);
                 }
-                continue; // Pular para próxima linha
+                continue;
             }
             
             // Padrão 2: Linha só com GB (ex: "10gb")
@@ -1119,24 +1399,50 @@ class WhatsAppBotDivisao {
                 // Procurar o PRÓXIMO número que ainda não tem especificação
                 for (let j = i + 1; j < linhas.length; j++) {
                     const linhaSeguinte = linhas[j];
-                    const numeroMatch = linhaSeguinte.match(/^(\d{9})$/);
+                    const numeroMatch = linhaSeguinte.match(/(\d{9})/);
                     
                     if (numeroMatch) {
-                        const numero = numeroMatch[1];
+                        const numero = this.limparNumero(numeroMatch[1]);
                         if (numeros.includes(numero) && !especificacoes[numero]) {
                             especificacoes[numero] = gb * 1024;
-                            console.log(`   ✅ Padrão separado: ${numero} → ${gb}GB`);
-                            break; // Parar na primeira correspondência
+                            console.log(`   ✅ Padrão separado: ${numero} → ${gb}GB (${gb * 1024}MB)`);
+                            break;
                         }
                     }
                 }
-                continue; // Pular para próxima linha
+                continue;
+            }
+            
+            // Padrão 3: Número seguido de GB (ex: "852118624 10gb")
+            const numeroGb = linha.match(/(\d{9})\s+(\d+)\s*gb/i);
+            if (numeroGb) {
+                const numero = this.limparNumero(numeroGb[1]);
+                const gb = parseInt(numeroGb[2]);
+                
+                if (numeros.includes(numero) && !especificacoes[numero]) {
+                    especificacoes[numero] = gb * 1024;
+                    console.log(`   ✅ Padrão número-gb: ${numero} → ${gb}GB (${gb * 1024}MB)`);
+                }
+                continue;
+            }
+            
+            // Padrão 4: Formato com hífen ou dois pontos (ex: "852118624: 10gb" ou "852118624 - 10gb")
+            const numeroSeparadorGb = linha.match(/(\d{9})\s*[:-]\s*(\d+)\s*gb/i);
+            if (numeroSeparadorGb) {
+                const numero = this.limparNumero(numeroSeparadorGb[1]);
+                const gb = parseInt(numeroSeparadorGb[2]);
+                
+                if (numeros.includes(numero) && !especificacoes[numero]) {
+                    especificacoes[numero] = gb * 1024;
+                    console.log(`   ✅ Padrão separador: ${numero} → ${gb}GB (${gb * 1024}MB)`);
+                }
+                continue;
             }
         }
         
         console.log(`   📊 Especificações finais extraídas:`);
         Object.entries(especificacoes).forEach(([numero, megas]) => {
-            console.log(`      • ${numero}: ${megas/1024}GB`);
+            console.log(`      • ${numero}: ${megas/1024}GB (${megas}MB)`);
         });
         
         return especificacoes;
