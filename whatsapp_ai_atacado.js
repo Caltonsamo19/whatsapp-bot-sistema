@@ -8,31 +8,71 @@ class WhatsAppAIAtacado {
     this.historicoMensagens = [];
     this.maxHistorico = 100;
     
-    // Configurar Google Vision (COPIADO EXATAMENTE DO BOT DE REFERÊNCIA)
+    // Configurar Google Vision com verificação robusta
     this.googleVisionEnabled = process.env.GOOGLE_VISION_ENABLED === 'true';
     this.googleVisionTimeout = parseInt(process.env.GOOGLE_VISION_TIMEOUT) || 10000;
     
+    console.log('🔍 Iniciando Google Vision...');
+    console.log(`📋 GOOGLE_VISION_ENABLED: ${process.env.GOOGLE_VISION_ENABLED}`);
+    console.log(`📁 GOOGLE_APPLICATION_CREDENTIALS: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
+    
     if (this.googleVisionEnabled) {
       try {
-        // Tentar inicializar Google Vision
-        if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-          // Usando arquivo de credenciais
-          this.visionClient = new vision.ImageAnnotatorClient();
-          console.log('🔍 Google Vision inicializado com arquivo de credenciais');
-        } else if (process.env.GOOGLE_VISION_API_KEY) {
-          // Usando API Key
+        const fs = require('fs');
+        const path = require('path');
+        
+        let initialized = false;
+        
+        // MÉTODO 1: Credenciais JSON diretamente na variável de ambiente
+        if (!initialized && process.env.GOOGLE_VISION_CREDENTIALS_JSON) {
+          try {
+            const credentials = JSON.parse(process.env.GOOGLE_VISION_CREDENTIALS_JSON);
+            this.visionClient = new vision.ImageAnnotatorClient({
+              credentials: credentials
+            });
+            console.log('✅ Google Vision inicializado com JSON das credenciais');
+            initialized = true;
+          } catch (jsonError) {
+            console.warn('⚠️ Erro ao parsear GOOGLE_VISION_CREDENTIALS_JSON:', jsonError.message);
+          }
+        }
+        
+        // MÉTODO 2: Arquivo de credenciais
+        if (!initialized && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+          const credentialsPath = path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+          console.log(`🔍 Verificando credenciais em: ${credentialsPath}`);
+          
+          if (fs.existsSync(credentialsPath)) {
+            this.visionClient = new vision.ImageAnnotatorClient();
+            console.log('✅ Google Vision inicializado com arquivo de credenciais');
+            initialized = true;
+          } else {
+            console.error(`❌ Arquivo de credenciais não encontrado: ${credentialsPath}`);
+          }
+        }
+        
+        // MÉTODO 3: API Key
+        if (!initialized && process.env.GOOGLE_VISION_API_KEY) {
           this.visionClient = new vision.ImageAnnotatorClient({
             apiKey: process.env.GOOGLE_VISION_API_KEY
           });
-          console.log('🔍 Google Vision inicializado com API Key');
-        } else {
-          console.log('⚠️ Google Vision desabilitado: credenciais não encontradas');
+          console.log('✅ Google Vision inicializado com API Key');
+          initialized = true;
+        }
+        
+        if (!initialized) {
+          console.log('⚠️ Google Vision desabilitado: nenhuma credencial válida encontrada');
           this.googleVisionEnabled = false;
+        } else {
+          console.log('🧪 Google Vision pronto para uso');
         }
       } catch (error) {
         console.error('❌ Erro ao inicializar Google Vision:', error.message);
+        console.error('❌ Stack trace:', error.stack);
         this.googleVisionEnabled = false;
       }
+    } else {
+      console.log('⚠️ Google Vision desabilitado via GOOGLE_VISION_ENABLED');
     }
     
     setInterval(() => {

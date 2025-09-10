@@ -1483,93 +1483,13 @@ client.on('message', async (message) => {
                             // Processar como pedido único
                             await processarPedidoIndividual(dadosCompletos, megasConvertido, referencia, numero, nomeContato, autorMensagem, message);
                         }
-                        
-                        // === NOVA VERIFICAÇÃO: CONFIRMAR PAGAMENTO ANTES DE PROCESSAR ===
-                        console.log(`🔍 INDIVIDUAL: Verificando pagamento antes de processar screenshot...`);
-                        
-                        // 1. Calcular valor esperado baseado nos megas
-                        const valorEsperado = calcularValorEsperadoDosMegas(megasConvertido, message.from);
-                        
-                        if (!valorEsperado) {
-                            console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
-                            
-                            const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, message.from, message);
-                            if (resultadoEnvio === null) {
-                                console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
-                                return; // Para aqui se for duplicado
-                            }
-                            await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
-                            
-                            if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
-                                const timestampMensagem = new Date().toLocaleString('pt-BR');
-                                adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
-                            }
-                            
-                            // Mensagem adaptada para subdivisão
-                            let mensagemResposta = `✅ *Screenshot + Número processados!*\n\n💰 Referência: ${referencia}\n📊 Megas: ${megas}\n📱 Número: ${numero}\n`;
-                            
-                            if (resultadoEnvio.subdividido) {
-                                mensagemResposta += `\n🔧 **Subdividido em ${resultadoEnvio.totalBlocos} blocos de máx 10GB**\n📦 **${resultadoEnvio.blocosNovos} novos blocos criados**\n⚙️ *Sistema processa max 10GB por pedido*\n`;
-                            }
-                            
-                            mensagemResposta += `\n⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`;
-                            
-                            await message.reply(mensagemResposta);
-                            return;
-                        }
-                        
-                        // 2. Verificar se pagamento existe
-                        const pagamentoConfirmado = await verificarPagamentoIndividual(referencia, valorEsperado);
-                        
-                        if (!pagamentoConfirmado) {
-                            const valorNormalizado = normalizarValor(valorEsperado);
-                            console.log(`❌ INDIVIDUAL: Pagamento não confirmado para screenshot - ${referencia} (${valorNormalizado}MT)`);
-                            
-                            await message.reply(
-                                `⏳ *AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO*\n\n` +
-                                `💰 Referência: ${referencia}\n` +
-                                `📊 Megas: ${megas}\n` +
-                                `📱 Número: ${numero}\n` +
-                                `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
-                                `🔍 Aguardando confirmação do pagamento na planilha...\n` +
-                                `⏱️ Tente novamente em alguns minutos.`
-                            );
-                            return;
-                        }
-                        
-                        console.log(`✅ INDIVIDUAL: Pagamento confirmado para screenshot! Processando...`);
-                        
-                        // 3. Se pagamento confirmado, processar normalmente
-                        const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, message.from, message);
-                        if (resultadoEnvio === null) {
-                            console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
-                            return; // Para aqui se for duplicado
-                        }
-                        await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
-                        
-                        if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
-                            const timestampMensagem = new Date().toLocaleString('pt-BR');
-                            adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
-                        }
-                        
-                        // Mensagem adaptada para subdivisão
-                        let mensagemResposta = `✅ *Screenshot + Número processados!*\n\n💰 Referência: ${referencia}\n📊 Megas: ${megas}\n📱 Número: ${numero}\n💳 Pagamento: ${normalizarValor(valorEsperado)}MT confirmado\n`;
-                        
-                        if (resultadoEnvio.subdividido) {
-                            mensagemResposta += `\n🔧 **Subdividido em ${resultadoEnvio.totalBlocos} blocos de máx 10GB**\n📦 **${resultadoEnvio.blocosNovos} novos blocos criados**\n⚙️ *Sistema processa max 10GB por pedido*\n`;
-                        }
-                        
-                        mensagemResposta += `\n⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`;
-                        
-                        await message.reply(mensagemResposta);
-                        return;
-                    }
                 } else {
                     await message.reply(
                         `❌ *Não consegui processar o comprovante da imagem!*\n\n` +
                         `📝 Envie o comprovante como texto.`
                     );
                 }
+            }
                 
             } catch (error) {
                 console.error('❌ Erro ao processar imagem:', error);
