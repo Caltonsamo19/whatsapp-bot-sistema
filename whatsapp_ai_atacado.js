@@ -249,7 +249,197 @@ Responde APENAS em JSON:
       
     } catch (error) {
       console.error('❌ Erro no método híbrido:', error.message);
-      throw error;
+      console.log('🔄 Fallback: Tentando com GPT-4 Vision diretamente...');
+      
+      // FALLBACK: Usar GPT-4 Vision diretamente (método original)
+      return await this.processarImagemGPT4Vision(imagemBase64, remetente, timestamp, configGrupo, legendaImagem);
+    }
+  }
+
+  // === FALLBACK: GPT-4 VISION DIRETO (MÉTODO ORIGINAL) ===
+  async processarImagemGPT4Vision(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
+    console.log(`🔄 Fallback GPT-4 Vision para ${remetente}`);
+    
+    const temLegendaValida = legendaImagem && 
+                            typeof legendaImagem === 'string' && 
+                            legendaImagem.trim().length > 0;
+    
+    if (temLegendaValida) {
+      console.log(`   📝 ATACADO: Legenda detectada: "${legendaImagem.trim()}"`);
+    }
+
+    // PROMPT ORIGINAL baseado no whatsapp_ai.js que funciona bem
+    const prompt = `
+Analisa esta imagem de comprovante de pagamento M-Pesa ou E-Mola de Moçambique.
+
+Procura por:
+1. Referência da transação (exemplos: CGC4GQ17W84, PP250712.2035.u31398, etc.)
+2. Valor transferido (em MT - Meticais)
+
+ATENÇÃO: 
+- Procura por palavras como "Confirmado", "ID da transacao", "Transferiste"
+- O valor pode estar em formato "100.00MT", "100MT", "100,00MT"
+- A referência é geralmente um código alfanumérico
+
+Responde APENAS no formato JSON:
+{
+  "referencia": "CGC4GQ17W84",
+  "valor": "210",
+  "encontrado": true
+}
+
+Se não conseguires ler a imagem ou extrair os dados:
+{"encontrado": false}`;
+
+    try {
+      const resposta = await this.openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${imagemBase64}`,
+                  detail: "high"
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 300
+      });
+
+      console.log(`   🔍 ATACADO: Resposta da IA para imagem: ${resposta.choices[0].message.content}`);
+      
+      const resultado = this.extrairJSON(resposta.choices[0].message.content);
+      console.log(`   ✅ ATACADO: JSON extraído da imagem:`, resultado);
+      
+      if (resultado.encontrado) {
+        const comprovante = {
+          referencia: resultado.referencia,
+          valor: this.limparValor(resultado.valor),
+          fonte: 'gpt4_vision',
+          metodo: 'fallback'
+        };
+        
+        return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem);
+      } else {
+        console.log(`   ❌ ATACADO: IA não conseguiu extrair dados da imagem`);
+        return {
+          sucesso: false,
+          tipo: 'imagem_nao_reconhecida',
+          mensagem: 'Não consegui ler o comprovante na imagem. Envie como texto.'
+        };
+      }
+      
+    } catch (error) {
+      console.error('❌ ATACADO: Erro ao processar imagem com GPT-4 Vision:', error);
+      return {
+        sucesso: false,
+        tipo: 'erro_processamento_imagem',
+        mensagem: 'Erro ao processar imagem. Tente enviar como texto.'
+      };
+    }
+  }
+
+  // === PROCESSAR COMPROVANTE EXTRAÍDO (FUNÇÃO AUXILIAR) ===
+  async processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo = null, legendaImagem = null) {
+    console.log(`   ✅ ATACADO: Dados extraídos da imagem: ${comprovante.referencia} - ${comprovante.valor}MT (${comprovante.metodo})`);
+    
+    const temLegendaValida = legendaImagem && 
+                            typeof legendaImagem === 'string' && 
+                            legendaImagem.trim().length > 0;
+    
+    // VERIFICAR SE HÁ LEGENDA COM NÚMEROS
+    if (temLegendaValida) {
+      console.log(`   🔍 ATACADO: ANALISANDO LEGENDA DA IMAGEM...`);
+      
+      const numeros = this.extrairNumerosSimples(legendaImagem);
+      
+      if (numeros.length > 0) {
+        console.log(`   🎯 ATACADO: IMAGEM + NÚMEROS NA LEGENDA DETECTADOS!`);
+        console.log(`   💰 Comprovante da imagem: ${comprovante.referencia} - ${comprovante.valor}MT`);
+        console.log(`   📱 Números da legenda: ${numeros.join(', ')}`);
+        
+        if (numeros.length === 1) {
+          // CORREÇÃO: Calcular megas antes de criar dados completos
+          const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+          
+          if (megasCalculados) {
+            // NOVA LÓGICA: SEMPRE aplicar subdivisão se necessário (>10GB)
+            const pedidosFinais = this.aplicarSubdivisaoSeNecessario(
+              comprovante.referencia, 
+              megasCalculados.quantidade, 
+              numeros[0]
+            );
+            
+            console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${pedidosFinais.length} bloco(s)`);
+            pedidosFinais.forEach((pedido, i) => {
+              console.log(`      📦 Bloco ${i + 1}: ${pedido} (${Math.floor(pedido.split('|')[1]/1024)}GB)`);
+            });
+            
+            return { 
+              sucesso: true, 
+              dadosCompletos: pedidosFinais.length === 1 ? pedidosFinais[0] : pedidosFinais,
+              pedidosSubdivididos: pedidosFinais,
+              tipo: 'numero_processado',
+              numero: numeros[0],
+              megas: megasCalculados.megas,
+              subdividido: pedidosFinais.length > 1,
+              fonte: 'imagem_com_legenda',
+              metodo: comprovante.metodo
+            };
+          } else {
+            console.log(`   ❌ ATACADO: Valor ${comprovante.valor}MT não encontrado na tabela`);
+            return {
+              sucesso: false,
+              tipo: 'valor_nao_encontrado_na_tabela',
+              valor: comprovante.valor,
+              mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
+            };
+          }
+        } else {
+          // Múltiplos números detectados - redirecionar para bot de divisão
+          console.log(`   ❌ ATACADO: Múltiplos números na legenda não permitidos`);
+          return {
+            sucesso: false,
+            tipo: 'multiplos_numeros_nao_permitido',
+            numeros: numeros,
+            comprovativo: comprovante, // INCLUIR dados do comprovativo
+            mensagem: 'Sistema atacado aceita apenas UM número por vez.'
+          };
+        }
+      }
+    }
+    
+    // Sem números na legenda - processar comprovante normalmente
+    // CORREÇÃO: Calcular megas antes de salvar
+    const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+    
+    if (megasCalculados) {
+      await this.processarComprovante(comprovante, remetente, timestamp);
+      
+      return { 
+        sucesso: true, 
+        tipo: 'comprovante_imagem_recebido',
+        referencia: comprovante.referencia,
+        valor: comprovante.valor,
+        megas: megasCalculados.megas,
+        metodo: comprovante.metodo,
+        mensagem: `Comprovante da imagem processado! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
+      };
+    } else {
+      console.log(`   ❌ ATACADO: Valor ${comprovante.valor}MT não encontrado na tabela`);
+      return {
+        sucesso: false,
+        tipo: 'valor_nao_encontrado_na_tabela',
+        valor: comprovante.valor,
+        mensagem: `❌ *VALOR NÃO ENCONTRADO NA TABELA!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n📋 Digite *tabela* para ver os valores disponíveis\n💡 Verifique se o valor está correto`
+      };
     }
   }
 
