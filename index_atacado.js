@@ -1436,7 +1436,7 @@ client.on('message', async (message) => {
                         if (resultadoIA.subdividido && resultadoIA.pedidosSubdivididos) {
                             console.log(`🔧 ATACADO: Processando ${resultadoIA.pedidosSubdivididos.length} pedidos subdivididos...`);
                             
-                            // Processar cada pedido subdividido separadamente
+                            // Processar cada pedido subdividido separadamente (SEM VERIFICAÇÃO DE PAGAMENTO)
                             for (let i = 0; i < resultadoIA.pedidosSubdivididos.length; i++) {
                                 const pedidoSubdividido = resultadoIA.pedidosSubdivididos[i];
                                 const [referenciaSubdiv, megasSubdiv, numeroSubdiv] = pedidoSubdividido.split('|');
@@ -1447,8 +1447,23 @@ client.on('message', async (message) => {
                                 const autorMensagem = message.author || 'Desconhecido';
                                 const megasConvertido = converterMegasParaNumero(megasSubdiv);
                                 
-                                // Processar este bloco como pedido individual
-                                await processarPedidoIndividual(pedidoSubdividido, megasConvertido, referenciaSubdiv, numeroSubdiv, nomeContato, autorMensagem, message);
+                                // ENVIAR DIRETO (pagamento original já foi verificado)
+                                console.log(`   💰 ATACADO: Bloco subdividido - pulando verificação de pagamento (original já verificado)`);
+                                
+                                const resultadoEnvio = await enviarParaTasker(referenciaSubdiv, megasConvertido, numeroSubdiv, message.from, message);
+                                if (resultadoEnvio === null) {
+                                    console.log(`   🛑 ATACADO: Bloco ${referenciaSubdiv} duplicado - continuando`);
+                                } else {
+                                    console.log(`   ✅ ATACADO: Bloco ${referenciaSubdiv} enviado com sucesso`);
+                                }
+                                
+                                await registrarComprador(message.from, numeroSubdiv, nomeContato, Math.floor(megasConvertido/1024) + 'GB');
+                                
+                                if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
+                                    const timestampMensagem = new Date().toLocaleString('pt-BR');
+                                    const configGrupo = CONFIGURACAO_GRUPOS[message.from] || { nome: 'Grupo' };
+                                    adicionarNaFila(pedidoSubdividido, autorMensagem, configGrupo.nome, timestampMensagem);
+                                }
                             }
                             
                             // Mensagem final sobre subdivisão
