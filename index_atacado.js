@@ -977,7 +977,7 @@ client.on('ready', async () => {
         console.log(`   📋 ${config.nome} (${grupoId})`);
     });
     
-    console.log('\n🔧 Comandos admin: .ia .divisao .clear_cache .test_busca .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo');
+    console.log('\n🔧 Comandos admin: .ia .divisao .test_busca .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo');
 });
 
 client.on('group-join', async (notification) => {
@@ -1059,10 +1059,9 @@ client.on('message', async (message) => {
             const comando = message.body.toLowerCase().trim();
 
             if (comando === '.ia') {
-                // OTIMIZAÇÃO: Usar status otimizado com estatísticas de cache
-                const statusIA = ia.getStatusOtimizado();
+                const statusIA = ia.getStatusDetalhado();
                 await message.reply(statusIA);
-                console.log(`🧠 Comando .ia executado (com estatísticas de cache)`);
+                console.log(`🧠 Comando .ia executado`);
                 return;
             }
 
@@ -1219,15 +1218,6 @@ client.on('message', async (message) => {
                 return;
             }
 
-            // NOVO COMANDO: Limpar cache da IA
-            if (comando === '.clear_cache') {
-                const tamanhoAnterior = ia.cacheResultados.size;
-                ia.cacheResultados.clear();
-                ia.tokenStats = { total: 0, saved: 0, calls: 0, cacheHits: 0 };
-                await message.reply(`🗑️ *Cache da IA limpo!*\n\n📊 ${tamanhoAnterior} entradas removidas\n📈 Estatísticas zeradas`);
-                return;
-            }
-
             // === COMANDOS PARA DETECÇÃO DE GRUPOS ===
             if (comando === '.grupos') {
                 try {
@@ -1329,10 +1319,8 @@ client.on('message', async (message) => {
         
         if (textoMensagem === 'tabela') {
             const configGrupoBasico = getConfiguracaoGrupo(message.from);
-            // OTIMIZAÇÃO: Usar cache da IA
-            const tabelaCacheada = ia.getCachedResponse('tabela', configGrupoBasico);
-            if (tabelaCacheada) {
-                await message.reply(tabelaCacheada);
+            if (configGrupoBasico && configGrupoBasico.tabela) {
+                await message.reply(configGrupoBasico.tabela);
             } else {
                 await message.reply('❌ Tabela não configurada para este grupo.');
             }
@@ -1341,10 +1329,8 @@ client.on('message', async (message) => {
         
         if (textoMensagem === 'pagamento') {
             const configGrupoBasico = getConfiguracaoGrupo(message.from);
-            // OTIMIZAÇÃO: Usar cache da IA
-            const pagamentoCacheado = ia.getCachedResponse('pagamento', configGrupoBasico);
-            if (pagamentoCacheado) {
-                await message.reply(pagamentoCacheado);
+            if (configGrupoBasico && configGrupoBasico.pagamento) {
+                await message.reply(configGrupoBasico.pagamento);
             } else {
                 await message.reply('❌ Informações de pagamento não configuradas para este grupo.');
             }
@@ -1523,16 +1509,14 @@ client.on('message', async (message) => {
             return;
         }
 
-        // Comandos de tabela e pagamento (OTIMIZADOS)
+        // Comandos de tabela e pagamento
         if (/tabela/i.test(message.body)) {
-            const tabelaCacheada = ia.getCachedResponse('tabela', configGrupo);
-            await message.reply(tabelaCacheada || configGrupo.tabela);
+            await message.reply(configGrupo.tabela);
             return;
         }
 
         if (/pagamento/i.test(message.body)) {
-            const pagamentoCacheado = ia.getCachedResponse('pagamento', configGrupo);
-            await message.reply(pagamentoCacheado || configGrupo.pagamento);
+            await message.reply(configGrupo.pagamento);
             return;
         }
 

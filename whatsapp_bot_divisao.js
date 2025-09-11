@@ -813,35 +813,27 @@ class WhatsAppBotDivisao {
         try {
             console.log(`🔍 DIVISÃO: Buscando pagamento ${referencia} - ${valorEsperado}MT`);
             
-            const resultado = await this.tentarComRetry(
-                async (timeout) => {
-                    const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
-                        action: "buscar_por_referencia",
-                        referencia: referencia,
-                        valor: valorEsperado
-                    }, {
-                        timeout: timeout,
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                    
-                    if (response.data && response.data.encontrado) {
-                        console.log(`✅ DIVISÃO: Pagamento encontrado!`);
-                        return true;
-                    }
-                    
-                    console.log(`❌ DIVISÃO: Pagamento não encontrado`);
-                    return false;
-                },
-                `Busca de pagamento ${referencia}`,
-                2 // Apenas 2 tentativas para busca
-            );
+            const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
+                action: "buscar_por_referencia",
+                referencia: referencia,
+                valor: valorEsperado
+            }, {
+                timeout: 15000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
             
-            return resultado;
+            if (response.data && response.data.encontrado) {
+                console.log(`✅ DIVISÃO: Pagamento encontrado!`);
+                return true;
+            }
+            
+            console.log(`❌ DIVISÃO: Pagamento não encontrado`);
+            return false;
             
         } catch (error) {
-            console.error(`❌ DIVISÃO: Erro ao buscar pagamento após tentativas:`, error.message);
+            console.error(`❌ DIVISÃO: Erro ao buscar pagamento:`, error.message);
             return false;
         }
     }
@@ -1166,32 +1158,6 @@ class WhatsAppBotDivisao {
         }
     }
     
-    // === FUNÇÃO AUXILIAR: Retry com backoff exponencial ===
-    async tentarComRetry(operacao, descricao, maxTentativas = 3) {
-        for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
-            try {
-                const timeout = 30000 + (tentativa * 30000); // 30s, 60s, 90s
-                console.log(`🔄 DIVISÃO: ${descricao} - Tentativa ${tentativa}/${maxTentativas} (timeout: ${timeout}ms)`);
-                
-                return await operacao(timeout);
-                
-            } catch (error) {
-                const isTimeout = error.code === 'ECONNABORTED' && error.message.includes('timeout');
-                const isUltimaTentativa = tentativa === maxTentativas;
-                
-                if (isTimeout && !isUltimaTentativa) {
-                    const delayMs = tentativa * 2000; // 2s, 4s
-                    console.log(`⏳ DIVISÃO: Timeout na tentativa ${tentativa}, aguardando ${delayMs}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delayMs));
-                    continue;
-                }
-                
-                console.error(`❌ DIVISÃO: ${descricao} falhou na tentativa ${tentativa}:`, error.message);
-                if (isUltimaTentativa) throw error;
-            }
-        }
-    }
-
     // === ENVIAR PARA PLANILHA DE PEDIDOS ===
     async enviarParaPlanilhaPedidos(referencia, megas, numero, grupoId) {
         console.log(`📋 DIVISÃO: Enviando pedido ${referencia}|${megas}|${numero}`);
@@ -1209,31 +1175,53 @@ class WhatsAppBotDivisao {
         
         console.log(`📋 DIVISÃO: Dados:`, JSON.stringify(dados));
         
-        return await this.tentarComRetry(
-            async (timeout) => {
-                const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
-                    timeout: timeout,
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                console.log(`📋 DIVISÃO: Resposta recebida:`, response.data);
-                
-                // Verificar se é pedido duplicado (caso especial)
-                if (response.data && response.data.duplicado) {
-                    console.log(`⚠️ DIVISÃO: Pedido ${referencia} já existe (Status: ${response.data.status_existente})`);
-                    return { duplicado: true, referencia, status: response.data.status_existente };
+        try {
+            const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
+                timeout: 30000, // Aumentado para 30 segundos (Google Apps Script pode ser lento)
+                headers: { 'Content-Type': 'application/json' },
+                retry: 2 // Tentar novamente se falhar
+            });
+            
+            console.log(`📋 DIVISÃO: Resposta recebida:`, response.data);
+            
+            // Verificar se é pedido duplicado (caso especial)
+            if (response.data && response.data.duplicado) {
+                console.log(`⚠️ DIVISÃO: Pedido ${referencia} já existe (Status: ${response.data.status_existente})`);
+                return { duplicado: true, referencia, status: response.data.status_existente };
+            }
+            
+            if (!response.data || !response.data.success) {
+                const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+                throw new Error(`Erro ao salvar pedido: ${responseText}`);
+            }
+            
+            console.log(`✅ DIVISÃO: Pedido salvo com sucesso - ${referencia}|${megas}|${numero}`);
+            
+        } catch (error) {
+            console.error(`❌ DIVISÃO: Erro ao enviar pedido:`, error.message);
+            
+            // Se foi timeout, tentar novamente
+            if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+                console.log(`🔄 DIVISÃO: Tentando reenviar pedido após timeout...`);
+                try {
+                    const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
+                        timeout: 45000, // 45 segundos na segunda tentativa
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    console.log(`✅ DIVISÃO: Pedido enviado na segunda tentativa:`, response.data);
+                    
+                    if (response.data && response.data.success) {
+                        console.log(`✅ DIVISÃO: Pedido salvo com sucesso na segunda tentativa - ${referencia}|${megas}|${numero}`);
+                        return;
+                    }
+                } catch (retryError) {
+                    console.error(`❌ DIVISÃO: Segunda tentativa também falhou:`, retryError.message);
                 }
-                
-                if (!response.data || !response.data.success) {
-                    const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-                    throw new Error(`Erro ao salvar pedido: ${responseText}`);
-                }
-                
-                console.log(`✅ DIVISÃO: Pedido salvo com sucesso - ${referencia}|${megas}|${numero}`);
-                return response.data;
-            },
-            `Envio de pedido ${referencia}`
-        );
+            }
+            
+            throw error;
+        }
     }
     
     // === ENVIAR PARA PLANILHA DE PAGAMENTOS ===
@@ -1253,45 +1241,71 @@ class WhatsAppBotDivisao {
         
         console.log(`💰 DIVISÃO: Dados:`, JSON.stringify(dados));
         
-        return await this.tentarComRetry(
-            async (timeout) => {
-                const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, dados, {
-                    timeout: timeout,
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                console.log(`💰 DIVISÃO: Resposta recebida:`, response.data);
-                
-                // Verificar se é pagamento duplicado (múltiplos formatos)
-                if (response.data && response.data.duplicado) {
-                    const status = response.data.status_existente || 'Existente';
-                    console.log(`⚠️ DIVISÃO: Pagamento ${referencia} já existe (Status: ${status})`);
-                    return { duplicado: true, referencia, status };
+        try {
+            
+            const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, dados, {
+                timeout: 30000, // Aumentado para 30 segundos (Google Apps Script pode ser lento)
+                headers: { 'Content-Type': 'application/json' },
+                retry: 2 // Tentar novamente se falhar
+            });
+            
+            console.log(`💰 DIVISÃO: Resposta recebida:`, response.data);
+            
+            // Verificar se é pagamento duplicado (múltiplos formatos)
+            if (response.data && response.data.duplicado) {
+                const status = response.data.status_existente || 'Existente';
+                console.log(`⚠️ DIVISÃO: Pagamento ${referencia} já existe (Status: ${status})`);
+                return { duplicado: true, referencia, status };
+            }
+            
+            // Verificar formato de string "Duplicado! REFERENCIA [IGNORADO]"
+            if (typeof response.data === 'string' && response.data.includes('Duplicado!')) {
+                console.log(`⚠️ DIVISÃO: Pagamento ${referencia} já existe (formato string)`);
+                // Tentar extrair status da mensagem se disponível
+                const statusMatch = response.data.match(/\[([^\]]+)\]/);
+                const status = statusMatch ? statusMatch[1] : 'Existente';
+                return { duplicado: true, referencia, status };
+            }
+            
+            // Verificar se foi sucesso - pode ser objeto {success: true} ou string "Sucesso!"
+            const isSuccess = (response.data && response.data.success) || 
+                             (typeof response.data === 'string' && response.data.includes('Sucesso'));
+            
+            if (!response.data || !isSuccess) {
+                const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+                throw new Error(`Erro ao salvar pagamento: ${responseText}`);
+            }
+            
+            console.log(`✅ DIVISÃO: Pagamento salvo com sucesso - ${referencia}|${valor}|${numero}`);
+            
+        } catch (error) {
+            console.error(`❌ DIVISÃO: Erro ao enviar pagamento:`, error.message);
+            
+            // Se foi timeout, tentar novamente
+            if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+                console.log(`🔄 DIVISÃO: Tentando reenviar pagamento após timeout...`);
+                try {
+                    const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, dados, {
+                        timeout: 45000, // 45 segundos na segunda tentativa
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    console.log(`✅ DIVISÃO: Pagamento enviado na segunda tentativa:`, response.data);
+                    
+                    const isSuccess = (response.data && response.data.success) || 
+                                     (typeof response.data === 'string' && response.data.includes('Sucesso'));
+                    
+                    if (isSuccess) {
+                        console.log(`✅ DIVISÃO: Pagamento salvo com sucesso na segunda tentativa - ${referencia}|${valor}|${numero}`);
+                        return;
+                    }
+                } catch (retryError) {
+                    console.error(`❌ DIVISÃO: Segunda tentativa de pagamento também falhou:`, retryError.message);
                 }
-                
-                // Verificar formato de string "Duplicado! REFERENCIA [IGNORADO]"
-                if (typeof response.data === 'string' && response.data.includes('Duplicado!')) {
-                    console.log(`⚠️ DIVISÃO: Pagamento ${referencia} já existe (formato string)`);
-                    // Tentar extrair status da mensagem se disponível
-                    const statusMatch = response.data.match(/\[([^\]]+)\]/);
-                    const status = statusMatch ? statusMatch[1] : 'Existente';
-                    return { duplicado: true, referencia, status };
-                }
-                
-                // Verificar se foi sucesso - pode ser objeto {success: true} ou string "Sucesso!"
-                const isSuccess = (response.data && response.data.success) || 
-                                 (typeof response.data === 'string' && response.data.includes('Sucesso'));
-                
-                if (!response.data || !isSuccess) {
-                    const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-                    throw new Error(`Erro ao salvar pagamento: ${responseText}`);
-                }
-                
-                console.log(`✅ DIVISÃO: Pagamento salvo com sucesso - ${referencia}|${valor}|${numero}`);
-                return response.data;
-            },
-            `Envio de pagamento ${referencia}`
-        );
+            }
+            
+            throw error;
+        }
     }
     
     // === LIMPEZA DE DADOS ANTIGOS ===
