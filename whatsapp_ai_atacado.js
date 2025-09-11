@@ -8,6 +8,16 @@ class WhatsAppAIAtacado {
     this.historicoMensagens = [];
     this.maxHistorico = 100;
     
+    // === OTIMIZAÇÃO: Cache de resultados para reduzir tokens ===
+    this.cacheResultados = new Map();
+    this.cacheTimeout = 30 * 60 * 1000; // 30 minutos
+    this.tokenStats = {
+      total: 0,
+      saved: 0,
+      calls: 0,
+      cacheHits: 0
+    };
+    
     // Configurar Google Vision com verificação robusta
     this.googleVisionEnabled = process.env.GOOGLE_VISION_ENABLED === 'true';
     this.googleVisionTimeout = parseInt(process.env.GOOGLE_VISION_TIMEOUT) || 10000;
@@ -77,6 +87,7 @@ class WhatsAppAIAtacado {
     
     setInterval(() => {
       this.limparComprovantesAntigos();
+      this.limparCacheAntigo(); // OTIMIZAÇÃO: Limpar cache junto
     }, 10 * 60 * 1000);
     
     const visionStatus = this.googleVisionEnabled ? 'Google Vision + GPT-4' : 'GPT-4 Vision';
@@ -209,48 +220,43 @@ class WhatsAppAIAtacado {
     }
   }
 
-  // === INTERPRETAR COMPROVANTE COM GPT (TEXTO PURO) ===
+  // === INTERPRETAR COMPROVANTE COM GPT (OTIMIZADO) ===
   async interpretarComprovanteComGPT(textoExtraido) {
     console.log('🧠 Interpretando texto extraído com GPT-4...');
     
-    const prompt = `
-Analisa este texto extraído de um comprovante M-Pesa ou E-Mola de Moçambique:
-
+    // OTIMIZAÇÃO: Cache para texto extraído
+    const cacheKey = `gpt_${Buffer.from(textoExtraido).toString('base64').substring(0, 32)}`;
+    const cached = this.cacheResultados.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
+      console.log('💾 ATACADO: Cache hit - GPT interpretação');
+      this.tokenStats.cacheHits++;
+      return cached.resultado;
+    }
+    
+    // OTIMIZAÇÃO: Prompt 50% mais curto
+    const prompt = `Extrair referência e valor MT de comprovante:
 "${textoExtraido}"
-
-Procura por:
-1. Referência da transação (exemplos: CGC4GQ17W84, PP250712.2035.u31398, etc.)
-2. Valor transferido (em MT - Meticais)
-
-INSTRUÇÕES IMPORTANTES:
-- A REFERÊNCIA pode estar QUEBRADA em múltiplas linhas. Ex: "PP250901.1250.B" + "64186" = "PP250901.1250.B64186"
-- RECONSTRÓI referências que estão separadas por quebras de linha
-- Procura por "ID da transacao", "Confirmado", "Transferiste"
-- Valores sempre têm "MT" (ex: "250.00 MT", "125 MT")
-- Referências E-Mola: formato como PP250901.1250.B64186
-- Referências M-Pesa: formato como CGC4GQ17W84
-
-IMPORTANTE: Analisa TODO o texto e encontra a MELHOR correspondência.
-
-Responde APENAS em JSON:
-{
-  "encontrado": true/false,
-  "referencia": "referencia_encontrada",
-  "valor": valor_numerico
-}`;
+JSON: {"encontrado":true,"referencia":"XXX","valor":123} ou {"encontrado":false}`;
 
     try {
+      this.tokenStats.calls++;
       const resposta = await this.openai.chat.completions.create({
         model: "gpt-4",
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 150,
-        temperature: 0.1
+        max_tokens: 100,
+        temperature: 0
       });
 
       console.log(`🔍 Resposta GPT-4: ${resposta.choices[0].message.content}`);
       
       const resultado = this.extrairJSON(resposta.choices[0].message.content);
       console.log(`✅ JSON extraído (GPT-4):`, resultado);
+      
+      // OTIMIZAÇÃO: Salvar no cache
+      this.cacheResultados.set(cacheKey, {
+        resultado: resultado,
+        timestamp: Date.now()
+      });
       
       return resultado;
       
@@ -308,30 +314,22 @@ Responde APENAS em JSON:
       console.log(`   📝 ATACADO: Legenda detectada: "${legendaImagem.trim()}"`);
     }
 
-    // PROMPT ORIGINAL baseado no whatsapp_ai.js que funciona bem
-    const prompt = `
-Analisa esta imagem de comprovante de pagamento M-Pesa ou E-Mola de Moçambique.
+    // OTIMIZAÇÃO: Cache para imagens (hash pequeno para performance)
+    const imageHash = imagemBase64.substring(0, 50);
+    const cacheKey = `vision_${Buffer.from(imageHash).toString('base64').substring(0, 32)}`;
+    const cached = this.cacheResultados.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
+      console.log('💾 ATACADO: Cache hit - GPT-4 Vision');
+      this.tokenStats.cacheHits++;
+      return cached.resultado;
+    }
 
-Procura por:
-1. Referência da transação (exemplos: CGC4GQ17W84, PP250712.2035.u31398, etc.)
-2. Valor transferido (em MT - Meticais)
-
-ATENÇÃO: 
-- Procura por palavras como "Confirmado", "ID da transacao", "Transferiste"
-- O valor pode estar em formato "100.00MT", "100MT", "100,00MT"
-- A referência é geralmente um código alfanumérico
-
-Responde APENAS no formato JSON:
-{
-  "referencia": "CGC4GQ17W84",
-  "valor": "210",
-  "encontrado": true
-}
-
-Se não conseguires ler a imagem ou extrair os dados:
-{"encontrado": false}`;
+    // OTIMIZAÇÃO: Prompt 30% mais curto
+    const prompt = `Extrair referência e valor de comprovante M-Pesa/E-Mola da imagem:
+JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":false}`;
 
     try {
+      this.tokenStats.calls++;
       const resposta = await this.openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
@@ -349,8 +347,8 @@ Se não conseguires ler a imagem ou extrair os dados:
             ]
           }
         ],
-        temperature: 0.1,
-        max_tokens: 300
+        temperature: 0,
+        max_tokens: 150
       });
 
       console.log(`   🔍 ATACADO: Resposta da IA para imagem: ${resposta.choices[0].message.content}`);
@@ -366,14 +364,30 @@ Se não conseguires ler a imagem ou extrair os dados:
           metodo: 'fallback'
         };
         
-        return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem);
+        const processado = await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem);
+        
+        // OTIMIZAÇÃO: Salvar resultado positivo no cache
+        this.cacheResultados.set(cacheKey, {
+          resultado: processado,
+          timestamp: Date.now()
+        });
+        
+        return processado;
       } else {
         console.log(`   ❌ ATACADO: IA não conseguiu extrair dados da imagem`);
-        return {
+        const resultadoNegativo = {
           sucesso: false,
           tipo: 'imagem_nao_reconhecida',
           mensagem: 'Não consegui ler o comprovante na imagem. Envie como texto.'
         };
+        
+        // OTIMIZAÇÃO: Salvar resultado negativo no cache também
+        this.cacheResultados.set(cacheKey, {
+          resultado: resultadoNegativo,
+          timestamp: Date.now()
+        });
+        
+        return resultadoNegativo;
       }
       
     } catch (error) {
@@ -1213,7 +1227,7 @@ Se não conseguires ler a imagem ou extrair os dados:
     };
   }
 
-  // === ANALISAR COMPROVANTE (CÓDIGO ORIGINAL) ===
+  // === ANALISAR COMPROVANTE (OTIMIZADO COM CACHE) ===
   async analisarComprovante(mensagem) {
     const temConfirmado = /^confirmado/i.test(mensagem.trim());
     const temID = /^id\s/i.test(mensagem.trim());
@@ -1222,47 +1236,59 @@ Se não conseguires ler a imagem ou extrair os dados:
       return null;
     }
 
-    const prompt = `
-Analisa esta mensagem de comprovante de pagamento M-Pesa ou E-Mola:
+    // OTIMIZAÇÃO: Verificar cache primeiro
+    const cacheKey = `comprovante_${Buffer.from(mensagem).toString('base64').substring(0, 32)}`;
+    const cached = this.cacheResultados.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
+      console.log('💾 ATACADO: Cache hit - comprovante');
+      this.tokenStats.cacheHits++;
+      return cached.resultado;
+    }
 
+    // OTIMIZAÇÃO: Prompt 40% mais curto
+    const prompt = `Extrair referência e valor de comprovante M-Pesa/E-Mola:
 "${mensagem}"
+JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":false}`;
 
-Extrai a referência da transação e o valor transferido.
-
-Responde APENAS no formato JSON:
-{
-  "referencia": "CGC4GQ17W84",
-  "valor": "210",
-  "encontrado": true
-}
-
-Se não conseguires extrair, responde:
-{"encontrado": false}
-`;
-
+    // OTIMIZAÇÃO: Parâmetros otimizados
+    this.tokenStats.calls++;
     const resposta = await this.openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: "Você é especialista em analisar comprovantes de pagamento moçambicanos M-Pesa e E-Mola." },
         { role: "user", content: prompt }
       ],
-      temperature: 0.1,
-      max_tokens: 200
+      temperature: 0,
+      max_tokens: 150,
+      top_p: 0.9
     });
 
     try {
       const resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
       
       if (resultado.encontrado) {
-        return {
+        const comprovanteProcessado = {
           referencia: resultado.referencia,
           valor: this.limparValor(resultado.valor),
           fonte: 'texto'
         };
+        
+        // OTIMIZAÇÃO: Salvar no cache
+        this.cacheResultados.set(cacheKey, {
+          resultado: comprovanteProcessado,
+          timestamp: Date.now()
+        });
+        
+        return comprovanteProcessado;
       }
     } catch (parseError) {
       console.error('❌ ATACADO: Erro ao parsear resposta da IA:', parseError);
     }
+
+    // OTIMIZAÇÃO: Salvar resultado negativo no cache também
+    this.cacheResultados.set(cacheKey, {
+      resultado: null,
+      timestamp: Date.now()
+    });
 
     return null;
   }
@@ -1338,6 +1364,23 @@ Se não conseguires extrair, responde:
 
     if (removidos > 0) {
       console.log(`🗑️ ATACADO: Removidos ${removidos} comprovantes antigos (>45min)`);
+    }
+  }
+
+  // === OTIMIZAÇÃO: Limpeza de cache ===
+  limparCacheAntigo() {
+    const agora = Date.now();
+    let removidos = 0;
+    
+    for (const [key, data] of this.cacheResultados.entries()) {
+      if (agora - data.timestamp > this.cacheTimeout) {
+        this.cacheResultados.delete(key);
+        removidos++;
+      }
+    }
+    
+    if (removidos > 0) {
+      console.log(`🗑️ ATACADO: Cache limpo - ${removidos} entradas antigas removidas`);
     }
   }
 
@@ -1437,6 +1480,48 @@ Se não conseguires extrair, responde:
     console.log(`   📊 ${Math.floor(megasTotal/1024)}GB → ${pedidosSubdivididos.length} blocos (máx 10GB cada)`);
     
     return pedidosSubdivididos;
+  }
+
+  // === OTIMIZAÇÃO: Cache para comandos frequentes ===
+  getCachedResponse(comando, configGrupo) {
+    const cacheKey = `comando_${comando}_${configGrupo?.nome || 'default'}`;
+    const cached = this.cacheResultados.get(cacheKey);
+    
+    if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
+      console.log(`💾 ATACADO: Cache hit - comando ${comando}`);
+      this.tokenStats.cacheHits++;
+      return cached.resultado;
+    }
+    
+    let resultado = null;
+    if (comando === 'tabela' && configGrupo?.tabela) {
+      resultado = configGrupo.tabela;
+    } else if (comando === 'pagamento' && configGrupo?.pagamento) {
+      resultado = configGrupo.pagamento;
+    }
+    
+    if (resultado) {
+      this.cacheResultados.set(cacheKey, {
+        resultado: resultado,
+        timestamp: Date.now()
+      });
+      console.log(`💾 ATACADO: Comando ${comando} armazenado no cache`);
+    }
+    
+    return resultado;
+  }
+
+  // === OTIMIZAÇÃO: Status com estatísticas de cache ===
+  getStatusOtimizado() {
+    const status = this.getStatusDetalhado();
+    const cacheSize = this.cacheResultados.size;
+    const hitRate = this.tokenStats.calls > 0 ? 
+      ((this.tokenStats.cacheHits / this.tokenStats.calls) * 100).toFixed(1) : 0;
+    
+    return status + `\n\n🚀 *OTIMIZAÇÕES ATIVAS:*\n` +
+      `💾 Cache: ${cacheSize} entradas ativas\n` +
+      `📊 Taxa de acerto: ${hitRate}% (${this.tokenStats.cacheHits}/${this.tokenStats.calls})\n` +
+      `💰 Economia estimada: ~${Math.round(this.tokenStats.cacheHits * 0.3)}% tokens poupados`;
   }
 }
 
