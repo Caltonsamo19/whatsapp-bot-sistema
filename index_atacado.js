@@ -1680,6 +1680,7 @@ client.on('message', async (message) => {
                 const inicioProcessamento = Date.now();
                 
                 // PROCESSAMENTO EM BACKGROUND - NÃO BLOQUEIA RESPOSTA
+                console.log(`🚀 INDIVIDUAL: Chamando função de background para ${referencia}`);
                 processarPedidoUnicoEmBackground(
                     referencia, megasConvertido, numero, message.from, message, 
                     dadosCompletos, autorMensagem, configGrupo, nomeContato, 
@@ -1957,6 +1958,18 @@ async function processarPedidoIndividual(dadosCompletos, megasConvertido, refere
     }
     
     console.log(`✅ INDIVIDUAL: ${referencia} processado com sucesso - ${Math.floor(megasConvertido/1024)}GB para ${numero}`);
+    
+    // ENVIAR MENSAGEM DE CONFIRMAÇÃO
+    await message.reply(
+        `✅ *Pedido processado!*\n\n` +
+        `💰 *Referência:* ${referencia}\n` +
+        `📊 *Megas:* ${Math.floor(megasConvertido/1024)}GB\n` +
+        `📱 *Número:* ${numero}\n` +
+        `💳 *Pagamento:* 125MT Confirmado\n\n` +
+        `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
+    );
+    
+    console.log(`📤 INDIVIDUAL: Mensagem de confirmação enviada para ${numero}`);
 }
 
 // === PROCESSAMENTO DE PEDIDO ÚNICO EM BACKGROUND (NOVA FUNÇÃO) ===
@@ -1968,7 +1981,7 @@ async function processarPedidoUnicoEmBackground(
     const inicioBackground = Date.now();
     
     try {
-        console.log(`🔄 BACKGROUND-ÚNICO: Processando ${referencia} para ${numero}`);
+        console.log(`🔄 BACKGROUND-ÚNICO: INICIADO - Processando ${referencia} para ${numero}`);
         
         // Processar o envio
         const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, grupoId, message);
