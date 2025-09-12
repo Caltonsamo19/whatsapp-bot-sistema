@@ -979,6 +979,26 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     console.log(`   📝 ATACADO: Analisando mensagem: "${mensagem}"`);
     
     const mensagemLimpa = mensagem.trim();
+    
+    // FILTRO DE ECONOMIA: Ignorar apenas conversas óbvias, mas manter funcionalidade
+    const eComprovanteObvio = /^(confirmado|id\s|id da transacao)/i.test(mensagemLimpa) || 
+                              /transferiste\s+\d+/i.test(mensagemLimpa) ||
+                              /^8[0-9]{8}$/.test(mensagemLimpa); // Número moçambicano
+    
+    const eComandoSistema = /(tabela|pagamento|teste|ajuda)/i.test(mensagemLimpa);
+    
+    const eConversaCasual = /^(bom dia|boa tarde|boa noite|olá|oi|como está|obrigad|muito obrigad)/i.test(mensagemLimpa) ||
+                           /^(quanto custa|qual.*preço|como funciona)/i.test(mensagemLimpa);
+    
+    // APENAS ignorar conversas casuais óbvias
+    if (!eComprovanteObvio && !eComandoSistema && eConversaCasual) {
+      console.log(`💰 ATACADO: POUPANDO TOKENS - Conversa casual ignorada: "${mensagemLimpa.substring(0,30)}..."`);
+      return { 
+        sucesso: false, 
+        tipo: 'conversa_casual_ignorada',
+        mensagem: null 
+      };
+    }
     const apenasNumeroRegex = /^(?:\+258\s*)?8[0-9]{8}$/;
     
     if (apenasNumeroRegex.test(mensagemLimpa)) {
