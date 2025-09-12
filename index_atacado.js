@@ -1662,13 +1662,17 @@ client.on('message', async (message) => {
                     const valorNormalizado = normalizarValor(valorEsperado);
                     console.log(`❌ INDIVIDUAL: Pagamento não confirmado para texto - ${referencia} (${valorNormalizado}MT)`);
                     
+                    // Detectar tipo de pagamento pela referência
+                    const eEMola = referencia.includes('PP') || referencia.includes('.') && referencia.length > 10;
+                    const tipoSistema = eEMola ? 'eMola' : 'M-Pesa';
+                    
                     await message.reply(
-                        `⏳ *AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO*\n\n` +
+                        `⏳ *AGUARDANDO MENSAGEM DE CONFIRMAÇÃO DE PAGAMENTO*\n\n` +
                         `💰 Referência: ${referencia}\n` +
                         `📊 Megas: ${megas}\n` +
                         `📱 Número: ${numero}\n` +
                         `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
-                        `🔍 Aguardando Mensagem de Confirmação de Pagamento...\n` +
+                        `🔍 O sistema ainda não recebeu a mensagem de confirmação do ${tipoSistema}.\n` +
                         `⏱️ Tente novamente em alguns minutos.`
                     );
                     return;
