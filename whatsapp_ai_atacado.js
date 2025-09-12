@@ -1231,8 +1231,10 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
   async analisarComprovante(mensagem) {
     const temConfirmado = /^confirmado/i.test(mensagem.trim());
     const temID = /^id\s/i.test(mensagem.trim());
+    const temIDdaTransacao = /^id da transacao/i.test(mensagem.trim());
+    const temTransferiste = /transferiste\s+\d+/i.test(mensagem);
     
-    if (!temConfirmado && !temID) {
+    if (!temConfirmado && !temID && !temIDdaTransacao && !temTransferiste) {
       return null;
     }
 
