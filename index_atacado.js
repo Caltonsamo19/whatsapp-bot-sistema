@@ -1942,6 +1942,17 @@ async function processarPedidoIndividual(dadosCompletos, megasConvertido, refere
     
     console.log(`✅ INDIVIDUAL: Pagamento confirmado para ${referencia}! Processando...`);
     
+    // ENVIAR MENSAGEM DE CONFIRMAÇÃO IMEDIATA
+    await message.reply(
+        `✅ *Pedido processado!*\n\n` +
+        `💰 *Referência:* ${referencia}\n` +
+        `📊 *Megas:* ${Math.floor(megasConvertido/1024)}GB\n` +
+        `📱 *Número:* ${numero}\n` +
+        `💳 *Pagamento:* 125MT Confirmado\n\n` +
+        `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
+    );
+    console.log(`📤 INDIVIDUAL: Mensagem de confirmação enviada imediatamente para ${numero}`);
+    
     // 3. Se pagamento confirmado, processar normalmente
     const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, message.from, message);
     if (resultadoEnvio === null) {
@@ -1958,18 +1969,6 @@ async function processarPedidoIndividual(dadosCompletos, megasConvertido, refere
     }
     
     console.log(`✅ INDIVIDUAL: ${referencia} processado com sucesso - ${Math.floor(megasConvertido/1024)}GB para ${numero}`);
-    
-    // ENVIAR MENSAGEM DE CONFIRMAÇÃO
-    await message.reply(
-        `✅ *Pedido processado!*\n\n` +
-        `💰 *Referência:* ${referencia}\n` +
-        `📊 *Megas:* ${Math.floor(megasConvertido/1024)}GB\n` +
-        `📱 *Número:* ${numero}\n` +
-        `💳 *Pagamento:* 125MT Confirmado\n\n` +
-        `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
-    );
-    
-    console.log(`📤 INDIVIDUAL: Mensagem de confirmação enviada para ${numero}`);
 }
 
 // === PROCESSAMENTO DE PEDIDO ÚNICO EM BACKGROUND (NOVA FUNÇÃO) ===
