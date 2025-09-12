@@ -422,7 +422,7 @@ async function verificarPagamentoIndividual(referencia, valorEsperado) {
             referencia: referencia,
             valor: valorNormalizado
         }, {
-            timeout: 15000,
+            timeout: 45000,
             headers: {
                 'Content-Type': 'application/json'
             }
@@ -1216,8 +1216,8 @@ client.on('message', async (message) => {
                     return;
                 }
                 
-                // Extrair parâmetros: .pedido CIC8HCO4GXC 10GB 851609341
-                const params = comando.replace('.pedido ', '').trim().split(' ');
+                // Extrair parâmetros da mensagem original (preservar maiúsculas/minúsculas)
+                const params = message.body.replace(/^\.pedido\s+/i, '').trim().split(' ');
                 
                 if (params.length < 3) {
                     await message.reply('❌ *Formato incorreto!*\n\n📝 Use: .pedido REFERENCIA MEGAS TELEFONE\n💡 Exemplo: .pedido CIC8HCO4GXC 10GB 851609341');
