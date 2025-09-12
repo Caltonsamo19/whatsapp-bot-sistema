@@ -1668,18 +1668,8 @@ client.on('message', async (message) => {
                 
                 console.log(`✅ INDIVIDUAL: Pagamento confirmado! Enviando resposta imediata...`);
                 
-                // OTIMIZAÇÃO: Resposta imediata para número único
+                // PROCESSAMENTO ACELERADO - SEM MENSAGEM IMEDIATA
                 const inicioProcessamento = Date.now();
-                await message.reply(
-                    `🚀 *PEDIDO CONFIRMADO!*\n\n` +
-                    `💰 **${referencia}** - ${normalizarValor(valorEsperado)}MT ✅\n` +
-                    `📊 **${megas}** → **${numero}**\n\n` +
-                    `⚡ *Processando transferência...*\n` +
-                    `⏱️ *Conclusão em ~10-30s*`
-                );
-                
-                const tempoResposta = Date.now() - inicioProcessamento;
-                console.log(`⚡ INDIVIDUAL: Resposta enviada em ${tempoResposta}ms`);
                 
                 // PROCESSAMENTO EM BACKGROUND - NÃO BLOQUEIA RESPOSTA
                 processarPedidoUnicoEmBackground(
@@ -2002,18 +1992,11 @@ async function processarPedidoUnicoEmBackground(
         
         console.log(`🏁 BACKGROUND-ÚNICO: Concluído em ${tempoTotal}ms (total: ${tempoTotalCompleto}ms)`);
         
-        // ENVIAR MENSAGEM FINAL DE SUCESSO
-        const tempoFormatado = tempoTotalCompleto > 10000 ? 
-            `${Math.round(tempoTotalCompleto/1000)}s` : `${tempoTotalCompleto}ms`;
-            
+        // ENVIAR MENSAGEM FINAL - FORMATO ORIGINAL
         await message.reply(
-            `🎉 *PEDIDO CONCLUÍDO!*\n\n` +
-            `✅ **${referencia}** processado\n` +
-            `📊 **${Math.floor(megasConvertido/1024)}GB** → **${numero}**\n` +
-            `💳 **${normalizarValor(valorEsperado)}MT** confirmado\n` +
-            `⚡ **Processado em ${tempoFormatado}**\n\n` +
-            `🚀 *Transferência executada automaticamente!*` +
-            (tempoTotalCompleto < 30000 ? `\n\n⚡ *Processamento rápido ativado!*` : '')
+            `✅ **${referencia}** - ${normalizarValor(valorEsperado)}MT\n` +
+            `📊 **${Math.floor(megasConvertido/1024)}GB** para **${numero}**\n\n` +
+            `🚀 *Transferência executada automaticamente!*`
         );
         
         console.log(`📤 BACKGROUND-ÚNICO: Mensagem final enviada para ${numero}`);
