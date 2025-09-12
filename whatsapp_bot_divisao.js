@@ -131,6 +131,16 @@ class WhatsAppBotDivisao {
                 return null;
             }
             
+            // FILTRO: Ignorar mensagens do sistema/bot 
+            if (/✅.*Transação Concluída Com Sucesso/i.test(mensagem) || 
+                /✅.*Pedido processado/i.test(mensagem) ||
+                /Transferencia Processada Automaticamente/i.test(mensagem) ||
+                (/📱.*Número:/i.test(mensagem) && /📊.*Megas:/i.test(mensagem) && /💰.*Referência:/i.test(mensagem)) ||
+                (/📱.*Número:/i.test(mensagem) && /📊.*Megas:/i.test(mensagem) && /🔖.*Referência:/i.test(mensagem))) {
+                console.log(`🤖 DIVISÃO: Ignorando mensagem do sistema/bot de ${remetente}`);
+                return null;
+            }
+            
             console.log(`\n🔍 DIVISÃO: Analisando mensagem de ${remetente}`);
             
             // 1. DETECTAR SE É COMPROVATIVO SEM NÚMEROS
@@ -925,7 +935,7 @@ class WhatsAppBotDivisao {
                 if (megas <= 10240) {
                     subdivisoes.push({
                         ...divisao,
-                        referenciaFinal: referenciaBase + String(contadorGlobal).padStart(3, '0'),
+                        referenciaFinal: referenciaBase + '.' + String(contadorGlobal).padStart(2, '0'),
                         ehSubdivisao: false,
                         blocoOriginal: contadorGlobal
                     });
@@ -963,7 +973,7 @@ class WhatsAppBotDivisao {
                         megasBloco = 10240;
                     }
                     
-                    const novaReferencia = referenciaBase + String(contadorGlobal).padStart(3, '0') + String(i + 1);
+                    const novaReferencia = referenciaBase + '.' + String(contadorGlobal).padStart(2, '0') + String(i + 1);
                     
                     subdivisoes.push({
                         numero: numero,
@@ -1345,6 +1355,13 @@ class WhatsAppBotDivisao {
 
     // === ENVIAR PARA PLANILHA DE PEDIDOS ===
     async enviarParaPlanilhaPedidos(referencia, megas, numero, grupoId) {
+        // VALIDAÇÃO: Garantir que referencia não é um número
+        if (/^\d+$/.test(referencia)) {
+            console.error(`❌ DIVISÃO: ERRO - Recebido número como referência: ${referencia}`);
+            console.error(`❌ DIVISÃO: Isso é um bug! Referência deve ser alfanumérica, não só números.`);
+            throw new Error(`Referência inválida: ${referencia} (deve ser alfanumérica)`);
+        }
+        
         console.log(`📋 DIVISÃO: Enviando pedido ${referencia}|${megas}|${numero}`);
         
         const timestamp = new Date().toLocaleString('pt-BR');
