@@ -1116,37 +1116,59 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
 
   // === EXTRAÇÃO DE JSON MELHORADA ===
   extrairJSONMelhorado(texto) {
-    console.log(`   🔍 ATACADO: Extraindo JSON melhorado de: ${texto}`);
+    console.log(`   🔍 ATACADO: Extraindo JSON melhorado de: ${texto.substring(0, 200)}...`);
     
+    // Tentar encontrar JSON completo primeiro
     try {
       return JSON.parse(texto);
     } catch (e) {
+      // Remover blocos de código se houver
       try {
         let limpo = texto.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         return JSON.parse(limpo);
       } catch (e2) {
+        // Procurar por JSON em qualquer lugar do texto
         try {
-          const match = texto.match(/\{[\s\S]*\}/);
+          const match = texto.match(/\{[^}]*"encontrado"\s*:\s*true[^}]*\}/);
           if (match) {
             return JSON.parse(match[0]);
           }
         } catch (e3) {
+          // Procurar por qualquer JSON válido
           try {
-            const refMatch = texto.match(/["']?referencia["']?\s*:\s*["']([^"']+)["']/i);
-            const valorMatch = texto.match(/["']?valor["']?\s*:\s*["']?([^"',}]+)["']?/i);
+            const match = texto.match(/\{[^{}]*\}/);
+            if (match) {
+              return JSON.parse(match[0]);
+            }
+          } catch (e4) {
+            // Extração manual como fallback - padrões mais robustos
+            const refMatch = texto.match(/["']?referencia["']?\s*:\s*["']?([A-Z0-9.]+)["']?/i);
+            const valorMatch = texto.match(/["']?valor["']?\s*:\s*["']?(\d+(?:\.\d+)?)["']?/i);
             const encontradoMatch = texto.match(/["']?encontrado["']?\s*:\s*(true|false)/i);
-            const tipoMatch = texto.match(/["']?tipo["']?\s*:\s*["']([^"']+)["']/i);
+            
+            // Tentar extrair de texto explicativo também
+            if (!refMatch) {
+              const refMatch2 = texto.match(/ID da transacao\s+([A-Z0-9.]+)/i);
+              const valorMatch2 = texto.match(/Transferiste\s+(\d+(?:\.\d+)?)MT/i);
+              
+              if (refMatch2 && valorMatch2) {
+                return {
+                  referencia: refMatch2[1].trim(),
+                  valor: valorMatch2[1].trim(),
+                  encontrado: true
+                };
+              }
+            }
             
             if (refMatch && valorMatch) {
               return {
                 referencia: refMatch[1].trim(),
                 valor: valorMatch[1].trim(),
-                encontrado: encontradoMatch ? encontradoMatch[1] === 'true' : true,
-                tipo: tipoMatch ? tipoMatch[1] : 'desconhecido'
+                encontrado: encontradoMatch ? encontradoMatch[1] === 'true' : true
               };
             }
-          } catch (e4) {
-            console.error('❌ ATACADO: Todas as tentativas de parsing falharam:', e4);
+            
+            console.error('❌ ATACADO: Todas as tentativas de parsing falharam');
           }
         }
       }
@@ -1247,10 +1269,14 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       return cached.resultado;
     }
 
-    // OTIMIZAÇÃO: Prompt 40% mais curto
-    const prompt = `Extrair referência e valor de comprovante M-Pesa/E-Mola:
+    // OTIMIZAÇÃO: Prompt direto e curto
+    const prompt = `Extrair dados:
 "${mensagem}"
-JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":false}`;
+
+APENAS responda com JSON válido:
+{"referencia":"XXX","valor":"123","encontrado":true}
+ou
+{"encontrado":false}`;
 
     // OTIMIZAÇÃO: Parâmetros otimizados
     this.tokenStats.calls++;
