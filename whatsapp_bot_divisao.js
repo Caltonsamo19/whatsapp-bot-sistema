@@ -526,6 +526,7 @@ class WhatsAppBotDivisao {
     
     // === PROCESSAR DIVISÃO ===
     async processarDivisao(comprovativo, numeros, grupoId, message) {
+        const inicioProcessamento = Date.now(); // OTIMIZAÇÃO: Timestamp para velocidade
         const chaveProcessamento = `${comprovativo.referencia}_${numeros.join('_')}`;
         
         // Evitar processamento duplicado
@@ -598,252 +599,55 @@ class WhatsAppBotDivisao {
             
             console.log(`🔧 SUBDIVISÃO: ${divisao.length} divisões → ${subdivisoes.length} blocos finais`);
             
-            // 5. ENVIAR MENSAGEM INFORMATIVA (ATUALIZADA)
-            let mensagemResposta = `🔄 *MÚLTIPLOS NÚMEROS DETECTADOS!*\n\n`;
-            mensagemResposta += `💰 **${comprovativo.referencia}** - ${comprovativo.valor}MT\n`;
-            mensagemResposta += `📱 **${numeros.length} números** serão processados\n\n`;
+            // 5. RESPOSTA IMEDIATA (OTIMIZADA PARA VELOCIDADE)
+            console.log(`🚀 DIVISÃO: Enviando resposta imediata ao WhatsApp`);
             
-            // Mostrar divisão original (antes da subdivisão)
-            mensagemResposta += `⚡ **Divisão calculada:**\n`;
-            divisao.forEach((item, i) => {
-                mensagemResposta += `   • ${item.numero}: ${item.megasTexto} (${item.valorMT}MT)\n`;
+            let mensagemImediata = `✅ *DIVISÃO INICIADA!*\n\n`;
+            mensagemImediata += `💰 **${comprovativo.referencia}** - ${comprovativo.valor}MT\n`;
+            mensagemImediata += `📱 **${numeros.length} números** detectados\n\n`;
+            
+            // Mostrar divisão de forma compacta
+            mensagemImediata += `⚡ **Divisão:**\n`;
+            divisao.slice(0, 5).forEach((item, i) => {
+                mensagemImediata += `   • ${item.numero.slice(-4)}: ${item.megasTexto}\n`;
             });
-            
-            // Se houve subdivisões, informar
-            if (subdivisoes.length > divisao.length) {
-                mensagemResposta += `\n🔧 **Subdividindo em blocos de 10GB:**\n`;
-                mensagemResposta += `   📦 ${divisao.length} divisões → ${subdivisoes.length} blocos\n`;
-                mensagemResposta += `   ⚙️ Sistema processa max 10GB por pedido\n`;
+            if (divisao.length > 5) {
+                mensagemImediata += `   • ... e mais ${divisao.length - 5} números\n`;
             }
             
-            mensagemResposta += `\n⏳ *Criando ${subdivisoes.length} pedidos na planilha...*`;
+            if (subdivisoes.length > divisao.length) {
+                mensagemImediata += `\n🔧 **${subdivisoes.length} blocos de 10GB criados**\n`;
+            }
             
-            // Enviar mensagem
-            await message.reply(mensagemResposta);
+            mensagemImediata += `\n🚀 *Processando em paralelo...*\n`;
+            mensagemImediata += `⏱️ *Aguarde ~${Math.ceil(subdivisoes.length/5)*10}s para conclusão*`;
             
-            // 6. CRIAR REGISTROS SUBDIVIDIDOS (PROCESSAMENTO PARALELO OTIMIZADO)
-            let sucessos = 0;
-            let duplicados = 0;
-            let erros = 0;
-            let pedidosDuplicados = [];
+            // ENVIAR RESPOSTA IMEDIATA (NÃO BLOQUEIA PROCESSAMENTO)
+            try {
+                await message.reply(mensagemImediata);
+                console.log(`✅ DIVISÃO: Resposta imediata enviada em ${Date.now() - inicioProcessamento}ms`);
+            } catch (error) {
+                console.error(`❌ DIVISÃO: Erro ao enviar resposta imediata:`, error.message);
+            }
             
-            console.log(`🚀 DIVISÃO: Processando ${subdivisoes.length} blocos EM PARALELO para máxima velocidade`);
+            // 6. PROCESSAMENTO EM BACKGROUND (OTIMIZADO PARA VELOCIDADE)
+            console.log(`🚀 DIVISÃO: Iniciando processamento em background de ${subdivisoes.length} blocos`);
             
-            // OTIMIZAÇÃO: Processar todos os pedidos em paralelo (pagamentos não são mais enviados)
-            const promessasProcessamento = subdivisoes.map(async ({ numero, megas, valorMT, referenciaFinal }, i) => {
-                const logPrefix = `📝 DIVISÃO [${i + 1}/${subdivisoes.length}]`;
-                console.log(`${logPrefix}: Enviando pedido ${referenciaFinal} - ${megas/1024}GB (${valorMT}MT) para ${numero}`);
-                
-                try {
-                    // OTIMIZAÇÃO: Apenas pedidos - pagamentos não são mais necessários
-                    const resultadoPedido = await this.enviarParaPlanilhaPedidos(referenciaFinal, megas, numero, grupoId);
-                    
-                    // Verificar se foi duplicado
-                    const pedidoDuplicado = resultadoPedido && resultadoPedido.duplicado;
-                    
-                    if (pedidoDuplicado) {
-                        console.log(`⚠️ ${logPrefix}: ${referenciaFinal} já existia (duplicado)`);
-                        return {
-                            tipo: 'duplicado',
-                            referencia: referenciaFinal,
-                            numero: numero,
-                            status: resultadoPedido.status || 'Existente'
-                        };
-                    } else {
-                        console.log(`✅ ${logPrefix}: ${referenciaFinal} criado com sucesso`);
-                        return { tipo: 'sucesso', referencia: referenciaFinal };
-                    }
-                    
-                } catch (error) {
-                    console.error(`❌ ${logPrefix}: Erro ao processar ${referenciaFinal}:`, error.message);
-                    
-                    // Se o erro for relacionado a duplicata, tratar como duplicado
-                    if (error.message && (error.message.includes('Duplicado') || error.message.includes('já existe'))) {
-                        console.log(`⚠️ ${logPrefix}: ${referenciaFinal} já existia (duplicado - detectado por erro)`);
-                        return {
-                            tipo: 'duplicado',
-                            referencia: referenciaFinal,
-                            numero: numero,
-                            status: 'Existente'
-                        };
-                    } else {
-                        console.error(`❌ ${logPrefix}: Erro real não relacionado a duplicata em ${referenciaFinal}`);
-                        return {
-                            tipo: 'erro',
-                            referencia: referenciaFinal,
-                            numero: numero,
-                            erro: error.message
-                        };
-                    }
-                }
-            });
+            // EXECUTAR EM BACKGROUND - NÃO BLOQUEIA A RESPOSTA
+            this.processarPedidosEmBackground(subdivisoes, grupoId, comprovativo.referencia, message);
             
-            // Aguardar todos os processamentos terminarem
-            console.log(`⏳ DIVISÃO: Aguardando ${promessasProcessamento.length} processamentos paralelos...`);
-            const resultados = await Promise.allSettled(promessasProcessamento);
-            
-            // Processar resultados
-            resultados.forEach((resultado, i) => {
-                if (resultado.status === 'fulfilled') {
-                    const res = resultado.value;
-                    switch (res.tipo) {
-                        case 'sucesso':
-                            sucessos++;
-                            break;
-                        case 'duplicado':
-                            duplicados++;
-                            pedidosDuplicados.push(res);
-                            break;
-                        case 'erro':
-                            erros++;
-                            console.error(`❌ DIVISÃO: Erro final em ${res.referencia}: ${res.erro}`);
-                            break;
-                    }
-                } else {
-                    erros++;
-                    console.error(`❌ DIVISÃO: Falha crítica no processamento ${i + 1}:`, resultado.reason);
-                }
-            });
-            
-            console.log(`🏁 DIVISÃO: Criação de pedidos concluída - ✅${sucessos} pedidos ⚠️${duplicados} duplicados ❌${erros} erros`);
-            
-            // 7. LIMPAR DADOS E RESPONDER
+            // 7. RESPOSTA RÁPIDA (PROCESSAMENTO CONTINUA EM BACKGROUND)
             const remetenteLimpeza = this.normalizarRemetente(message.author || message.from);
             delete this.comprovantesMemorizados[remetenteLimpeza];
             
-            // Criar mensagem final baseada no resultado
-            let mensagemFinal = '';
-            
-            if (sucessos > 0 && duplicados === 0) {
-                // Todos criados com sucesso
-                const referenciasCriadas = subdivisoes.map(sub => sub.referenciaFinal);
-                mensagemFinal = `✅ *DIVISÃO CONCLUÍDA!*\n\n` +
-                    `🎯 **${sucessos}/${subdivisoes.length} blocos criados**\n` +
-                    `📦 **Blocos criados:** ${referenciasCriadas.slice(0, 10).join(', ')}${referenciasCriadas.length > 10 ? '...' : ''}\n` +
-                    `🔧 **Máximo 10GB por bloco** (compatível com sistema de transferência)\n\n` +
-                    `⏳ *O sistema principal processará as transferências em instantes...*`;
-                    
-            } else if (sucessos === 0 && duplicados > 0) {
-                // Todos já existiam - mensagem personalizada por status
-                const pedidosPendentes = pedidosDuplicados.filter(p => 
-                    p.status === 'Pendente' || p.status === 'PENDENTE' || 
-                    p.status === 'Em Processamento' || p.status === 'Aguardando'
-                );
-                const pedidosProcessados = pedidosDuplicados.filter(p => 
-                    p.status === 'Processado' || p.status === 'PROCESSADO' || 
-                    p.status === 'Concluído' || p.status === 'Completo' ||
-                    p.status === 'Finalizado' || p.status === 'Executado'
-                );
-                const pedidosOutrosStatus = pedidosDuplicados.filter(p => 
-                    !pedidosPendentes.includes(p) && !pedidosProcessados.includes(p)
-                );
-                
-                if (pedidosPendentes.length === duplicados) {
-                    // Todos pendentes
-                    mensagemFinal = `⏳ *PEDIDOS JÁ EM PROCESSAMENTO*\n\n` +
-                        `📋 **${duplicados} pedidos já estão na planilha:**\n\n` +
-                        pedidosDuplicados.map(p => 
-                            `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
-                        ).join('\n') + 
-                        `\n\n⏳ *Aguarde o processamento automático.*\n` +
-                        `🔄 As transferências serão executadas em breve!`;
-                } else if (pedidosProcessados.length === duplicados) {
-                    // Todos processados
-                    mensagemFinal = `✅ *DIVISÃO JÁ PROCESSADA ANTERIORMENTE*\n\n` +
-                        `📋 **${duplicados} pedidos já foram executados:**\n\n` +
-                        pedidosDuplicados.map(p => 
-                            `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
-                        ).join('\n') + 
-                        `\n\n✅ *Os pedidos já foram concluídos anteriormente.*`;
-                } else {
-                    // Status misto
-                    mensagemFinal = `⚠️ *PEDIDOS JÁ EXISTEM COM STATUS VARIADOS*\n\n` +
-                        `📋 **${duplicados} pedidos encontrados:**\n\n`;
-                    
-                    if (pedidosPendentes.length > 0) {
-                        mensagemFinal += `⏳ **Pendentes (${pedidosPendentes.length}):**\n` +
-                            pedidosPendentes.map(p => `• ${p.referencia} (${p.numero})`).join('\n') + '\n\n';
-                    }
-                    
-                    if (pedidosProcessados.length > 0) {
-                        mensagemFinal += `✅ **Processados (${pedidosProcessados.length}):**\n` +
-                            pedidosProcessados.map(p => `• ${p.referencia} (${p.numero})`).join('\n') + '\n\n';
-                    }
-                    
-                    if (pedidosOutrosStatus.length > 0) {
-                        mensagemFinal += `📋 **Outros (${pedidosOutrosStatus.length}):**\n` +
-                            pedidosOutrosStatus.map(p => `• ${p.referencia} (${p.numero}) - ${p.status}`).join('\n') + '\n\n';
-                    }
-                    
-                    mensagemFinal += `🔍 *Verifique os status individuais acima.*`;
-                }
-                    
-            } else if (sucessos > 0 && duplicados > 0) {
-                // Alguns criados, alguns duplicados - mensagem detalhada
-                mensagemFinal = `⚠️ *DIVISÃO PARCIALMENTE PROCESSADA*\n\n` +
-                    `✅ **${sucessos} pedidos criados com sucesso**\n` +
-                    `📋 **${duplicados} pedidos já existiam:**\n\n`;
-                
-                // Agrupar duplicados por status
-                const duplicadosPorStatus = {};
-                pedidosDuplicados.forEach(p => {
-                    const status = p.status || 'Existente';
-                    if (!duplicadosPorStatus[status]) {
-                        duplicadosPorStatus[status] = [];
-                    }
-                    duplicadosPorStatus[status].push(p);
-                });
-                
-                // Mostrar duplicados agrupados por status
-                Object.entries(duplicadosPorStatus).forEach(([status, pedidos]) => {
-                    const emoji = status.toLowerCase().includes('pendent') || status.toLowerCase().includes('aguard') ? '⏳' : 
-                                 status.toLowerCase().includes('process') || status.toLowerCase().includes('conclu') ? '✅' : '📋';
-                    mensagemFinal += `${emoji} **${status} (${pedidos.length}):**\n` +
-                        pedidos.map(p => `• ${p.referencia} (${p.numero})`).join('\n') + '\n\n';
-                });
-                
-                mensagemFinal += `📊 **Resumo:** ${sucessos} novos + ${duplicados} existentes = ${sucessos + duplicados}/${subdivisoes.length} blocos totais`;
-                    
-            } else {
-                // Erro geral - fornecer mais contexto
-                if (duplicados > 0) {
-                    // Se teve duplicados mas nenhum sucesso, tratar como duplicados
-                    mensagemFinal = `⚠️ *ERRO NO PROCESSAMENTO*\n\n` +
-                        `🚫 Não foi possível processar os pedidos\n` +
-                        `📋 **${duplicados} pedidos com problemas:**\n\n` +
-                        pedidosDuplicados.map(p => 
-                            `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
-                        ).join('\n') + 
-                        `\n\n🔄 *Tente novamente ou contate o suporte.*`;
-                } else {
-                    // Erro geral sem duplicados
-                    mensagemFinal = `❌ *ERRO NA DIVISÃO*\n\n` +
-                        `🚫 Nenhum pedido foi processado com sucesso\n` +
-                        `⚠️ Possíveis causas:\n` +
-                        `• Problema de conectividade\n` +
-                        `• Erro nos dados de pagamento\n` +
-                        `• Falha temporária do sistema\n\n` +
-                        `🔄 *Tente novamente em alguns instantes.*`;
-                }
-            }
-            
-            // Aguardar um pouco antes da mensagem final
-            setTimeout(async () => {
-                try {
-                    await message.reply(mensagemFinal);
-                } catch (error) {
-                    console.error('❌ Erro ao enviar mensagem final:', error);
-                }
-            }, 2000);
+            const tempoResposta = Date.now() - inicioProcessamento;
+            console.log(`⚡ DIVISÃO: Resposta enviada em ${tempoResposta}ms - processamento continua em background`);
             
             return { 
                 processado: true, 
-                sucessos, 
-                duplicados, 
-                total: subdivisoes.length,
-                divisoesOriginais: divisao.length,
-                blocosFinais: subdivisoes.length,
-                pedidosDuplicados: pedidosDuplicados
+                resposta_imediata: true,
+                tempo_resposta_ms: tempoResposta,
+                blocos_em_processamento: subdivisoes.length
             };
             
         } catch (error) {
@@ -1211,6 +1015,187 @@ class WhatsAppBotDivisao {
         } catch (error) {
             console.error(`❌ SUBDIVISÃO: Erro na subdivisão:`, error);
             return null;
+        }
+    }
+
+    // === PROCESSAMENTO EM BACKGROUND (NOVA FUNÇÃO) ===
+    async processarPedidosEmBackground(subdivisoes, grupoId, referenciaOriginal, message) {
+        const inicioBackground = Date.now();
+        let sucessos = 0;
+        let duplicados = 0;
+        let erros = 0;
+        let pedidosDuplicados = [];
+        
+        try {
+            console.log(`🔄 BACKGROUND: Processando ${subdivisoes.length} pedidos em paralelo`);
+            
+            // PROCESSAMENTO PARALELO EM BACKGROUND
+            const promessasProcessamento = subdivisoes.map(async ({ numero, megas, valorMT, referenciaFinal }, i) => {
+                const logPrefix = `📝 BG [${i + 1}/${subdivisoes.length}]`;
+                
+                try {
+                    const resultadoPedido = await this.enviarParaPlanilhaPedidos(referenciaFinal, megas, numero, grupoId);
+                    
+                    // Verificar se foi duplicado
+                    const pedidoDuplicado = resultadoPedido && resultadoPedido.duplicado;
+                    
+                    if (pedidoDuplicado) {
+                        console.log(`⚠️ ${logPrefix}: ${referenciaFinal} já existia (duplicado)`);
+                        return {
+                            tipo: 'duplicado',
+                            referencia: referenciaFinal,
+                            numero: numero,
+                            status: resultadoPedido.status || 'Existente'
+                        };
+                    } else {
+                        console.log(`✅ ${logPrefix}: ${referenciaFinal} criado com sucesso`);
+                        return { tipo: 'sucesso', referencia: referenciaFinal };
+                    }
+                    
+                } catch (error) {
+                    console.error(`❌ ${logPrefix}: Erro ao processar ${referenciaFinal}:`, error.message);
+                    
+                    if (error.message && (error.message.includes('Duplicado') || error.message.includes('já existe'))) {
+                        return {
+                            tipo: 'duplicado',
+                            referencia: referenciaFinal,
+                            numero: numero,
+                            status: 'Existente'
+                        };
+                    } else {
+                        return {
+                            tipo: 'erro',
+                            referencia: referenciaFinal,
+                            numero: numero,
+                            erro: error.message
+                        };
+                    }
+                }
+            });
+            
+            // Aguardar todos os processamentos
+            const resultados = await Promise.allSettled(promessasProcessamento);
+            
+            // Processar resultados
+            resultados.forEach((resultado, i) => {
+                if (resultado.status === 'fulfilled') {
+                    const res = resultado.value;
+                    switch (res.tipo) {
+                        case 'sucesso':
+                            sucessos++;
+                            break;
+                        case 'duplicado':
+                            duplicados++;
+                            pedidosDuplicados.push(res);
+                            break;
+                        case 'erro':
+                            erros++;
+                            break;
+                    }
+                } else {
+                    erros++;
+                }
+            });
+            
+            const tempoTotal = Date.now() - inicioBackground;
+            console.log(`🏁 BACKGROUND: Concluído em ${tempoTotal}ms - ✅${sucessos} ⚠️${duplicados} ❌${erros}`);
+            
+            // ENVIAR MENSAGEM FINAL DE CONCLUSÃO
+            await this.enviarMensagemConclusao(message, sucessos, duplicados, erros, pedidosDuplicados, subdivisoes.length, tempoTotal);
+            
+        } catch (error) {
+            console.error(`❌ BACKGROUND: Erro crítico no processamento:`, error.message);
+            
+            // Enviar mensagem de erro
+            try {
+                await message.reply(`❌ *ERRO NO PROCESSAMENTO*\n\n${error.message}\n\n🔄 Tente novamente em alguns instantes.`);
+            } catch (replyError) {
+                console.error(`❌ BACKGROUND: Erro ao enviar mensagem de erro:`, replyError.message);
+            }
+        }
+    }
+
+    // === MENSAGEM FINAL DE CONCLUSÃO (NOVA FUNÇÃO) ===
+    async enviarMensagemConclusao(message, sucessos, duplicados, erros, pedidosDuplicados, totalBlocos, tempoTotal) {
+        try {
+            let mensagemFinal = '';
+            const tempoFormatado = tempoTotal > 10000 ? `${Math.round(tempoTotal/1000)}s` : `${tempoTotal}ms`;
+            
+            if (sucessos > 0 && duplicados === 0 && erros === 0) {
+                // TODOS CRIADOS COM SUCESSO
+                mensagemFinal = `🎉 *DIVISÃO CONCLUÍDA!*\n\n` +
+                    `✅ **${sucessos}/${totalBlocos} pedidos criados**\n` +
+                    `⚡ **Processado em ${tempoFormatado}**\n\n` +
+                    `🚀 *O sistema principal processará as transferências automaticamente.*`;
+                    
+            } else if (sucessos === 0 && duplicados > 0 && erros === 0) {
+                // TODOS JÁ EXISTIAM
+                const statusPredominante = this.analisarStatusPredominante(pedidosDuplicados);
+                
+                if (statusPredominante === 'pendente') {
+                    mensagemFinal = `⏳ *PEDIDOS JÁ EM PROCESSAMENTO*\n\n` +
+                        `📋 **${duplicados} pedidos já estão na planilha**\n` +
+                        `⚡ **Verificado em ${tempoFormatado}**\n\n` +
+                        `🔄 *As transferências serão executadas automaticamente.*`;
+                } else if (statusPredominante === 'processado') {
+                    mensagemFinal = `✅ *DIVISÃO JÁ PROCESSADA*\n\n` +
+                        `📋 **${duplicados} pedidos já foram executados**\n` +
+                        `⚡ **Verificado em ${tempoFormatado}**\n\n` +
+                        `🎯 *Transferências já foram concluídas anteriormente.*`;
+                } else {
+                    mensagemFinal = `📋 *PEDIDOS EXISTENTES*\n\n` +
+                        `⚠️ **${duplicados} pedidos já estão na planilha**\n` +
+                        `⚡ **Verificado em ${tempoFormatado}**\n\n` +
+                        `🔍 *Verifique o status individual dos pedidos.*`;
+                }
+                    
+            } else if (sucessos > 0 && (duplicados > 0 || erros > 0)) {
+                // RESULTADO MISTO
+                mensagemFinal = `⚠️ *PROCESSAMENTO CONCLUÍDO*\n\n` +
+                    `✅ **${sucessos} pedidos criados**\n` +
+                    (duplicados > 0 ? `📋 **${duplicados} já existiam**\n` : '') +
+                    (erros > 0 ? `❌ **${erros} com erro**\n` : '') +
+                    `⚡ **Processado em ${tempoFormatado}**\n\n` +
+                    `📊 **Total:** ${sucessos + duplicados}/${totalBlocos} pedidos OK`;
+                    
+            } else if (erros > 0) {
+                // SÓ ERROS
+                mensagemFinal = `❌ *ERRO NO PROCESSAMENTO*\n\n` +
+                    `🚫 **${erros}/${totalBlocos} pedidos falharam**\n` +
+                    `⚡ **Tentativa em ${tempoFormatado}**\n\n` +
+                    `🔄 *Tente novamente em alguns instantes.*`;
+            }
+            
+            // ADICIONAR RODAPÉ DE VELOCIDADE
+            if (tempoTotal < 30000) { // Menos de 30 segundos
+                mensagemFinal += `\n\n🚀 *Processamento rápido ativado!*`;
+            }
+            
+            await message.reply(mensagemFinal);
+            console.log(`📤 BACKGROUND: Mensagem final enviada - ${sucessos}✅ ${duplicados}⚠️ ${erros}❌`);
+            
+        } catch (error) {
+            console.error(`❌ BACKGROUND: Erro ao enviar mensagem final:`, error.message);
+        }
+    }
+    
+    // === ANALISAR STATUS PREDOMINANTE ===
+    analisarStatusPredominante(pedidosDuplicados) {
+        const statusCount = {};
+        pedidosDuplicados.forEach(p => {
+            const status = (p.status || 'existente').toLowerCase();
+            statusCount[status] = (statusCount[status] || 0) + 1;
+        });
+        
+        const statusMaisComum = Object.entries(statusCount)
+            .sort(([,a], [,b]) => b - a)[0]?.[0] || 'existente';
+        
+        if (['pendente', 'aguardando', 'em processamento'].includes(statusMaisComum)) {
+            return 'pendente';
+        } else if (['processado', 'concluido', 'finalizado', 'executado'].includes(statusMaisComum)) {
+            return 'processado';
+        } else {
+            return 'existente';
         }
     }
     
