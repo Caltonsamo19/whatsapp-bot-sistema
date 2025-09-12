@@ -103,6 +103,18 @@ const ADMINISTRADORES_GLOBAIS = [
     '258852118624@c.us'
 ];
 
+// Configuração para comando .pedido (apenas no privado)
+const NUMEROS_AUTORIZADOS_PEDIDO = [
+    '258852118624@c.us',
+    '258840326152@c.us'
+];
+
+// Configuração de grupo padrão por número autorizado
+const GRUPOS_PADRAO_POR_NUMERO = {
+    '258852118624@c.us': '120363419652375064@g.us', // Grupo padrão para o primeiro número
+    '258840326152@c.us': '120363419652375064@g.us'  // Net Fornecedor V para o segundo número
+};
+
 // === CONFIGURAÇÃO DE MODERAÇÃO ===
 const MODERACAO_CONFIG = {
     ativado: {
@@ -1174,6 +1186,112 @@ client.on('message', async (message) => {
                 }
                 
                 await message.reply(resposta);
+                return;
+            }
+
+            // === COMANDO .PEDIDO (APENAS NO PRIVADO PARA NÚMEROS AUTORIZADOS) ===
+            if (comando.startsWith('.pedido ')) {
+                // Verificar se é mensagem privada
+                if (!isPrivado) {
+                    await message.reply('❌ Este comando só funciona no chat privado.');
+                    return;
+                }
+                
+                // Verificar se o número está autorizado
+                if (!NUMEROS_AUTORIZADOS_PEDIDO.includes(message.from)) {
+                    await message.reply('❌ Você não tem permissão para usar este comando.');
+                    return;
+                }
+                
+                // Obter grupo padrão para este número
+                const grupoId = GRUPOS_PADRAO_POR_NUMERO[message.from];
+                if (!grupoId) {
+                    await message.reply('❌ Nenhum grupo configurado para este número.');
+                    return;
+                }
+                
+                const configGrupo = getConfiguracaoGrupo(grupoId);
+                if (!configGrupo) {
+                    await message.reply('❌ Grupo configurado não foi encontrado no sistema.');
+                    return;
+                }
+                
+                // Extrair parâmetros: .pedido CIC8HCO4GXC 10GB 851609341
+                const params = comando.replace('.pedido ', '').trim().split(' ');
+                
+                if (params.length < 3) {
+                    await message.reply('❌ *Formato incorreto!*\n\n📝 Use: .pedido REFERENCIA MEGAS TELEFONE\n💡 Exemplo: .pedido CIC8HCO4GXC 10GB 851609341');
+                    return;
+                }
+                
+                const [referencia, megasStr, telefone] = params;
+                
+                // Validar referência
+                if (!referencia || referencia.length < 5) {
+                    await message.reply('❌ Referência inválida! Deve ter pelo menos 5 caracteres.');
+                    return;
+                }
+                
+                // Converter GB para MB
+                let megasValue;
+                if (megasStr.toUpperCase().includes('GB')) {
+                    const gb = parseFloat(megasStr.replace(/[^0-9.]/g, ''));
+                    if (isNaN(gb) || gb <= 0) {
+                        await message.reply('❌ Quantidade de GB inválida!');
+                        return;
+                    }
+                    megasValue = gb * 1024; // GB para MB
+                } else if (megasStr.toUpperCase().includes('MB')) {
+                    megasValue = parseFloat(megasStr.replace(/[^0-9.]/g, ''));
+                    if (isNaN(megasValue) || megasValue <= 0) {
+                        await message.reply('❌ Quantidade de MB inválida!');
+                        return;
+                    }
+                } else {
+                    await message.reply('❌ Formato de megas inválido! Use GB ou MB (ex: 10GB, 500MB)');
+                    return;
+                }
+                
+                // Validar telefone
+                const telefoneClean = telefone.replace(/[^0-9]/g, '');
+                if (telefoneClean.length < 9) {
+                    await message.reply('❌ Número de telefone inválido!');
+                    return;
+                }
+                
+                // Criar dados para planilha no formato: REFERENCIA|MEGAS|TELEFONE|TIMESTAMP
+                const timestamp = new Date().toLocaleString('pt-BR');
+                const dadosPlanilha = `${referencia}|${megasValue}|${telefoneClean}|${timestamp}`;
+                
+                try {
+                    console.log(`📝 Criando pedido via comando .pedido: ${dadosPlanilha} - Grupo: ${configGrupo.nome}`);
+                    
+                    // Enviar para Google Sheets com o grupo correto
+                    const resultado = await enviarParaGoogleSheets(dadosPlanilha, grupoId, timestamp);
+                    
+                    if (resultado.sucesso) {
+                        const confirmacao = `✅ *PEDIDO CRIADO COM SUCESSO*\n\n` +
+                            `🎯 **DETALHES DO PEDIDO**\n` +
+                            `━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                            `📋 Referência: \`${referencia}\`\n` +
+                            `📊 Megas: ${megasValue}MB (${megasStr})\n` +
+                            `📱 Telefone: ${telefoneClean}\n` +
+                            `🏢 Grupo: ${configGrupo.nome}\n` +
+                            `⏰ Criado: ${timestamp}\n` +
+                            `📊 Linha na planilha: ${resultado.row}\n\n` +
+                            `🚀 Pedido enviado para processamento automático!`;
+                        
+                        await message.reply(confirmacao);
+                        console.log(`✅ Pedido criado via comando .pedido: ${referencia} - ${megasValue}MB - ${telefoneClean}`);
+                    } else {
+                        await message.reply(`❌ *Erro ao criar pedido*\n\n⚠️ ${resultado.erro}\n\n🔄 Tente novamente em alguns segundos.`);
+                        console.error('❌ Erro ao enviar pedido via .pedido:', resultado.erro);
+                    }
+                } catch (error) {
+                    console.error('❌ Erro no comando .pedido:', error);
+                    await message.reply('❌ Erro interno ao processar pedido. Tente novamente.');
+                }
+                
                 return;
             }
 
