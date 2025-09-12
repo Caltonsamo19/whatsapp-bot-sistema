@@ -609,7 +609,7 @@ class WhatsAppBotDivisao {
             // Mostrar divisão de forma compacta
             mensagemImediata += `⚡ **Divisão:**\n`;
             divisao.slice(0, 5).forEach((item, i) => {
-                mensagemImediata += `   • ${item.numero.slice(-4)}: ${item.megasTexto}\n`;
+                mensagemImediata += `   • ${item.numero}: ${item.megasTexto}\n`;
             });
             if (divisao.length > 5) {
                 mensagemImediata += `   • ... e mais ${divisao.length - 5} números\n`;

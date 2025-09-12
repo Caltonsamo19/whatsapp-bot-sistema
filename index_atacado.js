@@ -1637,12 +1637,12 @@ client.on('message', async (message) => {
                         adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
                     }
                     
+                    // OTIMIZAÇÃO: Resposta imediata para número único
                     await message.reply(
-                        `✅ *Pedido processado!*\n\n` +
-                        `💰 Referência: ${referencia}\n` +
-                        `📊 Megas: ${megas}\n` +
-                        `📱 Número: ${numero}\n\n` +
-                        `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
+                        `🚀 *PEDIDO INICIADO!*\n\n` +
+                        `💰 **${referencia}** - ${resultadoIA.valorPago || 'N/A'}MT\n` +
+                        `📊 **${megas}** → **${numero}**\n\n` +
+                        `⚡ *Processando em segundos...*`
                     );
                     return;
                 }
@@ -1660,34 +1660,32 @@ client.on('message', async (message) => {
                         `📊 Megas: ${megas}\n` +
                         `📱 Número: ${numero}\n` +
                         `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
-                        `🔍 Aguardando confirmação do pagamento na planilha...\n` +
+                        `🔍 Aguardando Mensagem de Confirmação de Pagamento...\n` +
                         `⏱️ Tente novamente em alguns minutos.`
                     );
                     return;
                 }
                 
-                console.log(`✅ INDIVIDUAL: Pagamento confirmado para texto! Processando...`);
+                console.log(`✅ INDIVIDUAL: Pagamento confirmado! Enviando resposta imediata...`);
                 
-                // 3. Se pagamento confirmado, processar normalmente
-                const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, message.from, message);
-                if (resultadoEnvio === null) {
-                    console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
-                    return; // Para aqui se for duplicado
-                }
-                await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
-                
-                if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
-                    const timestampMensagem = new Date().toLocaleString('pt-BR');
-                    adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
-                }
-                
+                // OTIMIZAÇÃO: Resposta imediata para número único
+                const inicioProcessamento = Date.now();
                 await message.reply(
-                    `✅ *Pedido processado!*\n\n` +
-                    `💰 Referência: ${referencia}\n` +
-                    `📊 Megas: ${megas}\n` +
-                    `📱 Número: ${numero}\n` +
-                    `💳 Pagamento: ${normalizarValor(valorEsperado)}MT confirmado\n\n` +
-                    `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
+                    `🚀 *PEDIDO CONFIRMADO!*\n\n` +
+                    `💰 **${referencia}** - ${normalizarValor(valorEsperado)}MT ✅\n` +
+                    `📊 **${megas}** → **${numero}**\n\n` +
+                    `⚡ *Processando transferência...*\n` +
+                    `⏱️ *Conclusão em ~10-30s*`
+                );
+                
+                const tempoResposta = Date.now() - inicioProcessamento;
+                console.log(`⚡ INDIVIDUAL: Resposta enviada em ${tempoResposta}ms`);
+                
+                // PROCESSAMENTO EM BACKGROUND - NÃO BLOQUEIA RESPOSTA
+                processarPedidoUnicoEmBackground(
+                    referencia, megasConvertido, numero, message.from, message, 
+                    dadosCompletos, autorMensagem, configGrupo, nomeContato, 
+                    resultadoIA.valorPago || megas, valorEsperado, inicioProcessamento
                 );
                 return;
             }
@@ -1961,6 +1959,80 @@ async function processarPedidoIndividual(dadosCompletos, megasConvertido, refere
     }
     
     console.log(`✅ INDIVIDUAL: ${referencia} processado com sucesso - ${Math.floor(megasConvertido/1024)}GB para ${numero}`);
+}
+
+// === PROCESSAMENTO DE PEDIDO ÚNICO EM BACKGROUND (NOVA FUNÇÃO) ===
+async function processarPedidoUnicoEmBackground(
+    referencia, megasConvertido, numero, grupoId, message, 
+    dadosCompletos, autorMensagem, configGrupo, nomeContato, 
+    valorIA, valorEsperado, inicioProcessamento
+) {
+    const inicioBackground = Date.now();
+    
+    try {
+        console.log(`🔄 BACKGROUND-ÚNICO: Processando ${referencia} para ${numero}`);
+        
+        // Processar o envio
+        const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, grupoId, message);
+        
+        if (resultadoEnvio === null) {
+            console.log(`🛑 BACKGROUND-ÚNICO: Duplicado detectado - ${referencia}`);
+            
+            // Enviar mensagem de duplicado
+            await message.reply(
+                `⚠️ *PEDIDO JÁ EXISTE*\n\n` +
+                `💰 **${referencia}** já foi processado\n` +
+                `📊 **${Math.floor(megasConvertido/1024)}GB** → **${numero}**\n\n` +
+                `✅ *Verificar status na planilha*`
+            );
+            return;
+        }
+        
+        // Registrar comprador
+        await registrarComprador(grupoId, numero, nomeContato, valorIA);
+        
+        // Adicionar na fila se for grupo de origem
+        if (grupoId === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
+            const timestampMensagem = new Date().toLocaleString('pt-BR');
+            adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
+        }
+        
+        const tempoTotal = Date.now() - inicioBackground;
+        const tempoTotalCompleto = Date.now() - inicioProcessamento;
+        
+        console.log(`🏁 BACKGROUND-ÚNICO: Concluído em ${tempoTotal}ms (total: ${tempoTotalCompleto}ms)`);
+        
+        // ENVIAR MENSAGEM FINAL DE SUCESSO
+        const tempoFormatado = tempoTotalCompleto > 10000 ? 
+            `${Math.round(tempoTotalCompleto/1000)}s` : `${tempoTotalCompleto}ms`;
+            
+        await message.reply(
+            `🎉 *PEDIDO CONCLUÍDO!*\n\n` +
+            `✅ **${referencia}** processado\n` +
+            `📊 **${Math.floor(megasConvertido/1024)}GB** → **${numero}**\n` +
+            `💳 **${normalizarValor(valorEsperado)}MT** confirmado\n` +
+            `⚡ **Processado em ${tempoFormatado}**\n\n` +
+            `🚀 *Transferência executada automaticamente!*` +
+            (tempoTotalCompleto < 30000 ? `\n\n⚡ *Processamento rápido ativado!*` : '')
+        );
+        
+        console.log(`📤 BACKGROUND-ÚNICO: Mensagem final enviada para ${numero}`);
+        
+    } catch (error) {
+        console.error(`❌ BACKGROUND-ÚNICO: Erro no processamento de ${referencia}:`, error.message);
+        
+        // Enviar mensagem de erro
+        try {
+            await message.reply(
+                `❌ *ERRO NO PROCESSAMENTO*\n\n` +
+                `💰 **${referencia}**\n` +
+                `📱 **${numero}**\n\n` +
+                `🔄 *Tente novamente em alguns instantes*`
+            );
+        } catch (replyError) {
+            console.error(`❌ BACKGROUND-ÚNICO: Erro ao enviar mensagem de erro:`, replyError.message);
+        }
+    }
 }
 
 
