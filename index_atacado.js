@@ -1992,11 +1992,14 @@ async function processarPedidoUnicoEmBackground(
         
         console.log(`🏁 BACKGROUND-ÚNICO: Concluído em ${tempoTotal}ms (total: ${tempoTotalCompleto}ms)`);
         
-        // ENVIAR MENSAGEM FINAL - FORMATO ORIGINAL
+        // ENVIAR MENSAGEM FINAL - FORMATO SOLICITADO
         await message.reply(
-            `✅ **${referencia}** - ${normalizarValor(valorEsperado)}MT\n` +
-            `📊 **${Math.floor(megasConvertido/1024)}GB** para **${numero}**\n\n` +
-            `🚀 *Transferência executada automaticamente!*`
+            `✅ *Pedido processado!*\n\n` +
+            `💰 *Referência:* ${referencia}\n` +
+            `📊 *Megas:* ${Math.floor(megasConvertido/1024)}GB\n` +
+            `📱 *Número:* ${numero}\n` +
+            `💳 *Pagamento:* ${normalizarValor(valorEsperado)}MT Confirmado\n\n` +
+            `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
         );
         
         console.log(`📤 BACKGROUND-ÚNICO: Mensagem final enviada para ${numero}`);
