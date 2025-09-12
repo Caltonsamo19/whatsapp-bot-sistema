@@ -5,6 +5,18 @@ class WhatsAppBotDivisao {
         this.comprovantesMemorizados = {};
         this.processandoDivisoes = new Set();
         
+        // OTIMIZAÇÃO: Sistema de fila para controle de requisições
+        this.filaRequisicoes = [];
+        this.processandoFila = false;
+        this.limiteConcorrencia = 5; // Máx 5 requisições simultâneas
+        this.intervaloEntreRequisicoes = 200; // 200ms entre requisições
+        this.estatisticasRede = {
+            sucessos: 0,
+            falhas: 0,
+            tempoMedioResposta: 1000,
+            ultimaFalha: null
+        };
+        
         // Inicializar IA usando variável de ambiente (mesma do servidor)
         const WhatsAppAIAtacado = require('./whatsapp_ai_atacado');
         const openaiApiKey = process.env.OPENAI_API_KEY;
@@ -54,7 +66,12 @@ class WhatsAppBotDivisao {
             this.limparComprovantesAntigos();
         }, 10 * 60 * 1000);
         
-        console.log('🔄 Bot de Divisão inicializado - Múltiplos números automático!');
+        // OTIMIZAÇÃO: Sistema de recuperação automática
+        setInterval(() => {
+            this.verificarSaudeDoSistema();
+        }, 5 * 60 * 1000); // A cada 5 minutos
+        
+        console.log('🔄 Bot de Divisão inicializado - Sistema otimizado com fila inteligente!');
     }
     
     // === FUNÇÃO PARA NORMALIZAR VALORES INTERNO ===
@@ -111,6 +128,16 @@ class WhatsAppBotDivisao {
             
             // Só processa grupos configurados
             if (!this.CONFIGURACAO_GRUPOS[grupoId]) {
+                return null;
+            }
+            
+            // FILTRO: Ignorar mensagens do sistema/bot 
+            if (/✅.*Transação Concluída Com Sucesso/i.test(mensagem) || 
+                /✅.*Pedido processado/i.test(mensagem) ||
+                /Transferencia Processada Automaticamente/i.test(mensagem) ||
+                (/📱.*Número:/i.test(mensagem) && /📊.*Megas:/i.test(mensagem) && /💰.*Referência:/i.test(mensagem)) ||
+                (/📱.*Número:/i.test(mensagem) && /📊.*Megas:/i.test(mensagem) && /🔖.*Referência:/i.test(mensagem))) {
+                console.log(`🤖 DIVISÃO: Ignorando mensagem do sistema/bot de ${remetente}`);
                 return null;
             }
             
@@ -509,6 +536,7 @@ class WhatsAppBotDivisao {
     
     // === PROCESSAR DIVISÃO ===
     async processarDivisao(comprovativo, numeros, grupoId, message) {
+        const inicioProcessamento = Date.now(); // OTIMIZAÇÃO: Timestamp para velocidade
         const chaveProcessamento = `${comprovativo.referencia}_${numeros.join('_')}`;
         
         // Evitar processamento duplicado
@@ -581,221 +609,55 @@ class WhatsAppBotDivisao {
             
             console.log(`🔧 SUBDIVISÃO: ${divisao.length} divisões → ${subdivisoes.length} blocos finais`);
             
-            // 5. ENVIAR MENSAGEM INFORMATIVA (ATUALIZADA)
-            let mensagemResposta = `🔄 *MÚLTIPLOS NÚMEROS DETECTADOS!*\n\n`;
-            mensagemResposta += `💰 **${comprovativo.referencia}** - ${comprovativo.valor}MT\n`;
-            mensagemResposta += `📱 **${numeros.length} números** serão processados\n\n`;
+            // 5. RESPOSTA IMEDIATA (OTIMIZADA PARA VELOCIDADE)
+            console.log(`🚀 DIVISÃO: Enviando resposta imediata ao WhatsApp`);
             
-            // Mostrar divisão original (antes da subdivisão)
-            mensagemResposta += `⚡ **Divisão calculada:**\n`;
-            divisao.forEach((item, i) => {
-                mensagemResposta += `   • ${item.numero}: ${item.megasTexto} (${item.valorMT}MT)\n`;
+            let mensagemImediata = `✅ *DIVISÃO INICIADA!*\n\n`;
+            mensagemImediata += `💰 **${comprovativo.referencia}** - ${comprovativo.valor}MT\n`;
+            mensagemImediata += `📱 **${numeros.length} números** detectados\n\n`;
+            
+            // Mostrar divisão de forma compacta
+            mensagemImediata += `⚡ **Divisão:**\n`;
+            divisao.slice(0, 5).forEach((item, i) => {
+                mensagemImediata += `   • ${item.numero}: ${item.megasTexto}\n`;
             });
+            if (divisao.length > 5) {
+                mensagemImediata += `   • ... e mais ${divisao.length - 5} números\n`;
+            }
             
-            // Se houve subdivisões, informar
             if (subdivisoes.length > divisao.length) {
-                mensagemResposta += `\n🔧 **Subdividindo em blocos de 10GB:**\n`;
-                mensagemResposta += `   📦 ${divisao.length} divisões → ${subdivisoes.length} blocos\n`;
-                mensagemResposta += `   ⚙️ Sistema processa max 10GB por pedido\n`;
+                mensagemImediata += `\n🔧 **${subdivisoes.length} blocos de 10GB criados**\n`;
             }
             
-            mensagemResposta += `\n⏳ *Criando ${subdivisoes.length} pedidos separados...*`;
+            mensagemImediata += `\n🚀 *Processando em paralelo...*\n`;
+            mensagemImediata += `⏱️ *Aguarde ~${Math.ceil(subdivisoes.length/5)*10}s para conclusão*`;
             
-            // Enviar mensagem
-            await message.reply(mensagemResposta);
-            
-            // 6. CRIAR REGISTROS SUBDIVIDIDOS (NOVA LÓGICA)
-            let sucessos = 0;
-            let duplicados = 0;
-            let pedidosDuplicados = [];
-            
-            for (let i = 0; i < subdivisoes.length; i++) {
-                const { numero, megas, valorMT, referenciaFinal } = subdivisoes[i];
-                
-                console.log(`📝 DIVISÃO: Processando ${i + 1}/${subdivisoes.length}: ${referenciaFinal} - ${megas/1024}GB (${valorMT}MT) para ${numero}`);
-                
-                try {
-                    // PEDIDO na planilha de pedidos
-                    const resultadoPedido = await this.enviarParaPlanilhaPedidos(referenciaFinal, megas, numero, grupoId);
-                    
-                    // PAGAMENTO na planilha de pagamentos  
-                    const resultadoPagamento = await this.enviarParaPlanilhaPagamentos(referenciaFinal, valorMT, numero, grupoId);
-                    
-                    // Verificar se foram duplicados (tanto pedido quanto pagamento)
-                    const pedidoDuplicado = resultadoPedido && resultadoPedido.duplicado;
-                    const pagamentoDuplicado = resultadoPagamento && resultadoPagamento.duplicado;
-                    
-                    if (pedidoDuplicado || pagamentoDuplicado) {
-                        duplicados++;
-                        pedidosDuplicados.push({
-                            referencia: referenciaFinal,
-                            numero: numero,
-                            status: pedidoDuplicado ? resultadoPedido.status : 
-                                   (pagamentoDuplicado ? resultadoPagamento.status : 'Existente')
-                        });
-                        console.log(`⚠️ DIVISÃO: ${referenciaFinal} já existia (duplicado)`);
-                    } else {
-                        sucessos++;
-                        console.log(`✅ DIVISÃO: ${referenciaFinal} criado com sucesso`);
-                    }
-                    
-                } catch (error) {
-                    console.error(`❌ DIVISÃO: Erro ao processar ${referenciaFinal}:`, error);
-                    
-                    // Se o erro for relacionado a duplicata, tratar como duplicado
-                    if (error.message && (error.message.includes('Duplicado') || error.message.includes('já existe'))) {
-                        duplicados++;
-                        pedidosDuplicados.push({
-                            referencia: referenciaFinal,
-                            numero: numero,
-                            status: 'Existente'
-                        });
-                        console.log(`⚠️ DIVISÃO: ${referenciaFinal} já existia (duplicado - detectado por erro)`);
-                    } else {
-                        // Erro real - não incrementar contadores, apenas registrar
-                        console.error(`❌ DIVISÃO: Erro não relacionado a duplicata em ${referenciaFinal}:`, error.message);
-                        // Você pode adicionar uma variável para contar erros se necessário
-                    }
-                }
+            // ENVIAR RESPOSTA IMEDIATA (NÃO BLOQUEIA PROCESSAMENTO)
+            try {
+                await message.reply(mensagemImediata);
+                console.log(`✅ DIVISÃO: Resposta imediata enviada em ${Date.now() - inicioProcessamento}ms`);
+            } catch (error) {
+                console.error(`❌ DIVISÃO: Erro ao enviar resposta imediata:`, error.message);
             }
             
-            // 7. LIMPAR DADOS E RESPONDER
+            // 6. PROCESSAMENTO EM BACKGROUND (OTIMIZADO PARA VELOCIDADE)
+            console.log(`🚀 DIVISÃO: Iniciando processamento em background de ${subdivisoes.length} blocos`);
+            
+            // EXECUTAR EM BACKGROUND - NÃO BLOQUEIA A RESPOSTA
+            this.processarPedidosEmBackground(subdivisoes, grupoId, comprovativo.referencia, message);
+            
+            // 7. RESPOSTA RÁPIDA (PROCESSAMENTO CONTINUA EM BACKGROUND)
             const remetenteLimpeza = this.normalizarRemetente(message.author || message.from);
             delete this.comprovantesMemorizados[remetenteLimpeza];
             
-            // Criar mensagem final baseada no resultado
-            let mensagemFinal = '';
-            
-            if (sucessos > 0 && duplicados === 0) {
-                // Todos criados com sucesso
-                const referenciasCriadas = subdivisoes.map(sub => sub.referenciaFinal);
-                mensagemFinal = `✅ *DIVISÃO CONCLUÍDA!*\n\n` +
-                    `🎯 **${sucessos}/${subdivisoes.length} blocos criados**\n` +
-                    `📦 **Blocos criados:** ${referenciasCriadas.slice(0, 10).join(', ')}${referenciasCriadas.length > 10 ? '...' : ''}\n` +
-                    `🔧 **Máximo 10GB por bloco** (compatível com sistema de transferência)\n\n` +
-                    `⏳ *O sistema principal processará as transferências em instantes...*`;
-                    
-            } else if (sucessos === 0 && duplicados > 0) {
-                // Todos já existiam - mensagem personalizada por status
-                const pedidosPendentes = pedidosDuplicados.filter(p => 
-                    p.status === 'Pendente' || p.status === 'PENDENTE' || 
-                    p.status === 'Em Processamento' || p.status === 'Aguardando'
-                );
-                const pedidosProcessados = pedidosDuplicados.filter(p => 
-                    p.status === 'Processado' || p.status === 'PROCESSADO' || 
-                    p.status === 'Concluído' || p.status === 'Completo' ||
-                    p.status === 'Finalizado' || p.status === 'Executado'
-                );
-                const pedidosOutrosStatus = pedidosDuplicados.filter(p => 
-                    !pedidosPendentes.includes(p) && !pedidosProcessados.includes(p)
-                );
-                
-                if (pedidosPendentes.length === duplicados) {
-                    // Todos pendentes
-                    mensagemFinal = `⏳ *PEDIDOS JÁ EM PROCESSAMENTO*\n\n` +
-                        `📋 **${duplicados} pedidos já estão na planilha:**\n\n` +
-                        pedidosDuplicados.map(p => 
-                            `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
-                        ).join('\n') + 
-                        `\n\n⏳ *Aguarde o processamento automático.*\n` +
-                        `🔄 As transferências serão executadas em breve!`;
-                } else if (pedidosProcessados.length === duplicados) {
-                    // Todos processados
-                    mensagemFinal = `✅ *DIVISÃO JÁ PROCESSADA ANTERIORMENTE*\n\n` +
-                        `📋 **${duplicados} pedidos já foram executados:**\n\n` +
-                        pedidosDuplicados.map(p => 
-                            `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
-                        ).join('\n') + 
-                        `\n\n✅ *Os pedidos já foram concluídos anteriormente.*`;
-                } else {
-                    // Status misto
-                    mensagemFinal = `⚠️ *PEDIDOS JÁ EXISTEM COM STATUS VARIADOS*\n\n` +
-                        `📋 **${duplicados} pedidos encontrados:**\n\n`;
-                    
-                    if (pedidosPendentes.length > 0) {
-                        mensagemFinal += `⏳ **Pendentes (${pedidosPendentes.length}):**\n` +
-                            pedidosPendentes.map(p => `• ${p.referencia} (${p.numero})`).join('\n') + '\n\n';
-                    }
-                    
-                    if (pedidosProcessados.length > 0) {
-                        mensagemFinal += `✅ **Processados (${pedidosProcessados.length}):**\n` +
-                            pedidosProcessados.map(p => `• ${p.referencia} (${p.numero})`).join('\n') + '\n\n';
-                    }
-                    
-                    if (pedidosOutrosStatus.length > 0) {
-                        mensagemFinal += `📋 **Outros (${pedidosOutrosStatus.length}):**\n` +
-                            pedidosOutrosStatus.map(p => `• ${p.referencia} (${p.numero}) - ${p.status}`).join('\n') + '\n\n';
-                    }
-                    
-                    mensagemFinal += `🔍 *Verifique os status individuais acima.*`;
-                }
-                    
-            } else if (sucessos > 0 && duplicados > 0) {
-                // Alguns criados, alguns duplicados - mensagem detalhada
-                mensagemFinal = `⚠️ *DIVISÃO PARCIALMENTE PROCESSADA*\n\n` +
-                    `✅ **${sucessos} pedidos criados com sucesso**\n` +
-                    `📋 **${duplicados} pedidos já existiam:**\n\n`;
-                
-                // Agrupar duplicados por status
-                const duplicadosPorStatus = {};
-                pedidosDuplicados.forEach(p => {
-                    const status = p.status || 'Existente';
-                    if (!duplicadosPorStatus[status]) {
-                        duplicadosPorStatus[status] = [];
-                    }
-                    duplicadosPorStatus[status].push(p);
-                });
-                
-                // Mostrar duplicados agrupados por status
-                Object.entries(duplicadosPorStatus).forEach(([status, pedidos]) => {
-                    const emoji = status.toLowerCase().includes('pendent') || status.toLowerCase().includes('aguard') ? '⏳' : 
-                                 status.toLowerCase().includes('process') || status.toLowerCase().includes('conclu') ? '✅' : '📋';
-                    mensagemFinal += `${emoji} **${status} (${pedidos.length}):**\n` +
-                        pedidos.map(p => `• ${p.referencia} (${p.numero})`).join('\n') + '\n\n';
-                });
-                
-                mensagemFinal += `📊 **Resumo:** ${sucessos} novos + ${duplicados} existentes = ${sucessos + duplicados}/${subdivisoes.length} blocos totais`;
-                    
-            } else {
-                // Erro geral - fornecer mais contexto
-                if (duplicados > 0) {
-                    // Se teve duplicados mas nenhum sucesso, tratar como duplicados
-                    mensagemFinal = `⚠️ *ERRO NO PROCESSAMENTO*\n\n` +
-                        `🚫 Não foi possível processar os pedidos\n` +
-                        `📋 **${duplicados} pedidos com problemas:**\n\n` +
-                        pedidosDuplicados.map(p => 
-                            `• ${p.referencia} (${p.numero}) - Status: ${p.status}`
-                        ).join('\n') + 
-                        `\n\n🔄 *Tente novamente ou contate o suporte.*`;
-                } else {
-                    // Erro geral sem duplicados
-                    mensagemFinal = `❌ *ERRO NA DIVISÃO*\n\n` +
-                        `🚫 Nenhum pedido foi processado com sucesso\n` +
-                        `⚠️ Possíveis causas:\n` +
-                        `• Problema de conectividade\n` +
-                        `• Erro nos dados de pagamento\n` +
-                        `• Falha temporária do sistema\n\n` +
-                        `🔄 *Tente novamente em alguns instantes.*`;
-                }
-            }
-            
-            // Aguardar um pouco antes da mensagem final
-            setTimeout(async () => {
-                try {
-                    await message.reply(mensagemFinal);
-                } catch (error) {
-                    console.error('❌ Erro ao enviar mensagem final:', error);
-                }
-            }, 2000);
+            const tempoResposta = Date.now() - inicioProcessamento;
+            console.log(`⚡ DIVISÃO: Resposta enviada em ${tempoResposta}ms - processamento continua em background`);
             
             return { 
                 processado: true, 
-                sucessos, 
-                duplicados, 
-                total: subdivisoes.length,
-                divisoesOriginais: divisao.length,
-                blocosFinais: subdivisoes.length,
-                pedidosDuplicados: pedidosDuplicados
+                resposta_imediata: true,
+                tempo_resposta_ms: tempoResposta,
+                blocos_em_processamento: subdivisoes.length
             };
             
         } catch (error) {
@@ -813,27 +675,35 @@ class WhatsAppBotDivisao {
         try {
             console.log(`🔍 DIVISÃO: Buscando pagamento ${referencia} - ${valorEsperado}MT`);
             
-            const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
-                action: "buscar_por_referencia",
-                referencia: referencia,
-                valor: valorEsperado
-            }, {
-                timeout: 15000,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
+            const resultado = await this.tentarComRetry(
+                async (timeout) => {
+                    const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, {
+                        action: "buscar_por_referencia",
+                        referencia: referencia,
+                        valor: valorEsperado
+                    }, {
+                        timeout: timeout,
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (response.data && response.data.encontrado) {
+                        console.log(`✅ DIVISÃO: Pagamento encontrado!`);
+                        return true;
+                    }
+                    
+                    console.log(`❌ DIVISÃO: Pagamento não encontrado`);
+                    return false;
+                },
+                `Busca de pagamento ${referencia}`,
+                2 // Apenas 2 tentativas para busca
+            );
             
-            if (response.data && response.data.encontrado) {
-                console.log(`✅ DIVISÃO: Pagamento encontrado!`);
-                return true;
-            }
-            
-            console.log(`❌ DIVISÃO: Pagamento não encontrado`);
-            return false;
+            return resultado;
             
         } catch (error) {
-            console.error(`❌ DIVISÃO: Erro ao buscar pagamento:`, error.message);
+            console.error(`❌ DIVISÃO: Erro ao buscar pagamento após tentativas:`, error.message);
             return false;
         }
     }
@@ -1157,9 +1027,341 @@ class WhatsAppBotDivisao {
             return null;
         }
     }
+
+    // === PROCESSAMENTO EM BACKGROUND (NOVA FUNÇÃO) ===
+    async processarPedidosEmBackground(subdivisoes, grupoId, referenciaOriginal, message) {
+        const inicioBackground = Date.now();
+        let sucessos = 0;
+        let duplicados = 0;
+        let erros = 0;
+        let pedidosDuplicados = [];
+        
+        try {
+            console.log(`🔄 BACKGROUND: Processando ${subdivisoes.length} pedidos em paralelo`);
+            
+            // PROCESSAMENTO PARALELO EM BACKGROUND
+            const promessasProcessamento = subdivisoes.map(async ({ numero, megas, valorMT, referenciaFinal }, i) => {
+                const logPrefix = `📝 BG [${i + 1}/${subdivisoes.length}]`;
+                
+                try {
+                    const resultadoPedido = await this.enviarParaPlanilhaPedidos(referenciaFinal, megas, numero, grupoId);
+                    
+                    // Verificar se foi duplicado
+                    const pedidoDuplicado = resultadoPedido && resultadoPedido.duplicado;
+                    
+                    if (pedidoDuplicado) {
+                        console.log(`⚠️ ${logPrefix}: ${referenciaFinal} já existia (duplicado)`);
+                        return {
+                            tipo: 'duplicado',
+                            referencia: referenciaFinal,
+                            numero: numero,
+                            status: resultadoPedido.status || 'Existente'
+                        };
+                    } else {
+                        console.log(`✅ ${logPrefix}: ${referenciaFinal} criado com sucesso`);
+                        return { tipo: 'sucesso', referencia: referenciaFinal };
+                    }
+                    
+                } catch (error) {
+                    console.error(`❌ ${logPrefix}: Erro ao processar ${referenciaFinal}:`, error.message);
+                    
+                    if (error.message && (error.message.includes('Duplicado') || error.message.includes('já existe'))) {
+                        return {
+                            tipo: 'duplicado',
+                            referencia: referenciaFinal,
+                            numero: numero,
+                            status: 'Existente'
+                        };
+                    } else {
+                        return {
+                            tipo: 'erro',
+                            referencia: referenciaFinal,
+                            numero: numero,
+                            erro: error.message
+                        };
+                    }
+                }
+            });
+            
+            // Aguardar todos os processamentos
+            const resultados = await Promise.allSettled(promessasProcessamento);
+            
+            // Processar resultados
+            resultados.forEach((resultado, i) => {
+                if (resultado.status === 'fulfilled') {
+                    const res = resultado.value;
+                    switch (res.tipo) {
+                        case 'sucesso':
+                            sucessos++;
+                            break;
+                        case 'duplicado':
+                            duplicados++;
+                            pedidosDuplicados.push(res);
+                            break;
+                        case 'erro':
+                            erros++;
+                            break;
+                    }
+                } else {
+                    erros++;
+                }
+            });
+            
+            const tempoTotal = Date.now() - inicioBackground;
+            console.log(`🏁 BACKGROUND: Concluído em ${tempoTotal}ms - ✅${sucessos} ⚠️${duplicados} ❌${erros}`);
+            
+            // ENVIAR MENSAGEM FINAL DE CONCLUSÃO
+            await this.enviarMensagemConclusao(message, sucessos, duplicados, erros, pedidosDuplicados, subdivisoes.length, tempoTotal);
+            
+        } catch (error) {
+            console.error(`❌ BACKGROUND: Erro crítico no processamento:`, error.message);
+            
+            // Enviar mensagem de erro
+            try {
+                await message.reply(`❌ *ERRO NO PROCESSAMENTO*\n\n${error.message}\n\n🔄 Tente novamente em alguns instantes.`);
+            } catch (replyError) {
+                console.error(`❌ BACKGROUND: Erro ao enviar mensagem de erro:`, replyError.message);
+            }
+        }
+    }
+
+    // === MENSAGEM FINAL DE CONCLUSÃO (NOVA FUNÇÃO) ===
+    async enviarMensagemConclusao(message, sucessos, duplicados, erros, pedidosDuplicados, totalBlocos, tempoTotal) {
+        try {
+            let mensagemFinal = '';
+            const tempoFormatado = tempoTotal > 10000 ? `${Math.round(tempoTotal/1000)}s` : `${tempoTotal}ms`;
+            
+            if (sucessos > 0 && duplicados === 0 && erros === 0) {
+                // TODOS CRIADOS COM SUCESSO
+                mensagemFinal = `🎉 *DIVISÃO CONCLUÍDA!*\n\n` +
+                    `✅ **${sucessos}/${totalBlocos} pedidos criados**\n` +
+                    `⚡ **Processado em ${tempoFormatado}**\n\n` +
+                    `🚀 *O sistema principal processará as transferências automaticamente.*`;
+                    
+            } else if (sucessos === 0 && duplicados > 0 && erros === 0) {
+                // TODOS JÁ EXISTIAM
+                const statusPredominante = this.analisarStatusPredominante(pedidosDuplicados);
+                
+                if (statusPredominante === 'pendente') {
+                    mensagemFinal = `⏳ *PEDIDOS JÁ EM PROCESSAMENTO*\n\n` +
+                        `📋 **${duplicados} pedidos já estão na planilha**\n` +
+                        `⚡ **Verificado em ${tempoFormatado}**\n\n` +
+                        `🔄 *As transferências serão executadas automaticamente.*`;
+                } else if (statusPredominante === 'processado') {
+                    mensagemFinal = `✅ *DIVISÃO JÁ PROCESSADA*\n\n` +
+                        `📋 **${duplicados} pedidos já foram executados**\n` +
+                        `⚡ **Verificado em ${tempoFormatado}**\n\n` +
+                        `🎯 *Transferências já foram concluídas anteriormente.*`;
+                } else {
+                    mensagemFinal = `📋 *PEDIDOS EXISTENTES*\n\n` +
+                        `⚠️ **${duplicados} pedidos já estão na planilha**\n` +
+                        `⚡ **Verificado em ${tempoFormatado}**\n\n` +
+                        `🔍 *Verifique o status individual dos pedidos.*`;
+                }
+                    
+            } else if (sucessos > 0 && (duplicados > 0 || erros > 0)) {
+                // RESULTADO MISTO
+                mensagemFinal = `⚠️ *PROCESSAMENTO CONCLUÍDO*\n\n` +
+                    `✅ **${sucessos} pedidos criados**\n` +
+                    (duplicados > 0 ? `📋 **${duplicados} já existiam**\n` : '') +
+                    (erros > 0 ? `❌ **${erros} com erro**\n` : '') +
+                    `⚡ **Processado em ${tempoFormatado}**\n\n` +
+                    `📊 **Total:** ${sucessos + duplicados}/${totalBlocos} pedidos OK`;
+                    
+            } else if (erros > 0) {
+                // SÓ ERROS
+                mensagemFinal = `❌ *ERRO NO PROCESSAMENTO*\n\n` +
+                    `🚫 **${erros}/${totalBlocos} pedidos falharam**\n` +
+                    `⚡ **Tentativa em ${tempoFormatado}**\n\n` +
+                    `🔄 *Tente novamente em alguns instantes.*`;
+            }
+            
+            // ADICIONAR RODAPÉ DE VELOCIDADE
+            if (tempoTotal < 30000) { // Menos de 30 segundos
+                mensagemFinal += `\n\n🚀 *Processamento rápido ativado!*`;
+            }
+            
+            await message.reply(mensagemFinal);
+            console.log(`📤 BACKGROUND: Mensagem final enviada - ${sucessos}✅ ${duplicados}⚠️ ${erros}❌`);
+            
+        } catch (error) {
+            console.error(`❌ BACKGROUND: Erro ao enviar mensagem final:`, error.message);
+        }
+    }
     
+    // === ANALISAR STATUS PREDOMINANTE ===
+    analisarStatusPredominante(pedidosDuplicados) {
+        const statusCount = {};
+        pedidosDuplicados.forEach(p => {
+            const status = (p.status || 'existente').toLowerCase();
+            statusCount[status] = (statusCount[status] || 0) + 1;
+        });
+        
+        const statusMaisComum = Object.entries(statusCount)
+            .sort(([,a], [,b]) => b - a)[0]?.[0] || 'existente';
+        
+        if (['pendente', 'aguardando', 'em processamento'].includes(statusMaisComum)) {
+            return 'pendente';
+        } else if (['processado', 'concluido', 'finalizado', 'executado'].includes(statusMaisComum)) {
+            return 'processado';
+        } else {
+            return 'existente';
+        }
+    }
+    
+    // === SISTEMA DE FILA INTELIGENTE ===
+    async adicionarNaFila(operacao, prioridade = 'normal') {
+        return new Promise((resolve, reject) => {
+            const item = {
+                operacao,
+                resolve,
+                reject,
+                prioridade,
+                timestamp: Date.now()
+            };
+            
+            // Inserir com base na prioridade
+            if (prioridade === 'alta') {
+                this.filaRequisicoes.unshift(item);
+            } else {
+                this.filaRequisicoes.push(item);
+            }
+            
+            this.processarFila();
+        });
+    }
+    
+    async processarFila() {
+        if (this.processandoFila || this.filaRequisicoes.length === 0) {
+            return;
+        }
+        
+        this.processandoFila = true;
+        console.log(`🔄 DIVISÃO: Processando fila com ${this.filaRequisicoes.length} itens`);
+        
+        const processosAtivos = [];
+        
+        while (this.filaRequisicoes.length > 0 && processosAtivos.length < this.limiteConcorrencia) {
+            const item = this.filaRequisicoes.shift();
+            
+            const processoAtivo = this.executarComEstatisticas(item);
+            processosAtivos.push(processoAtivo);
+            
+            // Aguardar intervalo entre requisições para não sobrecarregar
+            if (this.filaRequisicoes.length > 0) {
+                await new Promise(resolve => setTimeout(resolve, this.intervaloEntreRequisicoes));
+            }
+        }
+        
+        // Aguardar todos os processos terminarem
+        if (processosAtivos.length > 0) {
+            await Promise.allSettled(processosAtivos);
+        }
+        
+        this.processandoFila = false;
+        
+        // Se ainda há itens na fila, processar novamente
+        if (this.filaRequisicoes.length > 0) {
+            setTimeout(() => this.processarFila(), 100);
+        }
+    }
+    
+    async executarComEstatisticas(item) {
+        const inicioTempo = Date.now();
+        
+        try {
+            const resultado = await item.operacao();
+            
+            // Estatísticas de sucesso
+            this.estatisticasRede.sucessos++;
+            const tempoResposta = Date.now() - inicioTempo;
+            this.estatisticasRede.tempoMedioResposta = 
+                (this.estatisticasRede.tempoMedioResposta + tempoResposta) / 2;
+            
+            item.resolve(resultado);
+            
+        } catch (error) {
+            // Estatísticas de falha
+            this.estatisticasRede.falhas++;
+            this.estatisticasRede.ultimaFalha = {
+                timestamp: Date.now(),
+                erro: error.message,
+                tipo: this.classificarErro(error)
+            };
+            
+            // Ajustar limites baseado em falhas
+            this.ajustarLimitesPorFalhas(error);
+            
+            item.reject(error);
+        }
+    }
+    
+    classificarErro(error) {
+        if (error.code === 'ECONNABORTED') return 'timeout';
+        if (error.code === 'ENOTFOUND') return 'dns';
+        if (error.code === 'ECONNREFUSED') return 'conexao';
+        if (error.message && error.message.includes('500')) return 'servidor';
+        return 'desconhecido';
+    }
+    
+    ajustarLimitesPorFalhas(error) {
+        const tipoErro = this.classificarErro(error);
+        
+        // Se muitas falhas de timeout/servidor, reduzir concorrência
+        if (['timeout', 'servidor'].includes(tipoErro)) {
+            this.limiteConcorrencia = Math.max(2, this.limiteConcorrencia - 1);
+            this.intervaloEntreRequisicoes = Math.min(1000, this.intervaloEntreRequisicoes + 100);
+            console.log(`⚠️ DIVISÃO: Reduzindo concorrência para ${this.limiteConcorrencia} e aumentando intervalo para ${this.intervaloEntreRequisicoes}ms`);
+        }
+        
+        // Recuperar gradualmente após sucessos
+        if (this.estatisticasRede.sucessos > 0 && this.estatisticasRede.sucessos % 5 === 0) {
+            this.limiteConcorrencia = Math.min(5, this.limiteConcorrencia + 1);
+            this.intervaloEntreRequisicoes = Math.max(200, this.intervaloEntreRequisicoes - 50);
+        }
+    }
+
+    // === FUNÇÃO AUXILIAR: Retry com backoff exponencial OTIMIZADA ===
+    async tentarComRetry(operacao, descricao, maxTentativas = 3) {
+        // OTIMIZAÇÃO: Usar fila para controlar requisições
+        return await this.adicionarNaFila(async () => {
+            for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
+                try {
+                    // Timeout adaptativo baseado nas estatísticas de rede
+                    const baseTimeout = Math.max(15000, this.estatisticasRede.tempoMedioResposta * 3);
+                    const timeout = baseTimeout + (tentativa * 15000); // 15s, 30s, 45s (adaptativo)
+                    
+                    console.log(`🔄 DIVISÃO: ${descricao} - Tentativa ${tentativa}/${maxTentativas} (timeout: ${timeout}ms)`);
+                    
+                    return await operacao(timeout);
+                    
+                } catch (error) {
+                    const isTimeout = error.code === 'ECONNABORTED' && error.message.includes('timeout');
+                    const isUltimaTentativa = tentativa === maxTentativas;
+                    
+                    if (isTimeout && !isUltimaTentativa) {
+                        const delayMs = tentativa * 1000 + Math.random() * 1000; // 1-2s, 2-3s (jitter)
+                        console.log(`⏳ DIVISÃO: Timeout na tentativa ${tentativa}, aguardando ${Math.round(delayMs)}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, delayMs));
+                        continue;
+                    }
+                    
+                    console.error(`❌ DIVISÃO: ${descricao} falhou na tentativa ${tentativa}:`, error.message);
+                    if (isUltimaTentativa) throw error;
+                }
+            }
+        }, 'alta'); // Alta prioridade para tentativas de retry
+    }
+
     // === ENVIAR PARA PLANILHA DE PEDIDOS ===
     async enviarParaPlanilhaPedidos(referencia, megas, numero, grupoId) {
+        // VALIDAÇÃO: Garantir que referencia não é um número
+        if (/^\d+$/.test(referencia)) {
+            console.error(`❌ DIVISÃO: ERRO - Recebido número como referência: ${referencia}`);
+            console.error(`❌ DIVISÃO: Isso é um bug! Referência deve ser alfanumérica, não só números.`);
+            throw new Error(`Referência inválida: ${referencia} (deve ser alfanumérica)`);
+        }
+        
         console.log(`📋 DIVISÃO: Enviando pedido ${referencia}|${megas}|${numero}`);
         
         const timestamp = new Date().toLocaleString('pt-BR');
@@ -1175,138 +1377,36 @@ class WhatsAppBotDivisao {
         
         console.log(`📋 DIVISÃO: Dados:`, JSON.stringify(dados));
         
-        try {
-            const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
-                timeout: 30000, // Aumentado para 30 segundos (Google Apps Script pode ser lento)
-                headers: { 'Content-Type': 'application/json' },
-                retry: 2 // Tentar novamente se falhar
-            });
-            
-            console.log(`📋 DIVISÃO: Resposta recebida:`, response.data);
-            
-            // Verificar se é pedido duplicado (caso especial)
-            if (response.data && response.data.duplicado) {
-                console.log(`⚠️ DIVISÃO: Pedido ${referencia} já existe (Status: ${response.data.status_existente})`);
-                return { duplicado: true, referencia, status: response.data.status_existente };
-            }
-            
-            if (!response.data || !response.data.success) {
-                const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-                throw new Error(`Erro ao salvar pedido: ${responseText}`);
-            }
-            
-            console.log(`✅ DIVISÃO: Pedido salvo com sucesso - ${referencia}|${megas}|${numero}`);
-            
-        } catch (error) {
-            console.error(`❌ DIVISÃO: Erro ao enviar pedido:`, error.message);
-            
-            // Se foi timeout, tentar novamente
-            if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
-                console.log(`🔄 DIVISÃO: Tentando reenviar pedido após timeout...`);
-                try {
-                    const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
-                        timeout: 45000, // 45 segundos na segunda tentativa
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    
-                    console.log(`✅ DIVISÃO: Pedido enviado na segunda tentativa:`, response.data);
-                    
-                    if (response.data && response.data.success) {
-                        console.log(`✅ DIVISÃO: Pedido salvo com sucesso na segunda tentativa - ${referencia}|${megas}|${numero}`);
-                        return;
-                    }
-                } catch (retryError) {
-                    console.error(`❌ DIVISÃO: Segunda tentativa também falhou:`, retryError.message);
+        return await this.tentarComRetry(
+            async (timeout) => {
+                const response = await axios.post(this.SCRIPTS_CONFIG.PEDIDOS, dados, {
+                    timeout: timeout,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                console.log(`📋 DIVISÃO: Resposta recebida:`, response.data);
+                
+                // Verificar se é pedido duplicado (caso especial)
+                if (response.data && response.data.duplicado) {
+                    console.log(`⚠️ DIVISÃO: Pedido ${referencia} já existe (Status: ${response.data.status_existente})`);
+                    return { duplicado: true, referencia, status: response.data.status_existente };
                 }
-            }
-            
-            throw error;
-        }
+                
+                if (!response.data || !response.data.success) {
+                    const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+                    throw new Error(`Erro ao salvar pedido: ${responseText}`);
+                }
+                
+                console.log(`✅ DIVISÃO: Pedido salvo com sucesso - ${referencia}|${megas}|${numero}`);
+                return response.data;
+            },
+            `Envio de pedido ${referencia}`
+        );
     }
     
-    // === ENVIAR PARA PLANILHA DE PAGAMENTOS ===
-    async enviarParaPlanilhaPagamentos(referencia, valor, numero, grupoId) {
-        console.log(`💰 DIVISÃO: Enviando pagamento ${referencia}|${valor}|${numero}`);
-        
-        const timestamp = new Date().toLocaleString('pt-BR');
-        const dadosCompletos = `${referencia}|${valor}|${numero}|${timestamp}`;
-        
-        const dados = {
-            grupo_id: grupoId,
-            timestamp: timestamp,
-            transacao: dadosCompletos,  // Para pagamentos usar 'transacao'
-            sender: "WhatsApp-Bot-Divisao",
-            message: `Pagamento dividido: ${dadosCompletos}`
-        };
-        
-        console.log(`💰 DIVISÃO: Dados:`, JSON.stringify(dados));
-        
-        try {
-            
-            const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, dados, {
-                timeout: 30000, // Aumentado para 30 segundos (Google Apps Script pode ser lento)
-                headers: { 'Content-Type': 'application/json' },
-                retry: 2 // Tentar novamente se falhar
-            });
-            
-            console.log(`💰 DIVISÃO: Resposta recebida:`, response.data);
-            
-            // Verificar se é pagamento duplicado (múltiplos formatos)
-            if (response.data && response.data.duplicado) {
-                const status = response.data.status_existente || 'Existente';
-                console.log(`⚠️ DIVISÃO: Pagamento ${referencia} já existe (Status: ${status})`);
-                return { duplicado: true, referencia, status };
-            }
-            
-            // Verificar formato de string "Duplicado! REFERENCIA [IGNORADO]"
-            if (typeof response.data === 'string' && response.data.includes('Duplicado!')) {
-                console.log(`⚠️ DIVISÃO: Pagamento ${referencia} já existe (formato string)`);
-                // Tentar extrair status da mensagem se disponível
-                const statusMatch = response.data.match(/\[([^\]]+)\]/);
-                const status = statusMatch ? statusMatch[1] : 'Existente';
-                return { duplicado: true, referencia, status };
-            }
-            
-            // Verificar se foi sucesso - pode ser objeto {success: true} ou string "Sucesso!"
-            const isSuccess = (response.data && response.data.success) || 
-                             (typeof response.data === 'string' && response.data.includes('Sucesso'));
-            
-            if (!response.data || !isSuccess) {
-                const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-                throw new Error(`Erro ao salvar pagamento: ${responseText}`);
-            }
-            
-            console.log(`✅ DIVISÃO: Pagamento salvo com sucesso - ${referencia}|${valor}|${numero}`);
-            
-        } catch (error) {
-            console.error(`❌ DIVISÃO: Erro ao enviar pagamento:`, error.message);
-            
-            // Se foi timeout, tentar novamente
-            if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
-                console.log(`🔄 DIVISÃO: Tentando reenviar pagamento após timeout...`);
-                try {
-                    const response = await axios.post(this.SCRIPTS_CONFIG.PAGAMENTOS, dados, {
-                        timeout: 45000, // 45 segundos na segunda tentativa
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    
-                    console.log(`✅ DIVISÃO: Pagamento enviado na segunda tentativa:`, response.data);
-                    
-                    const isSuccess = (response.data && response.data.success) || 
-                                     (typeof response.data === 'string' && response.data.includes('Sucesso'));
-                    
-                    if (isSuccess) {
-                        console.log(`✅ DIVISÃO: Pagamento salvo com sucesso na segunda tentativa - ${referencia}|${valor}|${numero}`);
-                        return;
-                    }
-                } catch (retryError) {
-                    console.error(`❌ DIVISÃO: Segunda tentativa de pagamento também falhou:`, retryError.message);
-                }
-            }
-            
-            throw error;
-        }
-    }
+    // === FUNÇÃO DE ENVIO DE PAGAMENTOS REMOVIDA ===
+    // MOTIVO: O bot já consulta pagamentos na planilha para confirmar antes de enviar pedidos
+    // Não é mais necessário enviar pagamentos duplicados para a planilha
     
     // === LIMPEZA DE DADOS ANTIGOS ===
     limparComprovantesAntigos() {
@@ -1448,12 +1548,115 @@ class WhatsAppBotDivisao {
         return especificacoes;
     }
     
-    // === STATUS DO BOT ===
+    // === VERIFICAÇÃO DE SAÚDE DO SISTEMA ===
+    verificarSaudeDoSistema() {
+        const agora = Date.now();
+        const estatisticas = this.estatisticasRede;
+        
+        console.log(`🔍 DIVISÃO: Verificação de saúde do sistema`);
+        console.log(`   📊 Sucessos: ${estatisticas.sucessos} | Falhas: ${estatisticas.falhas}`);
+        console.log(`   ⏱️ Tempo médio: ${Math.round(estatisticas.tempoMedioResposta)}ms`);
+        console.log(`   🔄 Fila: ${this.filaRequisicoes.length} itens | Concorrência: ${this.limiteConcorrencia}`);
+        
+        // Verificar se o sistema está com muitas falhas
+        const totalRequests = estatisticas.sucessos + estatisticas.falhas;
+        const taxaFalha = totalRequests > 0 ? (estatisticas.falhas / totalRequests) * 100 : 0;
+        
+        if (taxaFalha > 30) { // Mais de 30% de falhas
+            console.log(`⚠️ DIVISÃO: Taxa de falha alta (${taxaFalha.toFixed(1)}%) - Aplicando correções`);
+            this.aplicarCorrecoesSistema();
+        }
+        
+        // Verificar se há itens muito antigos na fila
+        const itensAntigos = this.filaRequisicoes.filter(item => 
+            agora - item.timestamp > 10 * 60 * 1000 // 10 minutos
+        );
+        
+        if (itensAntigos.length > 0) {
+            console.log(`⚠️ DIVISÃO: ${itensAntigos.length} itens antigos na fila - Limpando`);
+            this.filaRequisicoes = this.filaRequisicoes.filter(item => 
+                agora - item.timestamp <= 10 * 60 * 1000
+            );
+        }
+        
+        // Verificar se o tempo de resposta está muito alto
+        if (estatisticas.tempoMedioResposta > 30000) { // Mais de 30 segundos
+            console.log(`⚠️ DIVISÃO: Tempo de resposta alto (${Math.round(estatisticas.tempoMedioResposta)}ms) - Ajustando`);
+            this.limiteConcorrencia = Math.max(2, Math.floor(this.limiteConcorrencia / 2));
+            this.intervaloEntreRequisicoes = Math.min(2000, this.intervaloEntreRequisicoes * 1.5);
+        }
+    }
+    
+    aplicarCorrecoesSistema() {
+        // Reset estatísticas para começar fresh
+        this.estatisticasRede.sucessos = 0;
+        this.estatisticasRede.falhas = 0;
+        this.estatisticasRede.tempoMedioResposta = 5000; // Valor conservador
+        
+        // Configurações mais conservadoras
+        this.limiteConcorrencia = 2; // Reduzir para mínimo
+        this.intervaloEntreRequisicoes = 1000; // 1 segundo entre requests
+        
+        // Limpar fila de itens com baixa prioridade
+        this.filaRequisicoes = this.filaRequisicoes.filter(item => 
+            item.prioridade === 'alta'
+        );
+        
+        console.log(`🔧 DIVISÃO: Correções aplicadas - Concorrência: ${this.limiteConcorrencia}, Intervalo: ${this.intervaloEntreRequisicoes}ms`);
+    }
+    
+    // === SISTEMA DE RECUPERAÇÃO DE PEDIDOS PERDIDOS ===
+    async tentarRecuperarPedidoPerdido(referencia, dadosOriginais) {
+        console.log(`🔄 DIVISÃO: Tentando recuperar pedido perdido ${referencia}`);
+        
+        try {
+            // Verificar se o pedido realmente foi perdido
+            const existeNaPlanilha = await this.buscarPagamentoNaPlanilha(referencia, dadosOriginais.valor);
+            
+            if (!existeNaPlanilha) {
+                console.log(`❌ DIVISÃO: Pedido ${referencia} realmente não existe - Não é necessário recuperar`);
+                return false;
+            }
+            
+            // Tentar recriar o pedido com prioridade alta
+            await this.adicionarNaFila(async () => {
+                console.log(`🚑 DIVISÃO: Recuperando pedido ${referencia}...`);
+                await this.enviarParaPlanilhaPedidos(
+                    dadosOriginais.referencia, 
+                    dadosOriginais.megas, 
+                    dadosOriginais.numero, 
+                    dadosOriginais.grupoId
+                );
+            }, 'alta');
+            
+            console.log(`✅ DIVISÃO: Pedido ${referencia} recuperado com sucesso`);
+            return true;
+            
+        } catch (error) {
+            console.error(`❌ DIVISÃO: Erro na recuperação de ${referencia}:`, error.message);
+            return false;
+        }
+    }
+
+    // === STATUS DO BOT (MELHORADO) ===
     getStatus() {
+        const taxaSucesso = this.estatisticasRede.sucessos + this.estatisticasRede.falhas > 0 ? 
+            ((this.estatisticasRede.sucessos / (this.estatisticasRede.sucessos + this.estatisticasRede.falhas)) * 100).toFixed(1) : 100;
+        
         return {
             comprovantesMemorizados: Object.keys(this.comprovantesMemorizados).length,
             processandoDivisoes: this.processandoDivisoes.size,
-            gruposConfigurados: Object.keys(this.CONFIGURACAO_GRUPOS).length
+            gruposConfigurados: Object.keys(this.CONFIGURACAO_GRUPOS).length,
+            // NOVAS ESTATÍSTICAS DE PERFORMANCE
+            performance: {
+                filaAtual: this.filaRequisicoes.length,
+                concorrenciaAtiva: this.limiteConcorrencia,
+                intervaloRequisicoes: this.intervaloEntreRequisicoes,
+                taxaSucesso: `${taxaSucesso}%`,
+                tempoMedioResposta: `${Math.round(this.estatisticasRede.tempoMedioResposta)}ms`,
+                ultimaFalha: this.estatisticasRede.ultimaFalha?.timestamp ? 
+                    new Date(this.estatisticasRede.ultimaFalha.timestamp).toLocaleString() : 'Nenhuma'
+            }
         };
     }
 }
