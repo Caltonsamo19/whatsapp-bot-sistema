@@ -1262,15 +1262,35 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     const temIDdaTransacao = /^id da transacao/i.test(mensagem.trim());
     const temTransferiste = /transferiste\s+\d+/i.test(mensagem);
     
-    if (!temConfirmado && !temID && !temIDdaTransacao && !temTransferiste) {
+    // FORÇAR reconhecimento para comprovantes óbvios
+    if (temConfirmado || temID || temIDdaTransacao || temTransferiste) {
+      console.log(`🎯 ATACADO: Comprovante DETECTADO - Confirmado:${temConfirmado} ID:${temID} IDTransacao:${temIDdaTransacao} Transferiste:${temTransferiste}`);
+    } else {
       return null;
     }
 
+    // EXTRAÇÃO DIRETA POR REGEX (FALLBACK GARANTIDO)
+    try {
+      const refMatch = mensagem.match(/(?:ID da transacao|Confirmado)\s+([A-Z0-9][A-Z0-9.]*[A-Z0-9])/i);
+      const valorMatch = mensagem.match(/Transferiste\s+(\d+(?:\.\d+)?)MT/i);
+      
+      if (refMatch && valorMatch) {
+        console.log(`🎯 ATACADO: Extração DIRETA por regex - Ref:${refMatch[1]} Valor:${valorMatch[1]}`);
+        return {
+          referencia: refMatch[1].trim(),
+          valor: this.limparValor(valorMatch[1]),
+          fonte: 'regex_direto'
+        };
+      }
+    } catch (regexError) {
+      console.log(`⚠️ ATACADO: Regex direto falhou, tentando IA...`);
+    }
+
     // OTIMIZAÇÃO: Verificar cache primeiro
-    const cacheKey = `comprovante_${Buffer.from(mensagem).toString('base64').substring(0, 32)}`;
+    const cacheKey = `comprovante_v3_${Buffer.from(mensagem).toString('base64').substring(0, 32)}`;
     const cached = this.cacheResultados.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
-      console.log('💾 ATACADO: Cache hit - comprovante');
+      console.log('💾 ATACADO: Cache hit - comprovante v3');
       this.tokenStats.cacheHits++;
       return cached.resultado;
     }
