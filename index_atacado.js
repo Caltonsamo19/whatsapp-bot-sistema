@@ -977,7 +977,7 @@ client.on('ready', async () => {
         console.log(`   📋 ${config.nome} (${grupoId})`);
     });
     
-    console.log('\n🔧 Comandos admin: .ia .divisao .clear_cache .test_busca .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo');
+    console.log('\n🔧 Comandos admin: .ia .divisao .test_busca .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo');
 });
 
 client.on('group-join', async (notification) => {
@@ -1059,10 +1059,9 @@ client.on('message', async (message) => {
             const comando = message.body.toLowerCase().trim();
 
             if (comando === '.ia') {
-                // OTIMIZAÇÃO: Usar status otimizado com estatísticas de cache
-                const statusIA = ia.getStatusOtimizado();
+                const statusIA = ia.getStatusDetalhado();
                 await message.reply(statusIA);
-                console.log(`🧠 Comando .ia executado (com estatísticas de cache)`);
+                console.log(`🧠 Comando .ia executado`);
                 return;
             }
 
@@ -1219,15 +1218,6 @@ client.on('message', async (message) => {
                 return;
             }
 
-            // NOVO COMANDO: Limpar cache da IA
-            if (comando === '.clear_cache') {
-                const tamanhoAnterior = ia.cacheResultados.size;
-                ia.cacheResultados.clear();
-                ia.tokenStats = { total: 0, saved: 0, calls: 0, cacheHits: 0 };
-                await message.reply(`🗑️ *Cache da IA limpo!*\n\n📊 ${tamanhoAnterior} entradas removidas\n📈 Estatísticas zeradas`);
-                return;
-            }
-
             // === COMANDOS PARA DETECÇÃO DE GRUPOS ===
             if (comando === '.grupos') {
                 try {
@@ -1329,10 +1319,8 @@ client.on('message', async (message) => {
         
         if (textoMensagem === 'tabela') {
             const configGrupoBasico = getConfiguracaoGrupo(message.from);
-            // OTIMIZAÇÃO: Usar cache da IA
-            const tabelaCacheada = ia.getCachedResponse('tabela', configGrupoBasico);
-            if (tabelaCacheada) {
-                await message.reply(tabelaCacheada);
+            if (configGrupoBasico && configGrupoBasico.tabela) {
+                await message.reply(configGrupoBasico.tabela);
             } else {
                 await message.reply('❌ Tabela não configurada para este grupo.');
             }
@@ -1341,10 +1329,8 @@ client.on('message', async (message) => {
         
         if (textoMensagem === 'pagamento') {
             const configGrupoBasico = getConfiguracaoGrupo(message.from);
-            // OTIMIZAÇÃO: Usar cache da IA
-            const pagamentoCacheado = ia.getCachedResponse('pagamento', configGrupoBasico);
-            if (pagamentoCacheado) {
-                await message.reply(pagamentoCacheado);
+            if (configGrupoBasico && configGrupoBasico.pagamento) {
+                await message.reply(configGrupoBasico.pagamento);
             } else {
                 await message.reply('❌ Informações de pagamento não configuradas para este grupo.');
             }
@@ -1523,16 +1509,14 @@ client.on('message', async (message) => {
             return;
         }
 
-        // Comandos de tabela e pagamento (OTIMIZADOS)
+        // Comandos de tabela e pagamento
         if (/tabela/i.test(message.body)) {
-            const tabelaCacheada = ia.getCachedResponse('tabela', configGrupo);
-            await message.reply(tabelaCacheada || configGrupo.tabela);
+            await message.reply(configGrupo.tabela);
             return;
         }
 
         if (/pagamento/i.test(message.body)) {
-            const pagamentoCacheado = ia.getCachedResponse('pagamento', configGrupo);
-            await message.reply(pagamentoCacheado || configGrupo.pagamento);
+            await message.reply(configGrupo.pagamento);
             return;
         }
 
@@ -1637,12 +1621,12 @@ client.on('message', async (message) => {
                         adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
                     }
                     
-                    // OTIMIZAÇÃO: Resposta imediata para número único
                     await message.reply(
-                        `🚀 *PEDIDO INICIADO!*\n\n` +
-                        `💰 **${referencia}** - ${resultadoIA.valorPago || 'N/A'}MT\n` +
-                        `📊 **${megas}** → **${numero}**\n\n` +
-                        `⚡ *Processando em segundos...*`
+                        `✅ *Pedido processado!*\n\n` +
+                        `💰 Referência: ${referencia}\n` +
+                        `📊 Megas: ${megas}\n` +
+                        `📱 Número: ${numero}\n\n` +
+                        `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
                     );
                     return;
                 }
@@ -1660,22 +1644,34 @@ client.on('message', async (message) => {
                         `📊 Megas: ${megas}\n` +
                         `📱 Número: ${numero}\n` +
                         `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
-                        `🔍 Aguardando Mensagem de Confirmação de Pagamento...\n` +
+                        `🔍 Aguardando confirmação do pagamento na planilha...\n` +
                         `⏱️ Tente novamente em alguns minutos.`
                     );
                     return;
                 }
                 
-                console.log(`✅ INDIVIDUAL: Pagamento confirmado! Enviando resposta imediata...`);
+                console.log(`✅ INDIVIDUAL: Pagamento confirmado para texto! Processando...`);
                 
-                // PROCESSAMENTO ACELERADO - SEM MENSAGEM IMEDIATA
-                const inicioProcessamento = Date.now();
+                // 3. Se pagamento confirmado, processar normalmente
+                const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, message.from, message);
+                if (resultadoEnvio === null) {
+                    console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
+                    return; // Para aqui se for duplicado
+                }
+                await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                 
-                // PROCESSAMENTO EM BACKGROUND - NÃO BLOQUEIA RESPOSTA
-                processarPedidoUnicoEmBackground(
-                    referencia, megasConvertido, numero, message.from, message, 
-                    dadosCompletos, autorMensagem, configGrupo, nomeContato, 
-                    resultadoIA.valorPago || megas, valorEsperado, inicioProcessamento
+                if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
+                    const timestampMensagem = new Date().toLocaleString('pt-BR');
+                    adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
+                }
+                
+                await message.reply(
+                    `✅ *Pedido processado!*\n\n` +
+                    `💰 Referência: ${referencia}\n` +
+                    `📊 Megas: ${megas}\n` +
+                    `📱 Número: ${numero}\n` +
+                    `💳 Pagamento: ${normalizarValor(valorEsperado)}MT confirmado\n\n` +
+                    `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
                 );
                 return;
             }
@@ -1949,76 +1945,6 @@ async function processarPedidoIndividual(dadosCompletos, megasConvertido, refere
     }
     
     console.log(`✅ INDIVIDUAL: ${referencia} processado com sucesso - ${Math.floor(megasConvertido/1024)}GB para ${numero}`);
-}
-
-// === PROCESSAMENTO DE PEDIDO ÚNICO EM BACKGROUND (NOVA FUNÇÃO) ===
-async function processarPedidoUnicoEmBackground(
-    referencia, megasConvertido, numero, grupoId, message, 
-    dadosCompletos, autorMensagem, configGrupo, nomeContato, 
-    valorIA, valorEsperado, inicioProcessamento
-) {
-    const inicioBackground = Date.now();
-    
-    try {
-        console.log(`🔄 BACKGROUND-ÚNICO: Processando ${referencia} para ${numero}`);
-        
-        // Processar o envio
-        const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, grupoId, message);
-        
-        if (resultadoEnvio === null) {
-            console.log(`🛑 BACKGROUND-ÚNICO: Duplicado detectado - ${referencia}`);
-            
-            // Enviar mensagem de duplicado
-            await message.reply(
-                `⚠️ *PEDIDO JÁ EXISTE*\n\n` +
-                `💰 **${referencia}** já foi processado\n` +
-                `📊 **${Math.floor(megasConvertido/1024)}GB** → **${numero}**\n\n` +
-                `✅ *Verificar status na planilha*`
-            );
-            return;
-        }
-        
-        // Registrar comprador
-        await registrarComprador(grupoId, numero, nomeContato, valorIA);
-        
-        // Adicionar na fila se for grupo de origem
-        if (grupoId === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
-            const timestampMensagem = new Date().toLocaleString('pt-BR');
-            adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
-        }
-        
-        const tempoTotal = Date.now() - inicioBackground;
-        const tempoTotalCompleto = Date.now() - inicioProcessamento;
-        
-        console.log(`🏁 BACKGROUND-ÚNICO: Concluído em ${tempoTotal}ms (total: ${tempoTotalCompleto}ms)`);
-        
-        // ENVIAR MENSAGEM FINAL - FORMATO SOLICITADO
-        await message.reply(
-            `✅ *Pedido processado!*\n\n` +
-            `💰 *Referência:* ${referencia}\n` +
-            `📊 *Megas:* ${Math.floor(megasConvertido/1024)}GB\n` +
-            `📱 *Número:* ${numero}\n` +
-            `💳 *Pagamento:* ${normalizarValor(valorEsperado)}MT Confirmado\n\n` +
-            `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
-        );
-        
-        console.log(`📤 BACKGROUND-ÚNICO: Mensagem final enviada para ${numero}`);
-        
-    } catch (error) {
-        console.error(`❌ BACKGROUND-ÚNICO: Erro no processamento de ${referencia}:`, error.message);
-        
-        // Enviar mensagem de erro
-        try {
-            await message.reply(
-                `❌ *ERRO NO PROCESSAMENTO*\n\n` +
-                `💰 **${referencia}**\n` +
-                `📱 **${numero}**\n\n` +
-                `🔄 *Tente novamente em alguns instantes*`
-            );
-        } catch (replyError) {
-            console.error(`❌ BACKGROUND-ÚNICO: Erro ao enviar mensagem de erro:`, replyError.message);
-        }
-    }
 }
 
 
