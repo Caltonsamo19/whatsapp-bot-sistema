@@ -104,6 +104,12 @@ const ADMINISTRADORES_GLOBAIS = [
     '258840326152@c.us'  // Adicionado para comandos administrativos
 ];
 
+// === MAPEAMENTO DE NÚMEROS PARA GRUPOS ===
+const MAPEAMENTO_NUMEROS_GRUPOS = {
+    '258840326152': '120363419652375064@g.us',  // Net Fornecedor V
+    '258852118624': '120363419652375064@g.us'   // Net Fornecedor V
+};
+
 // === CONFIGURAÇÃO DE MODERAÇÃO ===
 const MODERACAO_CONFIG = {
     ativado: {
@@ -690,6 +696,12 @@ function isAdministrador(numero) {
     return ADMINISTRADORES_GLOBAIS.includes(numero);
 }
 
+function obterGrupoDoNumero(numeroAdmin) {
+    // Extrair apenas o número do ID completo (ex: '258840326152@c.us' -> '258840326152')
+    const numeroLimpo = numeroAdmin.replace('@c.us', '');
+    return MAPEAMENTO_NUMEROS_GRUPOS[numeroLimpo] || null;
+}
+
 function isGrupoMonitorado(chatId) {
     return CONFIGURACAO_GRUPOS.hasOwnProperty(chatId);
 }
@@ -1223,8 +1235,32 @@ client.on('message', async (message) => {
             // === COMANDOS PARA DETECÇÃO DE GRUPOS ===
             if (comando === '.grupos') {
                 try {
-                    let resposta = `📋 *GRUPOS DETECTADOS ATACADO*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-                    
+                    let resposta = `📋 *GRUPOS CONFIGURADOS ATACADO*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+                    // Mostrar grupo padrão do admin (se existir)
+                    const meuGrupo = obterGrupoDoNumero(message.from);
+                    if (meuGrupo) {
+                        const configMeuGrupo = getConfiguracaoGrupo(meuGrupo);
+                        resposta += `🏠 *SEU GRUPO PADRÃO:*\n`;
+                        resposta += `📋 ${configMeuGrupo.nome}\n`;
+                        resposta += `🆔 ${meuGrupo}\n\n`;
+                    }
+
+                    resposta += `📊 *TODOS OS GRUPOS:*\n`;
+                    Object.keys(CONFIGURACAO_GRUPOS).forEach(grupoId => {
+                        const config = CONFIGURACAO_GRUPOS[grupoId];
+                        const isMeuGrupo = meuGrupo === grupoId ? ' ⭐' : '';
+                        resposta += `📋 ${config.nome}${isMeuGrupo}\n`;
+                        resposta += `🆔 \`${grupoId}\`\n\n`;
+                    });
+
+                    resposta += `💡 *MAPEAMENTO DE ADMINS:*\n`;
+                    Object.keys(MAPEAMENTO_NUMEROS_GRUPOS).forEach(numero => {
+                        const grupoId = MAPEAMENTO_NUMEROS_GRUPOS[numero];
+                        const config = getConfiguracaoGrupo(grupoId);
+                        resposta += `📱 ${numero} → ${config.nome}\n`;
+                    });
+
                     const chats = await client.getChats();
                     const grupos = chats.filter(chat => chat.isGroup);
                     
@@ -1297,35 +1333,55 @@ client.on('message', async (message) => {
                 return;
             }
 
-            // NOVO COMANDO: .pedido - Permite ao admin criar pedidos diretamente
+            // NOVO COMANDO: .pedido - Permite ao admin criar pedidos diretamente (APENAS PRIVADO)
             if (comando.startsWith('.pedido ')) {
+                // Verificar se está sendo usado no privado
+                if (!isPrivado) {
+                    await message.reply('❌ Este comando só pode ser usado no chat privado!\n\n🔒 Mande uma mensagem privada para o bot para usar este comando.');
+                    return;
+                }
+
                 const parametros = comando.replace('.pedido ', '').trim();
                 const partes = parametros.split(' ');
 
                 if (partes.length < 3) {
                     await message.reply(
                         `❌ *Uso do comando .pedido*\n\n` +
-                        `📝 **Formato:** .pedido REFERENCIA MEGAS NUMERO\n\n` +
+                        `📝 **Formato:** .pedido REFERENCIA MEGAS NUMERO [GRUPO_ID]\n\n` +
                         `💡 **Exemplos:**\n` +
                         `• .pedido ADMIN001 10240 847777777\n` +
-                        `• .pedido PROMO123 20480 848888888\n\n` +
-                        `📊 **MEGAS em MB:** 10240 = 10GB, 20480 = 20GB, etc.`
+                        `• .pedido PROMO123 20480 848888888 120363419652375064@g.us\n\n` +
+                        `📊 **MEGAS em MB:** 10240 = 10GB, 20480 = 20GB, etc.\n` +
+                        `🏢 **GRUPO_ID:** Opcional - se não informado, usa seu grupo padrão\n` +
+                        `💡 Use .grupos para ver IDs disponíveis`
                     );
                     return;
                 }
 
-                const [referencia, megas, numero] = partes;
-                const grupoAtual = message.from;
-                const configGrupo = getConfiguracaoGrupo(grupoAtual);
+                const [referencia, megas, numero, grupoIdManual] = partes;
 
-                // Verificar se é em um grupo configurado
-                if (!grupoAtual.endsWith('@g.us')) {
-                    await message.reply('❌ Use este comando apenas em grupos configurados!');
-                    return;
+                // Determinar o grupo: manual ou automático baseado no admin
+                let grupoId;
+                if (grupoIdManual) {
+                    grupoId = grupoIdManual;
+                } else {
+                    grupoId = obterGrupoDoNumero(message.from);
+                    if (!grupoId) {
+                        await message.reply(
+                            `❌ *Grupo não configurado para seu número!*\n\n` +
+                            `🔧 Você precisa especificar o GRUPO_ID manualmente:\n` +
+                            `📝 .pedido ${referencia} ${megas} ${numero} GRUPO_ID\n\n` +
+                            `💡 Use .grupos para ver grupos disponíveis`
+                        );
+                        return;
+                    }
                 }
 
+                const configGrupo = getConfiguracaoGrupo(grupoId);
+
+                // Verificar se o grupo está configurado
                 if (!configGrupo) {
-                    await message.reply('❌ Este grupo não está configurado no sistema!');
+                    await message.reply('❌ Grupo não configurado no sistema!\n\n💡 Use .grupos para ver grupos disponíveis.');
                     return;
                 }
 
@@ -1342,11 +1398,13 @@ client.on('message', async (message) => {
                     return;
                 }
 
-                console.log(`🔧 ADMIN: Comando .pedido executado pelo admin`);
+                const grupoTipo = grupoIdManual ? 'manual' : 'automático';
+                console.log(`🔧 ADMIN: Comando .pedido executado pelo admin no privado`);
                 console.log(`   📋 Referência: ${referencia}`);
                 console.log(`   📊 Megas: ${megasNum} (${Math.floor(megasNum/1024)}GB)`);
                 console.log(`   📱 Número: ${numero}`);
-                console.log(`   🏢 Grupo: ${configGrupo.nome}`);
+                console.log(`   🏢 Grupo: ${configGrupo.nome} (${grupoTipo})`);
+                console.log(`   🆔 ID: ${grupoId}`);
 
                 try {
                     // Enviar pedido direto para o sistema
@@ -1354,7 +1412,7 @@ client.on('message', async (message) => {
                         referencia,
                         megasNum,
                         numero,
-                        grupoAtual,
+                        grupoId,
                         message
                     );
 
@@ -1365,7 +1423,7 @@ client.on('message', async (message) => {
 
                     // Registrar no histórico
                     const nomeAdmin = message._data.notifyName || 'Admin';
-                    await registrarComprador(grupoAtual, numero, `${nomeAdmin} (Admin)`, megasNum);
+                    await registrarComprador(grupoId, numero, `${nomeAdmin} (Admin)`, megasNum);
 
                     // Resposta de sucesso
                     await message.reply(
