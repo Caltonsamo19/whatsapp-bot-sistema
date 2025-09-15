@@ -1035,13 +1035,16 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
             };
           }
         } else {
-          // Múltiplos números detectados - redirecionar para bot de divisão
-          console.log(`   ❌ ATACADO: Múltiplos números na legenda não permitidos`);
+          // Múltiplos números detectados - ENCAMINHAR PARA BOT DE DIVISÃO (DOS EXEMPLOS)
+          console.log(`   🔄 ATACADO: Múltiplos números detectados (${numeros.length}) - Encaminhando para bot de divisão`);
+          console.log(`   📱 NÚMEROS: ${numeros.join(', ')}`);
+          console.log(`   💰 COMPROVANTE: ${comprovante.referencia} - ${comprovante.valor}MT`);
+
           return {
             sucesso: false,
             tipo: 'multiplos_numeros_nao_permitido',
             numeros: numeros,
-            comprovativo: comprovante, // INCLUIR dados do comprovativo
+            comprovativo: comprovante,
             mensagem: 'Sistema atacado aceita apenas UM número por vez.'
           };
         }
@@ -1584,11 +1587,12 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     const resultadoNumero = this.extrairNumeroUnico(mensagem);
     
     if (resultadoNumero && resultadoNumero.multiplos) {
-      return { 
-        textoComprovante: '', 
-        numero: null, 
+      console.log(`🔄 ATACADO: Múltiplos números na mensagem - preparando para encaminhar`);
+      return {
+        textoComprovante: '',
+        numero: null,
         erro: 'multiplos_numeros',
-        numeros: resultadoNumero.numeros 
+        numeros: resultadoNumero.numeros
       };
     }
     
@@ -2699,27 +2703,11 @@ Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"enco
         if (referencia) break;
       }
       
-      // BUSCAR VALOR: Múltiplos padrões ROBUSTOS (melhorados)
-      const padroesValor = [
-        // Padrões específicos para "Transferiste" com diferentes formatos
-        /Transferiste\s+(\d+(?:,\d{3})*(?:\.\d+)?)MT/i,     // 1,250.00MT ou 1,000MT
-        /Transferiste\s+(\d+,\d{3}(?:\.\d{2})?)MT/i,        // 1,250.00MT específico
-        /Transferiste\s+(\d+(?:[.,]\d{1,2})?)MT/i,          // Padrão original melhorado
-        // Padrões genéricos com MT
-        /(?:valor|montante)\s*:?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*MT/i,
-        /(\d+(?:,\d{3})*(?:\.\d+)?)\s*MT/i,                 // Genérico com separador de milhares
-        /(\d+(?:[.,]\d{1,2})?)\s*MT/i,                      // Padrão simples
-        // Padrões sem MT como fallback
-        /(?:valor|montante)\s*:?\s*(\d+(?:[.,]\d{1,2})?)/i
-      ];
-      
-      for (const padrao of padroesValor) {
-        const match = mensagem.match(padrao);
-        if (match && match[1]) {
-          valor = this.normalizarValorRobusto(match[1]);
-          console.log(`✅ Valor encontrado via regex: ${match[1]} → ${valor}MT`);
-          break;
-        }
+      // BUSCAR VALOR: Padrão SIMPLES e EFICAZ (dos exemplos)
+      const valorMatch = mensagem.match(/Transferiste\s+(\d+(?:\.\d+)?)MT/i);
+      if (valorMatch) {
+        valor = this.limparValor(valorMatch[1]);
+        console.log(`✅ Valor encontrado: ${valorMatch[1]} → ${valor}MT`);
       }
       
       if (referencia && valor && valor !== null && valor !== undefined) {
@@ -2971,33 +2959,14 @@ ou
     return null;
   }
 
-  // === LIMPAR VALOR MONETÁRIO (MELHORADO COM VALIDAÇÕES) ===
+  // === LIMPAR VALOR MONETÁRIO (SIMPLES E EFICAZ - DOS EXEMPLOS) ===
   limparValor(valor) {
-    // VALIDAÇÃO INICIAL: Verificar se valor existe e não é undefined/null
-    if (!valor || valor === undefined || valor === null || valor === 'undefined' || valor === 'null') {
-      console.warn(`⚠️ ATACADO: limparValor recebeu valor inválido: "${valor}"`);
-      return null; // Retorna null em vez de '0' para detectar problemas
-    }
+    if (!valor) return '0';
 
-    let valorStr = valor.toString().trim();
-
-    // VALIDAÇÃO: Se string vazia após trim
-    if (valorStr === '' || valorStr === 'undefined' || valorStr === 'null') {
-      console.warn(`⚠️ ATACADO: Valor string vazia após conversão: "${valor}" → "${valorStr}"`);
-      return null;
-    }
-
-    // Remover unidades monetárias
+    let valorStr = valor.toString();
     valorStr = valorStr.replace(/\s*(MT|mt|meticais?|metical)\s*/gi, '');
     valorStr = valorStr.trim();
 
-    // USAR A FUNÇÃO ROBUSTA PRIMEIRO
-    const valorRobusto = this.normalizarValorRobusto(valorStr);
-    if (valorRobusto !== null && valorRobusto !== undefined && !isNaN(valorRobusto)) {
-      return valorRobusto.toString();
-    }
-
-    // FALLBACK: Lógica original como backup
     if (valorStr.includes(',') && valorStr.includes('.')) {
       valorStr = valorStr.replace(/,/g, '');
     } else if (valorStr.includes(',')) {
@@ -3012,18 +2981,11 @@ ou
     const match = valorStr.match(/\d+\.?\d*/);
     if (match) {
       const numero = parseFloat(match[0]);
-      if (!isNaN(numero) && numero > 0) {
-        return numero.toString();
-      }
+      return numero.toString();
     }
 
     const digitos = valorStr.replace(/[^\d]/g, '');
-    if (digitos && digitos !== '0') {
-      return digitos;
-    }
-
-    console.warn(`⚠️ ATACADO: Não foi possível extrair valor numérico de: "${valor}"`);
-    return null; // Retorna null para detectar falhas
+    return digitos || '0';
   }
 
   // === HISTÓRICO (CÓDIGO ORIGINAL) ===
