@@ -17,6 +17,23 @@ class WhatsAppAIAtacado {
       calls: 0,
       cacheHits: 0
     };
+
+    // MÉTRICAS DE PROCESSAMENTO DE IMAGENS ROBUSTAS
+    this.imagemStats = {
+      total: 0,
+      sucessos: 0,
+      falhas: 0,
+      metodos: {
+        hibrido_direto: 0,
+        abordagem_alternativa: 0,
+        regex_direto: 0,
+        prompt_simplificado: 0,
+        gpt4_vision_fallback: 0
+      },
+      referencias_reconstruidas: 0,
+      referencias_validadas: 0,
+      referencias_rejeitadas: 0
+    };
     
     // Configurar Google Vision com verificação robusta
     this.googleVisionEnabled = process.env.GOOGLE_VISION_ENABLED === 'true';
@@ -94,87 +111,238 @@ class WhatsAppAIAtacado {
     console.log(`🧠 IA WhatsApp ATACADO v5.0 inicializada - ${visionStatus}`);
   }
 
-  // === RECONSTRUIR REFERÊNCIAS QUEBRADAS (COPIADO EXATAMENTE DO BOT DE REFERÊNCIA) ===
+  // === RECONSTRUIR REFERÊNCIAS QUEBRADAS (VERSÃO MELHORADA E ROBUSTA) ===
   reconstruirReferenciasQuebradas(texto) {
-    console.log('🔧 Reconstruindo referências quebradas...');
+    console.log('🔧 Reconstruindo referências quebradas - VERSÃO ROBUSTA...');
+    console.log(`📝 Texto original (${texto.length} chars): ${texto.substring(0, 200)}...`);
     
-    // Padrões comuns de referências M-Pesa/E-Mola quebradas
+    // Padrões EXPANDIDOS de referências M-Pesa/E-Mola quebradas
     const padroes = [
-      // PP250901.1250.B + 64186 = PP250901.1250.B64186
+      // === PADRÕES E-MOLA (PP + AAMMDD + . + HHMM + . + Letra + 5 Números) ===
+      // Padrão completo: PP250914.1134.T38273
+      // PP250914.1134.T + 38273 = PP250914.1134.T38273
       {
-        regex: /(PP\d{6}\.\d{4}\.B)\s*\n?\s*(\d{4,6})/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`
+        regex: /(PP\d{6}\.\d{4}\.[A-Za-z])\s*\n?\s*(\d{5})/gi,
+        reconstruct: (match, p1, p2) => `${p1}${p2}`,
+        tipo: 'E-Mola completo'
       },
-      // CHMOH4HICK + 2 = CHMOH4HICK2 (caso específico: referência + número isolado)
+      // PP250914.1134. + T38273 = PP250914.1134.T38273
       {
-        regex: /(CHMOH4HICK)\s*\n?\s*(\d+)/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`
+        regex: /(PP\d{6}\.\d{4}\.)\s*\n?\s*([A-Za-z]\d{5})/gi,
+        reconstruct: (match, p1, p2) => `${p1}${p2}`,
+        tipo: 'E-Mola sem letra'
       },
-      // Padrão genérico: CÓDIGO + número isolado = CÓDIGONÚMERO
+      // PP250914. + 1134.T38273 = PP250914.1134.T38273
       {
-        regex: /([A-Z]{8,12}[A-Z])\s*\n?\s*(\d{1,3})(?=\s*\.|\s*\n|\s*$)/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`
+        regex: /(PP\d{6}\.)\s*\n?\s*(\d{4}\.[A-Za-z]\d{5})/gi,
+        reconstruct: (match, p1, p2) => `${p1}${p2}`,
+        tipo: 'E-Mola sem hora'
       },
-      // CI6H85P + TN4 = CI6H85PTN4
+      // PP + 250914.1134.T38273 = PP250914.1134.T38273
       {
-        regex: /([A-Z]\w{5,7}[A-Z])\s*\n?\s*([A-Z0-9]{2,4})/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`
+        regex: /(PP)\s*\n?\s*(\d{6}\.\d{4}\.[A-Za-z]\d{5})/gi,
+        reconstruct: (match, p1, p2) => `${p1}${p2}`,
+        tipo: 'E-Mola sem prefixo'
       },
-      // CGC4GQ1 + 7W84 = CGC4GQ17W84
+      // Quebra em 3 partes: PP250914 + 1134 + T38273
       {
-        regex: /([A-Z]{3}\d[A-Z]{2}\d)\s*\n?\s*(\d?[A-Z0-9]{3,4})/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`
+        regex: /(PP\d{6})\s*\n?\s*(\d{4})\s*\n?\s*([A-Za-z]\d{5})/gi,
+        reconstruct: (match, p1, p2, p3) => `${p1}.${p2}.${p3}`,
+        tipo: 'E-Mola tripla quebra'
       },
-      // Confirmado + CÓDIGO = CÓDIGO (remover prefixos)
+      
+      // === PADRÕES M-PESA (11 caracteres alfanuméricos misturados) ===
+      // Quebra simples: 8 chars + 3 chars = 11 chars total
       {
-        regex: /Confirmado\s*\n?\s*([A-Z0-9]{8,15})/gi,
-        reconstruct: (match, p1) => p1
-      },
-      // ID genérico: XXXXX + XXXXX = XXXXXXXXXX
-      {
-        regex: /([A-Z0-9]{5,8})\s*\n?\s*([A-Z0-9]{3,6})/gi,
+        regex: /([A-Z0-9]{6,8})\s*\n?\s*([A-Z0-9]{3,5})(?=\s|$|\n|\.)/gi,
         reconstruct: (match, p1, p2) => {
-          // Só juntar se parecer fazer sentido (não números aleatórios)
-          if (/^[A-Z]/.test(p1) && (p1.length + p2.length >= 8 && p1.length + p2.length <= 15)) {
+          const total = p1 + p2;
+          // Validar se totaliza 11 caracteres
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            return total;
+          }
+          return match;
+        },
+        tipo: 'M-Pesa 11 chars'
+      },
+      // Quebra 7+4: CHMOH4H + ICK2 = CHMOH4HICK2 (exemplo de 11 chars)
+      {
+        regex: /([A-Z0-9]{7})\s*\n?\s*([A-Z0-9]{4})(?=\s|$|\n|\.)/gi,
+        reconstruct: (match, p1, p2) => {
+          const total = p1 + p2;
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            return total;
+          }
+          return match;
+        },
+        tipo: 'M-Pesa 7+4'
+      },
+      // Quebra 5+6: CH4OH + 4HICK2 = CH4OH4HICK2
+      {
+        regex: /([A-Z0-9]{5})\s*\n?\s*([A-Z0-9]{6})(?=\s|$|\n|\.)/gi,
+        reconstruct: (match, p1, p2) => {
+          const total = p1 + p2;
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            return total;
+          }
+          return match;
+        },
+        tipo: 'M-Pesa 5+6'
+      },
+      // Quebra em 3 partes: CHM + OH4H + ICK2 = CHMOH4HICK2
+      {
+        regex: /([A-Z0-9]{3})\s*\n?\s*([A-Z0-9]{4})\s*\n?\s*([A-Z0-9]{4})(?=\s|$|\n|\.)/gi,
+        reconstruct: (match, p1, p2, p3) => {
+          const total = p1 + p2 + p3;
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            return total;
+          }
+          return match;
+        },
+        tipo: 'M-Pesa tripla 3+4+4'
+      },
+      
+      // === PADRÕES GENÉRICOS MAIS ROBUSTOS ===
+      // Código longo + sufixo curto
+      {
+        regex: /([A-Z]{6,12})\s*\n?\s*([A-Z0-9]{1,4})(?=\s|$|\n)/gi,
+        reconstruct: (match, p1, p2) => {
+          const comprimentoTotal = p1.length + p2.length;
+          // M-Pesa típico: 8-15 caracteres
+          if (comprimentoTotal >= 8 && comprimentoTotal <= 15 && /^[A-Z]/.test(p1)) {
             return `${p1}${p2}`;
           }
           return match;
-        }
+        },
+        tipo: 'Genérico'
+      },
+      // Código médio + sufixo médio
+      {
+        regex: /([A-Z0-9]{4,8})\s*\n?\s*([A-Z0-9]{3,6})(?=\s|$|\n)/gi,
+        reconstruct: (match, p1, p2) => {
+          const comprimentoTotal = p1.length + p2.length;
+          // Verificar se não são números de telefone ou valores
+          if (comprimentoTotal >= 8 && comprimentoTotal <= 15 && 
+              !/^\d+$/.test(p1) && !/^\d+$/.test(p2) && 
+              /^[A-Z]/.test(p1)) {
+            return `${p1}${p2}`;
+          }
+          return match;
+        },
+        tipo: 'Genérico'
+      },
+      
+      // === LIMPEZA DE PREFIXOS ===
+      // Confirmado + CÓDIGO = CÓDIGO
+      {
+        regex: /(?:Confirmado|ID da transacao|Transacao|Ref\.?)\s*:?\s*\n?\s*([A-Z0-9]{8,15})/gi,
+        reconstruct: (match, p1) => p1,
+        tipo: 'Limpeza'
+      },
+      
+      // === PADRÕES DE MÚLTIPLAS QUEBRAS ===
+      // Código quebrado em 3 partes: ABC + DEF + 123
+      {
+        regex: /([A-Z]{3,6})\s*\n?\s*([A-Z]{2,4})\s*\n?\s*([A-Z0-9]{2,4})/gi,
+        reconstruct: (match, p1, p2, p3) => {
+          const comprimentoTotal = p1.length + p2.length + p3.length;
+          if (comprimentoTotal >= 8 && comprimentoTotal <= 15) {
+            return `${p1}${p2}${p3}`;
+          }
+          return match;
+        },
+        tipo: 'Tripla quebra'
       }
     ];
 
     let textoProcessado = texto;
     let alteracoes = 0;
 
+    // PRIMEIRA PASSADA: Aplicar todos os padrões
     for (const padrao of padroes) {
       const matches = [...textoProcessado.matchAll(padrao.regex)];
       for (const match of matches) {
         const original = match[0];
         
-        // Chamar função de reconstrução com todos os grupos capturados
         let reconstruido;
         if (match.length === 2) {
-          // Apenas um grupo (ex: "Confirmado CODIGO")
           reconstruido = padrao.reconstruct(match[0], match[1]);
-        } else {
-          // Dois grupos (ex: "CODIGO1 CODIGO2")
+        } else if (match.length === 3) {
           reconstruido = padrao.reconstruct(match[0], match[1], match[2]);
+        } else if (match.length === 4) {
+          reconstruido = padrao.reconstruct(match[0], match[1], match[2], match[3]);
         }
         
         if (reconstruido !== original && reconstruido !== match[0]) {
           textoProcessado = textoProcessado.replace(original, reconstruido);
-          console.log(`   🔧 Reconstruído: "${original.replace(/\n/g, '\\n')}" → "${reconstruido}"`);
+          console.log(`   🔧 [${padrao.tipo}] "${original.replace(/\n/g, '\\n')}" → "${reconstruido}"`);
           alteracoes++;
         }
       }
     }
 
+    // SEGUNDA PASSADA: Detectar referências órfãs e tentar conectar
+    const referenciasOrfas = this.detectarReferenciasOrfas(textoProcessado);
+    if (referenciasOrfas.length > 0) {
+      console.log(`🔍 Detectadas ${referenciasOrfas.length} possíveis referências órfãs`);
+      const textoComOrfas = this.conectarReferenciasOrfas(textoProcessado, referenciasOrfas);
+      if (textoComOrfas !== textoProcessado) {
+        textoProcessado = textoComOrfas;
+        alteracoes++;
+        console.log(`   🔗 Referências órfãs conectadas`);
+      }
+    }
+
     if (alteracoes > 0) {
       console.log(`✅ ${alteracoes} referência(s) reconstruída(s)`);
+      console.log(`📝 Texto processado: ${textoProcessado.substring(0, 200)}...`);
+      
+      // MÉTRICAS: Referências reconstruídas
+      this.imagemStats.referencias_reconstruidas += alteracoes;
     } else {
       console.log(`ℹ️ Nenhuma referência quebrada detectada`);
     }
 
+    return textoProcessado;
+  }
+
+  // === DETECTAR REFERÊNCIAS ÓRFÃS ===
+  detectarReferenciasOrfas(texto) {
+    const linhas = texto.split('\n');
+    const orfas = [];
+    
+    for (let i = 0; i < linhas.length - 1; i++) {
+      const linhaAtual = linhas[i].trim();
+      const proximaLinha = linhas[i + 1].trim();
+      
+      // Detectar possível início de referência seguido de continuação
+      if (/^[A-Z]{3,8}$/.test(linhaAtual) && /^[A-Z0-9]{2,6}$/.test(proximaLinha)) {
+        orfas.push({
+          linha1: linhaAtual,
+          linha2: proximaLinha,
+          posicao: i
+        });
+      }
+    }
+    
+    return orfas;
+  }
+
+  // === CONECTAR REFERÊNCIAS ÓRFÃS ===
+  conectarReferenciasOrfas(texto, orfas) {
+    let textoProcessado = texto;
+    
+    for (const orfa of orfas) {
+      const padrao = new RegExp(`${orfa.linha1}\\s*\\n\\s*${orfa.linha2}`, 'g');
+      const reconstruida = `${orfa.linha1}${orfa.linha2}`;
+      
+      // Verificar se o comprimento faz sentido para uma referência
+      if (reconstruida.length >= 8 && reconstruida.length <= 15) {
+        textoProcessado = textoProcessado.replace(padrao, reconstruida);
+        console.log(`   🔗 Órfã conectada: "${orfa.linha1}\\n${orfa.linha2}" → "${reconstruida}"`);
+      }
+    }
+    
     return textoProcessado;
   }
 
@@ -206,11 +374,12 @@ class WhatsAppAIAtacado {
       // O primeiro item contém todo o texto detectado
       let textoCompleto = result.textAnnotations[0].description;
       console.log(`✅ Google Vision extraiu ${textoCompleto.length} caracteres`);
-      console.log(`📝 Texto extraído: ${textoCompleto.length} caracteres`);
+      console.log(`📝 Texto bruto extraído:\n"${textoCompleto}"`);
 
       // PRÉ-PROCESSAMENTO: Tentar reconstruir referências quebradas
+      console.log(`🔧 Iniciando reconstrução de referências quebradas...`);
       textoCompleto = this.reconstruirReferenciasQuebradas(textoCompleto);
-      console.log(`🔧 Texto processado`);
+      console.log(`✅ Reconstrução concluída`);
 
       return textoCompleto;
 
@@ -233,16 +402,42 @@ class WhatsAppAIAtacado {
       return cached.resultado;
     }
     
-    // OTIMIZAÇÃO: Prompt específico para extrair referência correta
-    const prompt = `Extrair dados de comprovante M-Pesa/E-Mola:
+    // PROMPT MELHORADO: Com especificações exatas dos padrões
+    const prompt = `Analisa este texto extraído de comprovante M-Pesa/E-Mola de Moçambique:
+
 "${textoExtraido}"
 
-IMPORTANTE: 
-- Referência = código alfanumérico (ex: CIC4HCIVDEY, PP250911.2253.L16474)
-- Valor = quantia em MT transferida
-- NÃO usar números de telefone como referência
+PADRÕES OFICIAIS DE REFERÊNCIAS:
 
-JSON: {"encontrado":true,"referencia":"CIC4HCIVDEY","valor":125} ou {"encontrado":false}`;
+📱 **E-MOLA**: PP + [AAMMDD] + "." + [HHMM] + "." + [Letra + 5 números]
+   • Exemplo: PP250914.1134.T38273
+   • PP = prefixo fixo
+   • 250914 = data (14/09/2025)
+   • 1134 = hora (11:34)
+   • T38273 = código (letra + 5 números)
+
+📱 **M-PESA**: Exatamente 11 caracteres alfanuméricos misturados
+   • Exemplo: CHMOH4HICK2
+   • Contém letras e números misturados
+   • Total: 11 caracteres
+
+INSTRUÇÕES CRÍTICAS:
+1. A referência pode estar QUEBRADA em múltiplas linhas
+2. Reconstrói juntando as partes quebradas
+3. NÃO usar números de telefone (258..., 84..., 85...)
+4. VALOR em MT (Meticais): "125.00MT", "125MT", etc.
+
+EXEMPLOS DE RECONSTRUÇÃO:
+• "PP250914.1134.T" + "38273" = "PP250914.1134.T38273"
+• "CHMOH4H" + "ICK2" = "CHMOH4HICK2"
+• "PP250914" + "1134" + "T38273" = "PP250914.1134.T38273"
+
+RESPOSTA JSON:
+{"encontrado": true, "referencia": "PP250914.1134.T38273", "valor": "125.00"}
+ou 
+{"encontrado": false}
+
+Analisa TODO o texto e reconstrói a referência completa:`;
 
     try {
       this.tokenStats.calls++;
@@ -258,6 +453,33 @@ JSON: {"encontrado":true,"referencia":"CIC4HCIVDEY","valor":125} ou {"encontrado
       const resultado = this.extrairJSON(resposta.choices[0].message.content);
       console.log(`✅ JSON extraído (GPT-4):`, resultado);
       
+      // VALIDAÇÃO RIGOROSA: Verificar se a referência extraída é válida
+      if (resultado.encontrado) {
+        const validacao = this.validarReferenciaMozambique(resultado.referencia, resultado.valor);
+        if (!validacao.valida) {
+          console.log(`❌ Validação falhou: ${validacao.motivo}`);
+          console.log(`📝 Referência rejeitada: "${resultado.referencia}"`);
+          
+          // MÉTRICAS: Referência rejeitada
+          this.imagemStats.referencias_rejeitadas++;
+          
+          // Tentar extrair referência alternativa do texto original
+          const referenciaAlternativa = this.buscarReferenciaAlternativa(textoExtraido);
+          if (referenciaAlternativa) {
+            console.log(`🔄 Usando referência alternativa: "${referenciaAlternativa}"`);
+            resultado.referencia = referenciaAlternativa;
+            this.imagemStats.referencias_validadas++;
+          } else {
+            console.log(`❌ Nenhuma referência válida encontrada`);
+            resultado.encontrado = false;
+          }
+        } else {
+          console.log(`✅ Referência validada: ${resultado.referencia} (${validacao.tipo})`);
+          // MÉTRICAS: Referência validada
+          this.imagemStats.referencias_validadas++;
+        }
+      }
+      
       // OTIMIZAÇÃO: Salvar no cache
       this.cacheResultados.set(cacheKey, {
         resultado: resultado,
@@ -272,39 +494,89 @@ JSON: {"encontrado":true,"referencia":"CIC4HCIVDEY","valor":125} ou {"encontrado
     }
   }
 
-  // === PROCESSAR IMAGEM COM MÉTODO HÍBRIDO (NOVA FUNÇÃO PRINCIPAL) ===
+  // === PROCESSAR IMAGEM COM MÉTODO HÍBRIDO ROBUSTO (VERSÃO MELHORADA) ===
   async processarImagemHibrida(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
-    console.log(`🔄 Método híbrido: Google Vision + GPT-4 para ${remetente}`);
+    console.log(`🔄 MÉTODO HÍBRIDO ROBUSTO: Google Vision + GPT-4 para ${remetente}`);
+    
+    // MÉTRICAS: Incrementar contador total
+    this.imagemStats.total++;
     
     try {
-      // ETAPA 1: Tentar extrair texto com Google Vision
+      // ETAPA 1: Extrair texto com Google Vision (com logs detalhados)
+      console.log(`📷 Etapa 1/3: Extraindo texto da imagem...`);
       const textoExtraido = await this.extrairTextoGoogleVision(imagemBase64);
+      console.log(`✅ Google Vision extraiu ${textoExtraido.length} caracteres`);
       
-      // ETAPA 2: Interpretar texto com GPT-4 (mais barato que Vision)
+      // ETAPA 2: Interpretar texto com GPT-4 robusto
+      console.log(`🧠 Etapa 2/3: Interpretando texto com GPT-4...`);
       const resultadoGPT = await this.interpretarComprovanteComGPT(textoExtraido);
       
       if (resultadoGPT.encontrado) {
-        console.log(`✅ Método híbrido funcionou: ${resultadoGPT.referencia} - ${resultadoGPT.valor}MT`);
+        console.log(`✅ SUCESSO HÍBRIDO: ${resultadoGPT.referencia} - ${resultadoGPT.valor}MT`);
+        console.log(`📊 Etapa 3/3: Processando comprovante extraído...`);
+        
+        // MÉTRICAS: Sucesso com método híbrido direto
+        this.imagemStats.sucessos++;
+        this.imagemStats.metodos.hibrido_direto++;
         
         const comprovante = {
           referencia: resultadoGPT.referencia,
           valor: this.limparValor(resultadoGPT.valor),
-          fonte: 'google_vision_gpt',
-          metodo: 'hibrido'
+          fonte: 'google_vision_gpt_v2',
+          metodo: 'hibrido_robusto',
+          textoOriginal: textoExtraido.substring(0, 100) // Para debug
         };
         
         return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem);
       } else {
-        console.log(`❌ Método híbrido falhou - não encontrou dados`);
-        throw new Error('Google Vision + GPT-4 não conseguiu extrair dados');
+        console.log(`❌ GPT-4 não encontrou dados no texto extraído`);
+        console.log(`📝 Texto que foi analisado: "${textoExtraido.substring(0, 300)}..."`);
+        
+        // ETAPA 3: Tentar múltiplas abordagens de reconstrução
+        console.log(`🔄 Etapa 3/3: Tentando abordagens alternativas...`);
+        const resultadoAlternativo = await this.tentarAbordagensAlternativas(textoExtraido);
+        
+        if (resultadoAlternativo.encontrado) {
+          console.log(`✅ SUCESSO COM ABORDAGEM ALTERNATIVA: ${resultadoAlternativo.referencia}`);
+          
+          // MÉTRICAS: Sucesso com abordagem alternativa
+          this.imagemStats.sucessos++;
+          this.imagemStats.metodos.abordagem_alternativa++;
+          
+          const comprovante = {
+            referencia: resultadoAlternativo.referencia,
+            valor: this.limparValor(resultadoAlternativo.valor),
+            fonte: 'google_vision_gpt_alternativo',
+            metodo: 'hibrido_alternativo'
+          };
+          
+          return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem);
+        }
+        
+        throw new Error('Nenhuma abordagem conseguiu extrair dados da imagem');
       }
       
     } catch (error) {
-      console.error('❌ Erro no método híbrido:', error.message);
+      console.error(`❌ MÉTODO HÍBRIDO ROBUSTO FALHOU: ${error.message}`);
       console.log('🔄 Fallback: Tentando com GPT-4 Vision diretamente...');
       
-      // FALLBACK: Usar GPT-4 Vision diretamente (método original)
-      return await this.processarImagemGPT4Vision(imagemBase64, remetente, timestamp, configGrupo, legendaImagem);
+      // MÉTRICAS: Tentar fallback
+      this.imagemStats.metodos.gpt4_vision_fallback++;
+      
+      try {
+        // FALLBACK: Usar GPT-4 Vision diretamente (método original)
+        const resultado = await this.processarImagemGPT4Vision(imagemBase64, remetente, timestamp, configGrupo, legendaImagem);
+        
+        // Se chegou aqui, o fallback funcionou
+        this.imagemStats.sucessos++;
+        return resultado;
+        
+      } catch (fallbackError) {
+        // MÉTRICAS: Falha completa
+        this.imagemStats.falhas++;
+        console.error(`❌ Fallback também falhou: ${fallbackError.message}`);
+        throw fallbackError;
+      }
     }
   }
 
@@ -652,9 +924,9 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     return precosUnicos;
   }
 
-  // === CALCULAR MEGAS POR VALOR (MELHORADO COM SUPORTE A PREÇOS DIRETOS) ===
+  // === CALCULAR MEGAS POR VALOR (VALIDAÇÃO RIGOROSA - SEM TOLERÂNCIA) ===
   calcularMegasPorValor(valorPago, configGrupo) {
-    console.log(`   🧮 ATACADO: Calculando megas para valor ${valorPago}MT...`);
+    console.log(`   🧮 ATACADO: Calculando megas para valor ${valorPago}MT (VALIDAÇÃO RIGOROSA)...`);
     
     if (!configGrupo) {
       console.log(`   ❌ ATACADO: Configuração do grupo não disponível`);
@@ -682,9 +954,10 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     
     const valorNumerico = parseFloat(valorPago);
     
+    // VALIDAÇÃO RIGOROSA: APENAS PREÇOS EXATOS - SEM TOLERÂNCIA
     const precoExato = precos.find(p => p.preco === valorNumerico);
     if (precoExato) {
-      console.log(`   ✅ ATACADO: Preço exato encontrado: ${precoExato.descricao}`);
+      console.log(`   ✅ ATACADO: Preço EXATO encontrado na tabela: ${precoExato.descricao} = ${valorNumerico}MT`);
       return {
         megas: precoExato.descricao,
         quantidade: precoExato.quantidade,
@@ -693,40 +966,25 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       };
     }
     
-    const tolerancia = 5;
-    const precoProximo = precos.find(p => 
-      Math.abs(p.preco - valorNumerico) <= tolerancia
-    );
-    
-    if (precoProximo) {
-      console.log(`   ⚡ ATACADO: Preço aproximado encontrado: ${precoProximo.descricao}`);
-      return {
-        megas: precoProximo.descricao,
-        quantidade: precoProximo.quantidade,
-        tipo: precoProximo.tipo,
-        preco: precoProximo.preco,
-        aproximado: true,
-        diferenca: Math.abs(precoProximo.preco - valorNumerico)
-      };
-    }
-    
-    console.log(`   ❌ ATACADO: Nenhum pacote encontrado para valor ${valorPago}MT`);
+    // RIGOROSO: Se não encontrar valor exato, REJEITAR completamente
+    console.log(`   ❌ ATACADO: Valor ${valorPago}MT NÃO ENCONTRADO na tabela - REJEITADO (validação rigorosa)`);
+    console.log(`   📋 ATACADO: Valores válidos disponíveis: ${precos.map(p => `${p.preco}MT`).join(', ')}`);
     return null;
   }
 
-  // === NOVO: CALCULAR MEGAS COM PREÇOS DIRETOS ===
+  // === CALCULAR MEGAS COM PREÇOS DIRETOS (VALIDAÇÃO RIGOROSA - SEM TOLERÂNCIA) ===
   calcularMegasPorValorDireto(valorPago, precos) {
-    console.log(`   🧮 ATACADO: Calculando megas com preços diretos para valor ${valorPago}MT...`);
+    console.log(`   🧮 ATACADO: Calculando megas com preços diretos para valor ${valorPago}MT (VALIDAÇÃO RIGOROSA)...`);
     console.log(`   📋 ATACADO: Preços disponíveis:`, Object.entries(precos).map(([megas, preco]) => `${Math.floor(megas/1024)}GB=${preco}MT`).join(', '));
     
     const valorNumerico = parseFloat(valorPago);
     
-    // Procurar preço exato
+    // VALIDAÇÃO RIGOROSA: APENAS PREÇOS EXATOS - SEM TOLERÂNCIA
     for (const [megas, preco] of Object.entries(precos)) {
       if (parseInt(preco) === valorNumerico) {
         const gb = Math.floor(parseInt(megas) / 1024);
         const megasTexto = `${gb}GB`;
-        console.log(`   ✅ ATACADO: Preço exato encontrado: ${valorNumerico}MT = ${megasTexto}`);
+        console.log(`   ✅ ATACADO: Preço EXATO encontrado na tabela: ${valorNumerico}MT = ${megasTexto}`);
         return {
           megas: megasTexto,
           quantidade: parseInt(megas),
@@ -736,27 +994,64 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       }
     }
     
-    // Procurar preço aproximado (tolerância de 5MT)
-    const tolerancia = 5;
-    for (const [megas, preco] of Object.entries(precos)) {
-      const diferenca = Math.abs(parseInt(preco) - valorNumerico);
-      if (diferenca <= tolerancia) {
-        const gb = Math.floor(parseInt(megas) / 1024);
-        const megasTexto = `${gb}GB`;
-        console.log(`   ⚡ ATACADO: Preço aproximado encontrado: ${valorNumerico}MT ≈ ${megasTexto} (diferença: ${diferenca}MT)`);
-        return {
-          megas: megasTexto,
-          quantidade: parseInt(megas),
-          tipo: 'GB',
-          preco: parseInt(preco),
-          aproximado: true,
-          diferenca: diferenca
-        };
-      }
+    // RIGOROSO: Se não encontrar valor exato, REJEITAR completamente
+    const valoresValidos = Object.values(precos).map(p => `${p}MT`).sort((a, b) => parseInt(a) - parseInt(b));
+    console.log(`   ❌ ATACADO: Valor ${valorPago}MT NÃO ENCONTRADO na tabela - REJEITADO (validação rigorosa)`);
+    console.log(`   📋 ATACADO: Valores válidos disponíveis: ${valoresValidos.join(', ')}`);
+    return null;
+  }
+
+  // === VALIDAR VALOR CONTRA TABELA (VALIDAÇÃO RIGOROSA) ===
+  validarValorContraTabela(valorPago, configGrupo) {
+    console.log(`   🔍 VALIDAÇÃO RIGOROSA: Verificando se valor ${valorPago}MT está na tabela...`);
+    
+    if (!configGrupo) {
+      console.log(`   ❌ VALIDAÇÃO: Configuração do grupo não disponível`);
+      return {
+        valido: false,
+        motivo: 'Configuração do grupo não disponível',
+        valoresValidos: []
+      };
     }
     
-    console.log(`   ❌ ATACADO: Valor ${valorPago}MT não encontrado na tabela de preços`);
-    return null;
+    let valoresValidos = [];
+    
+    // Verificar se tem preços diretos (estrutura do bot divisão)
+    if (configGrupo.precos) {
+      valoresValidos = Object.values(configGrupo.precos).map(p => parseInt(p)).sort((a, b) => a - b);
+    } else if (configGrupo.tabela) {
+      // Extrair preços da tabela como texto
+      const precos = this.extrairPrecosTabela(configGrupo.tabela);
+      valoresValidos = precos.map(p => p.preco).sort((a, b) => a - b);
+    } else {
+      console.log(`   ❌ VALIDAÇÃO: Nem preços diretos nem tabela disponível`);
+      return {
+        valido: false,
+        motivo: 'Tabela de preços não configurada',
+        valoresValidos: []
+      };
+    }
+    
+    const valorNumerico = parseFloat(valorPago);
+    const valorExiste = valoresValidos.includes(valorNumerico);
+    
+    if (valorExiste) {
+      console.log(`   ✅ VALIDAÇÃO: Valor ${valorPago}MT APROVADO - encontrado na tabela`);
+      return {
+        valido: true,
+        valor: valorNumerico,
+        valoresValidos: valoresValidos
+      };
+    } else {
+      console.log(`   ❌ VALIDAÇÃO: Valor ${valorPago}MT REJEITADO - NÃO encontrado na tabela`);
+      console.log(`   📋 VALIDAÇÃO: Valores válidos: ${valoresValidos.map(v => `${v}MT`).join(', ')}`);
+      return {
+        valido: false,
+        motivo: `Valor ${valorPago}MT não está na tabela de preços`,
+        valorInvalido: valorNumerico,
+        valoresValidos: valoresValidos
+      };
+    }
   }
 
   // === EXTRAIR NÚMERO ÚNICO (CÓDIGO ORIGINAL) ===
@@ -932,7 +1227,7 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       if (msg.tipo === 'texto') {
         console.log(`   🔍 ATACADO: Verificando mensagem: "${msg.mensagem.substring(0, 50)}..."`);
         
-        const comprovante = await this.analisarComprovante(msg.mensagem);
+        const comprovante = await this.analisarComprovante(msg.mensagem, configGrupo);
         if (comprovante) {
           const tempoDecorrido = Math.floor((timestamp - msg.timestamp) / 60000);
           console.log(`   ✅ ATACADO: Comprovante encontrado no histórico: ${comprovante.referencia} - ${comprovante.valor}MT (${tempoDecorrido} min atrás)`);
@@ -1023,7 +1318,19 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     
     let comprovante = null;
     if (textoComprovante && textoComprovante.length > 10) {
-      comprovante = await this.analisarComprovante(textoComprovante);
+      comprovante = await this.analisarComprovante(textoComprovante, configGrupo);
+    }
+    
+    // VERIFICAR SE VALOR É INVÁLIDO (VALIDAÇÃO RIGOROSA)
+    if (comprovante && comprovante.encontrado === false && comprovante.motivo === 'valor_nao_esta_na_tabela') {
+      console.log(`   ❌ ATACADO: VALOR INVÁLIDO DETECTADO - ${comprovante.valor_invalido}MT`);
+      return {
+        sucesso: false,
+        tipo: 'valor_nao_encontrado_na_tabela',
+        valor: comprovante.valor_invalido,
+        referencia: comprovante.referencia,
+        mensagem: comprovante.mensagem_erro
+      };
     }
     
     if (comprovante && numero) {
@@ -1063,6 +1370,18 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     }
     
     if (comprovante && !numero) {
+      // VERIFICAR SE VALOR É INVÁLIDO (VALIDAÇÃO RIGOROSA) - SEGUNDA VERIFICAÇÃO
+      if (comprovante.encontrado === false && comprovante.motivo === 'valor_nao_esta_na_tabela') {
+        console.log(`   ❌ ATACADO: VALOR INVÁLIDO DETECTADO (só comprovante) - ${comprovante.valor_invalido}MT`);
+        return {
+          sucesso: false,
+          tipo: 'valor_nao_encontrado_na_tabela',
+          valor: comprovante.valor_invalido,
+          referencia: comprovante.referencia,
+          mensagem: comprovante.mensagem_erro
+        };
+      }
+      
       console.log(`   💰 ATACADO: Apenas comprovante detectado: ${comprovante.referencia} - ${comprovante.valor}MT`);
       
       const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
@@ -1096,12 +1415,298 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     };
   }
 
+  // === VALIDAR REFERÊNCIA MOÇAMBIQUE ===
+  validarReferenciaMozambique(referencia, valor) {
+    if (!referencia || typeof referencia !== 'string') {
+      return { valida: false, motivo: 'Referência vazia ou inválida' };
+    }
+
+    const ref = referencia.trim().toUpperCase();
+    
+    // VALIDAÇÃO 1: Verificar se não é número de telefone
+    if (/^(258|84|85|86|87)\d{6,9}$/.test(ref)) {
+      return { valida: false, motivo: 'Parece ser número de telefone' };
+    }
+    
+    // VALIDAÇÃO 2: Verificar se não é valor monetário
+    if (/^\d+([.,]\d{1,2})?$/.test(ref)) {
+      return { valida: false, motivo: 'Parece ser valor monetário' };
+    }
+    
+    // VALIDAÇÃO 3: Muito curto
+    if (ref.length < 8) {
+      return { valida: false, motivo: 'Muito curto (< 8 caracteres)' };
+    }
+    
+    // VALIDAÇÃO 4: Muito longo
+    if (ref.length > 20) {
+      return { valida: false, motivo: 'Muito longo (> 20 caracteres)' };
+    }
+    
+    // VALIDAÇÃO 5: Padrões específicos válidos
+    
+    // E-Mola: PP + AAMMDD + . + HHMM + . + Letra + 5 números
+    // Exemplo: PP250914.1134.T38273
+    if (/^PP\d{6}\.\d{4}\.[A-Za-z]\d{5}$/.test(ref)) {
+      return { valida: true, tipo: 'E-Mola padrão oficial' };
+    }
+    
+    // M-Pesa: Exatamente 11 caracteres alfanuméricos misturados
+    // Deve ter pelo menos 1 letra e 1 número
+    if (ref.length === 11 && /^[A-Z0-9]+$/.test(ref) && /[A-Z]/.test(ref) && /[0-9]/.test(ref)) {
+      return { valida: true, tipo: 'M-Pesa padrão oficial' };
+    }
+    
+    // VALIDAÇÃO 6: Padrão genérico (deve ter pelo menos algumas letras)
+    const temLetras = /[A-Z]/.test(ref);
+    const temNumeros = /\d/.test(ref);
+    const somenteAlfanumerico = /^[A-Z0-9]+$/.test(ref);
+    
+    if (temLetras && temNumeros && somenteAlfanumerico && ref.length >= 8 && ref.length <= 15) {
+      return { valida: true, tipo: 'Genérico válido' };
+    }
+    
+    return { 
+      valida: false, 
+      motivo: `Padrão não reconhecido: ${ref.length} chars, letras: ${temLetras}, números: ${temNumeros}` 
+    };
+  }
+
+  // === BUSCAR REFERÊNCIA ALTERNATIVA ===
+  buscarReferenciaAlternativa(texto) {
+    console.log(`🔍 Buscando referência alternativa no texto...`);
+    
+    // Padrões mais específicos para busca direta baseados nos padrões oficiais
+    const padroes = [
+      // E-Mola: PP + 6 dígitos + . + 4 dígitos + . + letra + 5 números
+      /PP\d{6}\.\d{4}\.[A-Za-z]\d{5}/gi,
+      // M-Pesa: Exatamente 11 caracteres alfanuméricos misturados
+      /\b[A-Z0-9]{11}\b/g,
+      // E-Mola com possíveis espaços: PP 250914.1134.T38273
+      /PP\s*\d{6}\.\d{4}\.[A-Za-z]\d{5}/gi,
+      // Qualquer código que pareça ser referência válida
+      /\b[A-Z][A-Z0-9]{7,19}\b/g
+    ];
+    
+    for (const padrao of padroes) {
+      const matches = texto.match(padrao);
+      if (matches && matches.length > 0) {
+        // Filtrar candidatos válidos
+        for (const match of matches) {
+          const validacao = this.validarReferenciaMozambique(match);
+          if (validacao.valida) {
+            console.log(`✅ Referência alternativa encontrada: ${match} (${validacao.tipo})`);
+            return match.toUpperCase();
+          }
+        }
+      }
+    }
+    
+    console.log(`❌ Nenhuma referência alternativa válida encontrada`);
+    return null;
+  }
+
+  // === TENTAR ABORDAGENS ALTERNATIVAS ===
+  async tentarAbordagensAlternativas(textoExtraido) {
+    console.log(`🔄 Testando abordagens alternativas para extração...`);
+    
+    // ABORDAGEM 1: Reconstrução manual mais agressiva
+    const textoReconstruido = this.reconstrucaoManualAgressiva(textoExtraido);
+    if (textoReconstruido !== textoExtraido) {
+      console.log(`🔧 Tentativa 1: Reconstrução manual agressiva aplicada`);
+      const resultado1 = await this.interpretarComprovanteComGPT(textoReconstruido);
+      if (resultado1.encontrado) {
+        console.log(`✅ Abordagem 1 funcionou!`);
+        return resultado1;
+      }
+    }
+    
+    // ABORDAGEM 2: Busca por padrões regex diretos
+    console.log(`🔧 Tentativa 2: Busca direta por padrões regex`);
+    const resultado2 = this.extrairDiretoPorRegex(textoExtraido);
+    if (resultado2.encontrado) {
+      console.log(`✅ Abordagem 2 funcionou!`);
+      this.imagemStats.metodos.regex_direto++;
+      return resultado2;
+    }
+    
+    // ABORDAGEM 3: Prompt simplificado para GPT
+    console.log(`🔧 Tentativa 3: Prompt simplificado`);
+    const resultado3 = await this.interpretarComPromptSimplificado(textoExtraido);
+    if (resultado3.encontrado) {
+      console.log(`✅ Abordagem 3 funcionou!`);
+      this.imagemStats.metodos.prompt_simplificado++;
+      return resultado3;
+    }
+    
+    console.log(`❌ Todas as abordagens alternativas falharam`);
+    return { encontrado: false };
+  }
+
+  // === RECONSTRUÇÃO MANUAL AGRESSIVA ===
+  reconstrucaoManualAgressiva(texto) {
+    console.log(`🔧 Aplicando reconstrução manual agressiva...`);
+    
+    let textoProcessado = texto;
+    
+    // Remove espaços excessivos e padroniza quebras
+    textoProcessado = textoProcessado.replace(/\s+/g, ' ').trim();
+    
+    // Restaura quebras de linha importantes
+    textoProcessado = textoProcessado.replace(/\. /g, '.\n');
+    textoProcessado = textoProcessado.replace(/([A-Z]{3,}) ([A-Z0-9]{2,})/g, '$1$2');
+    textoProcessado = textoProcessado.replace(/(PP\d{6}\.\d{4}\.) ([A-Z]\d+)/g, '$1$2');
+    
+    return textoProcessado;
+  }
+
+  // === EXTRAIR DIRETO POR REGEX ===
+  extrairDiretoPorRegex(texto) {
+    console.log(`🔍 Buscando padrões diretos com regex...`);
+    
+    // Padrões de referência baseados nos padrões oficiais
+    const padroes = [
+      /(PP\d{6}\.\d{4}\.[A-Za-z]\d{5})/g,     // E-Mola padrão oficial
+      /([A-Z0-9]{11})/g,                       // M-Pesa padrão oficial (11 chars)
+      /(PP\s*\d{6}\.\d{4}\.[A-Za-z]\d{5})/g,  // E-Mola com espaços
+      /([A-Z0-9]{8,15})/g                      // Genérico para casos especiais
+    ];
+    
+    // Padrões de valor
+    const padroesValor = [
+      /(\d+[.,]\d{2})\s*MT/gi,
+      /(\d+)\s*MT/gi,
+      /Valor[:\s]+(\d+[.,]?\d*)/gi
+    ];
+    
+    let referencia = null;
+    let valor = null;
+    
+    // Buscar referência com validação rigorosa
+    for (const padrao of padroes) {
+      const match = texto.match(padrao);
+      if (match && match.length > 0) {
+        // Usar validação para filtrar candidatos
+        for (const candidato of match) {
+          const validacao = this.validarReferenciaMozambique(candidato);
+          if (validacao.valida) {
+            console.log(`✅ Regex encontrou referência válida: ${candidato} (${validacao.tipo})`);
+            referencia = candidato.toUpperCase();
+            break;
+          }
+        }
+        
+        if (referencia) break;
+      }
+    }
+    
+    // Buscar valor
+    for (const padrao of padroesValor) {
+      const match = texto.match(padrao);
+      if (match && match[1]) {
+        valor = match[1].replace(',', '.');
+        break;
+      }
+    }
+    
+    if (referencia && valor) {
+      console.log(`✅ Regex encontrou: ${referencia} - ${valor}MT`);
+      return { 
+        encontrado: true, 
+        referencia: referencia, 
+        valor: valor 
+      };
+    }
+    
+    console.log(`❌ Regex não encontrou padrões válidos`);
+    return { encontrado: false };
+  }
+
+  // === INTERPRETAR COM PROMPT SIMPLIFICADO ===
+  async interpretarComPromptSimplificado(textoExtraido) {
+    const promptSimples = `Extrai só a referência e valor deste comprovante:
+"${textoExtraido}"
+
+Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"encontrado":false}`;
+
+    try {
+      const resposta = await this.openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [{ role: "user", content: promptSimples }],
+        max_tokens: 50,
+        temperature: 0
+      });
+
+      return this.extrairJSON(resposta.choices[0].message.content);
+    } catch (error) {
+      console.error('❌ Erro no prompt simplificado:', error.message);
+      return { encontrado: false };
+    }
+  }
+
   // === PROCESSAMENTO DE IMAGEM MELHORADO ===
   async processarImagem(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
     console.log(`   📸 ATACADO: Processando imagem de ${remetente} com método híbrido (Google Vision + GPT-4)`);
     
     // Usar o novo método híbrido Google Vision + GPT-4
     return await this.processarImagemHibrida(imagemBase64, remetente, timestamp, configGrupo, legendaImagem);
+  }
+
+  // === OBTER ESTATÍSTICAS DE PROCESSAMENTO DE IMAGENS ===
+  getImagemStats() {
+    const stats = this.imagemStats;
+    const taxaSucesso = stats.total > 0 ? ((stats.sucessos / stats.total) * 100).toFixed(1) : '0.0';
+    
+    let relatorio = `📊 *ESTATÍSTICAS DE PROCESSAMENTO DE IMAGENS ROBUSTAS*\n`;
+    relatorio += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    
+    relatorio += `📈 **RESUMO GERAL**\n`;
+    relatorio += `• Total processadas: ${stats.total}\n`;
+    relatorio += `• Sucessos: ${stats.sucessos} (${taxaSucesso}%)\n`;
+    relatorio += `• Falhas: ${stats.falhas}\n\n`;
+    
+    relatorio += `🔧 **MÉTODOS UTILIZADOS**\n`;
+    relatorio += `• Híbrido direto: ${stats.metodos.hibrido_direto}\n`;
+    relatorio += `• Abordagem alternativa: ${stats.metodos.abordagem_alternativa}\n`;
+    relatorio += `• Regex direto: ${stats.metodos.regex_direto}\n`;
+    relatorio += `• Prompt simplificado: ${stats.metodos.prompt_simplificado}\n`;
+    relatorio += `• GPT-4 Vision fallback: ${stats.metodos.gpt4_vision_fallback}\n\n`;
+    
+    relatorio += `🔍 **PROCESSAMENTO DE REFERÊNCIAS**\n`;
+    relatorio += `• Referencias reconstruídas: ${stats.referencias_reconstruidas}\n`;
+    relatorio += `• Referencias validadas: ${stats.referencias_validadas}\n`;
+    relatorio += `• Referencias rejeitadas: ${stats.referencias_rejeitadas}\n\n`;
+    
+    relatorio += `💾 **CACHE E TOKENS**\n`;
+    relatorio += `• Chamadas GPT: ${this.tokenStats.calls}\n`;
+    relatorio += `• Cache hits: ${this.tokenStats.cacheHits}\n`;
+    
+    const taxaCache = this.tokenStats.calls > 0 ? 
+      ((this.tokenStats.cacheHits / (this.tokenStats.calls + this.tokenStats.cacheHits)) * 100).toFixed(1) : '0.0';
+    relatorio += `• Taxa de cache: ${taxaCache}%`;
+    
+    return relatorio;
+  }
+
+  // === RESETAR ESTATÍSTICAS ===
+  resetImagemStats() {
+    this.imagemStats = {
+      total: 0,
+      sucessos: 0,
+      falhas: 0,
+      metodos: {
+        hibrido_direto: 0,
+        abordagem_alternativa: 0,
+        regex_direto: 0,
+        prompt_simplificado: 0,
+        gpt4_vision_fallback: 0
+      },
+      referencias_reconstruidas: 0,
+      referencias_validadas: 0,
+      referencias_rejeitadas: 0
+    };
+    
+    console.log('📊 Estatísticas de processamento de imagens resetadas');
   }
 
   // === EXTRAIR NÚMEROS SIMPLES ===
@@ -1275,35 +1880,118 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     };
   }
 
-  // === ANALISAR COMPROVANTE (OTIMIZADO COM CACHE) ===
-  async analisarComprovante(mensagem) {
+  // === ANALISAR COMPROVANTE (VERSÃO ROBUSTA - ACEITA QUALQUER FORMATO + VALIDAÇÃO RIGOROSA) ===
+  async analisarComprovante(mensagem, configGrupo = null) {
+    // DETECÇÃO MÚLTIPLA: Verificar diferentes indicadores de comprovante
     const temConfirmado = /^confirmado/i.test(mensagem.trim());
     const temID = /^id\s/i.test(mensagem.trim());
     const temIDdaTransacao = /^id da transacao/i.test(mensagem.trim());
     const temTransferiste = /transferiste\s+\d+/i.test(mensagem);
     
-    // FORÇAR reconhecimento para comprovantes óbvios
-    if (temConfirmado || temID || temIDdaTransacao || temTransferiste) {
-      console.log(`🎯 ATACADO: Comprovante DETECTADO - Confirmado:${temConfirmado} ID:${temID} IDTransacao:${temIDdaTransacao} Transferiste:${temTransferiste}`);
+    // DETECÇÃO ROBUSTA: Procurar por padrões de referência E valor em QUALQUER lugar do texto
+    const temReferenciaEMola = /PP\d{6}\.\d{4}\.[A-Za-z]\d{5}/i.test(mensagem);
+    const temReferenciaMPesa = /\b[A-Z0-9]{11}\b/i.test(mensagem);
+    const temValorMT = /\d+(?:[.,]\d{1,2})?\s*MT/i.test(mensagem);
+    const temValorTransferido = /(?:valor|transferiste|montante)\s*:?\s*\d+/i.test(mensagem);
+    
+    // CRITÉRIO FLEXÍVEL: Aceitar se for formato tradicional OU se tiver referência + valor
+    const formatoTradicional = temConfirmado || temID || temIDdaTransacao || temTransferiste;
+    const temDadosCompletos = (temReferenciaEMola || temReferenciaMPesa) && (temValorMT || temValorTransferido);
+    
+    if (formatoTradicional) {
+      console.log(`🎯 ATACADO: Comprovante FORMATO TRADICIONAL - Confirmado:${temConfirmado} ID:${temID} IDTransacao:${temIDdaTransacao} Transferiste:${temTransferiste}`);
+    } else if (temDadosCompletos) {
+      console.log(`🎯 ATACADO: Comprovante FORMATO FLEXÍVEL - EMola:${temReferenciaEMola} MPesa:${temReferenciaMPesa} ValorMT:${temValorMT} ValorTransf:${temValorTransferido}`);
     } else {
+      console.log(`❌ ATACADO: Texto não reconhecido como comprovante - faltam dados essenciais`);
       return null;
     }
 
-    // EXTRAÇÃO DIRETA POR REGEX (FALLBACK GARANTIDO)
+    // EXTRAÇÃO DIRETA POR REGEX ROBUSTA (MÚLTIPLOS PADRÕES)
     try {
-      const refMatch = mensagem.match(/(?:ID da transacao|Confirmado)\s+([A-Z0-9][A-Z0-9.]*[A-Z0-9])/i);
-      const valorMatch = mensagem.match(/Transferiste\s+(\d+(?:\.\d+)?)MT/i);
+      let referencia = null;
+      let valor = null;
       
-      if (refMatch && valorMatch) {
-        console.log(`🎯 ATACADO: Extração DIRETA por regex - Ref:${refMatch[1]} Valor:${valorMatch[1]}`);
+      // BUSCAR REFERÊNCIA: Múltiplos padrões
+      const padroesRef = [
+        // Padrões tradicionais
+        /(?:ID da transacao|Confirmado)\s+([A-Z0-9][A-Z0-9.]*[A-Z0-9])/i,
+        // E-Mola direto
+        /(PP\d{6}\.\d{4}\.[A-Za-z]\d{5})/i,
+        // M-Pesa direto (11 caracteres)
+        /\b([A-Z0-9]{11})\b/,
+        // Qualquer código após palavras-chave
+        /(?:referencia|codigo|ref|id)\s*:?\s*([A-Z0-9][A-Z0-9.]{7,})/i,
+        // Código isolado que pareça ser referência
+        /\b([A-Z][A-Z0-9]{7,19})\b/
+      ];
+      
+      for (const padrao of padroesRef) {
+        const matches = [...mensagem.matchAll(new RegExp(padrao.source, padrao.flags + 'g'))];
+        
+        for (const match of matches) {
+          const candidato = match[1];
+          if (candidato) {
+            const validacao = this.validarReferenciaMozambique(candidato);
+            if (validacao.valida) {
+              referencia = candidato.trim();
+              console.log(`✅ Referência encontrada via regex: ${referencia} (${validacao.tipo})`);
+              break;
+            }
+          }
+        }
+        
+        if (referencia) break;
+      }
+      
+      // BUSCAR VALOR: Múltiplos padrões
+      const padroesValor = [
+        /Transferiste\s+(\d+(?:[.,]\d{1,2})?)MT/i,
+        /(?:valor|montante)\s*:?\s*(\d+(?:[.,]\d{1,2})?)\s*MT/i,
+        /(\d+(?:[.,]\d{1,2})?)\s*MT/i,
+        /(?:valor|montante)\s*:?\s*(\d+(?:[.,]\d{1,2})?)/i
+      ];
+      
+      for (const padrao of padroesValor) {
+        const match = mensagem.match(padrao);
+        if (match && match[1]) {
+          valor = match[1].replace(',', '.');
+          console.log(`✅ Valor encontrado via regex: ${valor}MT`);
+          break;
+        }
+      }
+      
+      if (referencia && valor) {
+        const valorLimpo = this.limparValor(valor);
+        console.log(`🎯 ATACADO: Extração DIRETA ROBUSTA - Ref:${referencia} Valor:${valorLimpo}MT`);
+        
+        // ======= VALIDAÇÃO RIGOROSA DE VALOR =======
+        if (configGrupo) {
+          const validacao = this.validarValorContraTabela(valorLimpo, configGrupo);
+          if (!validacao.valido) {
+            console.log(`❌ VALIDAÇÃO RIGOROSA: Valor ${valorLimpo}MT REJEITADO - ${validacao.motivo}`);
+            return {
+              encontrado: false,
+              valor_invalido: valorLimpo,
+              referencia: referencia,
+              motivo: 'valor_nao_esta_na_tabela',
+              valores_validos: validacao.valoresValidos,
+              mensagem_erro: `❌ *VALOR INVÁLIDO!*\n\n📋 *REFERÊNCIA:* ${referencia}\n💰 *VALOR ENVIADO:* ${valorLimpo}MT\n\n⚠️ Este valor não está na nossa tabela de preços.\n\n📋 *VALORES VÁLIDOS:*\n${validacao.valoresValidos.map(v => `• ${v}MT`).join('\n')}\n\n💡 Digite *tabela* para ver todos os pacotes disponíveis.`
+            };
+          }
+          console.log(`✅ VALIDAÇÃO RIGOROSA: Valor ${valorLimpo}MT APROVADO`);
+        }
+        
         return {
-          referencia: refMatch[1].trim(),
-          valor: this.limparValor(valorMatch[1]),
-          fonte: 'regex_direto'
+          referencia: referencia,
+          valor: valorLimpo,
+          fonte: 'regex_direto_robusto'
         };
+      } else {
+        console.log(`⚠️ ATACADO: Extração parcial - Ref:${referencia || 'NULO'} Valor:${valor || 'NULO'}`);
       }
     } catch (regexError) {
-      console.log(`⚠️ ATACADO: Regex direto falhou, tentando IA...`);
+      console.log(`⚠️ ATACADO: Regex robusto falhou, tentando IA... Erro: ${regexError.message}`);
     }
 
     // OTIMIZAÇÃO: Verificar cache primeiro
@@ -1340,9 +2028,36 @@ ou
       const resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
       
       if (resultado.encontrado) {
+        const valorLimpo = this.limparValor(resultado.valor);
+        
+        // ======= VALIDAÇÃO RIGOROSA DE VALOR (IA) =======
+        if (configGrupo) {
+          const validacao = this.validarValorContraTabela(valorLimpo, configGrupo);
+          if (!validacao.valido) {
+            console.log(`❌ VALIDAÇÃO RIGOROSA (IA): Valor ${valorLimpo}MT REJEITADO - ${validacao.motivo}`);
+            const resultadoInvalido = {
+              encontrado: false,
+              valor_invalido: valorLimpo,
+              referencia: resultado.referencia,
+              motivo: 'valor_nao_esta_na_tabela',
+              valores_validos: validacao.valoresValidos,
+              mensagem_erro: `❌ *VALOR INVÁLIDO!*\n\n📋 *REFERÊNCIA:* ${resultado.referencia}\n💰 *VALOR ENVIADO:* ${valorLimpo}MT\n\n⚠️ Este valor não está na nossa tabela de preços.\n\n📋 *VALORES VÁLIDOS:*\n${validacao.valoresValidos.map(v => `• ${v}MT`).join('\n')}\n\n💡 Digite *tabela* para ver todos os pacotes disponíveis.`
+            };
+            
+            // Salvar resultado inválido no cache
+            this.cacheResultados.set(cacheKey, {
+              resultado: resultadoInvalido,
+              timestamp: Date.now()
+            });
+            
+            return resultadoInvalido;
+          }
+          console.log(`✅ VALIDAÇÃO RIGOROSA (IA): Valor ${valorLimpo}MT APROVADO`);
+        }
+        
         const comprovanteProcessado = {
           referencia: resultado.referencia,
-          valor: this.limparValor(resultado.valor),
+          valor: valorLimpo,
           fonte: 'texto'
         };
         
