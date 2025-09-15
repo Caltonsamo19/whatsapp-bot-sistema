@@ -10,7 +10,7 @@ class WhatsAppAIAtacado {
     
     // === OTIMIZAÇÃO: Cache de resultados para reduzir tokens ===
     this.cacheResultados = new Map();
-    this.cacheTimeout = 30 * 60 * 1000; // 30 minutos
+    this.cacheTimeout = 5 * 60 * 1000; // 5 minutos (reduzido para evitar confusão)
     this.tokenStats = {
       total: 0,
       saved: 0,
@@ -109,13 +109,42 @@ class WhatsAppAIAtacado {
       this.limparComprovantesAntigos();
       this.limparCacheAntigo(); // OTIMIZAÇÃO: Limpar cache junto
       this.limparReferenciasAntigas(); // NOVO: Limpar referências antigas
-    }, 10 * 60 * 1000);
+    }, 5 * 60 * 1000); // Reduzido para 5 minutos para limpeza mais frequente
     
     const visionStatus = this.googleVisionEnabled ? 'Google Vision + GPT-4' : 'GPT-4 Vision';
     console.log(`🧠 IA WhatsApp ATACADO v5.0 inicializada - ${visionStatus}`);
   }
 
-  // === RECONSTRUIR REFERÊNCIAS QUEBRADAS (VERSÃO MELHORADA E ROBUSTA) ===
+  // === RECONSTRUÇÃO BREVE DE REFERÊNCIAS ===
+  reconstruirReferenciasBreve(texto) {
+    console.log('🔧 Reconstrução breve...');
+
+    // Apenas os padrões mais comuns
+    const padroes = [
+      // M-Pesa quebrado em 2 linhas
+      /(\w{6,10})\s*\n\s*(\w{1,5})/g,
+      // E-Mola básico: PP + números quebrados
+      /(PP\d{6})\.\s*(\d{4})\.\s*([A-Za-z]\d{5})/g,
+      // Espaços extras
+      /\s{2,}/g
+    ];
+
+    let textoLimpo = texto;
+
+    // M-Pesa: juntar fragmentos
+    textoLimpo = textoLimpo.replace(padroes[0], '$1$2');
+
+    // E-Mola: corrigir pontos
+    textoLimpo = textoLimpo.replace(padroes[1], '$1.$2.$3');
+
+    // Limpar espaços extras
+    textoLimpo = textoLimpo.replace(padroes[2], ' ');
+
+    console.log(`✅ ${textoLimpo.length - texto.length} chars ajustados`);
+    return textoLimpo;
+  }
+
+  // === RECONSTRUIR REFERÊNCIAS QUEBRADAS (VERSÃO ROBUSTA - DESATIVADA) ===
   reconstruirReferenciasQuebradas(texto) {
     console.log('🔧 Reconstruindo referências quebradas - VERSÃO ROBUSTA...');
     console.log(`📝 Texto original (${texto.length} chars): ${texto.substring(0, 200)}...`);
@@ -501,22 +530,20 @@ class WhatsAppAIAtacado {
         console.log(`✅ Referências aparentemente completas encontradas (${completude.referenciasCompletas})`);
       }
 
-      // PRÉ-PROCESSAMENTO: Tentar reconstruir referências quebradas
-      console.log(`🔧 Iniciando reconstrução de referências quebradas...`);
-      textoCompleto = this.reconstruirReferenciasQuebradas(textoCompleto);
-      console.log(`✅ Reconstrução concluída`);
+      // PRÉ-PROCESSAMENTO: Reconstrução breve
+      console.log(`🔧 Reconstrução breve de referências...`);
+      textoCompleto = this.reconstruirReferenciasBreve(textoCompleto);
+      console.log(`✅ Reconstrução breve concluída`);
       
-      // === VALIDAR COMPLETUDE APÓS A RECONSTRUÇÃO ===
-      console.log(`🔍 Verificando completude após reconstrução...`);
+      // === VALIDAR COMPLETUDE SIMPLIFICADA ===
+      console.log(`🔍 Validação simplificada final...`);
       const completudeFinal = this.validarCompletude(textoCompleto);
       
       if (completudeFinal.completo) {
-        console.log(`✅ SUCESSO: ${completudeFinal.referenciasCompletas} referência(s) completa(s) após reconstrução`);
+        console.log(`✅ SUCESSO: ${completudeFinal.referenciasCompletas} referência(s) válida(s) encontrada(s)`);
       } else {
-        console.log(`⚠️ ATENÇÃO: Ainda há fragmentos suspeitos após reconstrução`);
-        if (completudeFinal.fragmentosSuspeitos.length > 0) {
-          console.log(`📋 Fragmentos ainda suspeitos: ${completudeFinal.fragmentosSuspeitos.map(f => f.fragmento).join(', ')}`);
-        }
+        console.log(`⚠️ ATENÇÃO: Nenhuma referência válida encontrada`);
+      }
       }
 
       return textoCompleto;
@@ -648,8 +675,8 @@ Analisa TODO o texto e reconstrói a referência completa:`;
 
   // === VERIFICAR SE IMAGEM JÁ FOI PROCESSADA ===
   verificarImagemDuplicada(hashImagem) {
-    // Verificar se essa imagem já foi processada recentemente (últimas 2 horas)
-    const timeout = 2 * 60 * 60 * 1000; // 2 horas
+    // Verificar se essa imagem já foi processada recentemente (reduzido para evitar confusão)
+    const timeout = 30 * 60 * 1000; // 30 minutos (reduzido de 2 horas)
     const agora = Date.now();
     
     if (!this.imagensProcessadas) {
@@ -1837,131 +1864,43 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
 
   // === VALIDAR COMPLETUDE DE REFERÊNCIAS ===
   validarCompletude(texto) {
-    console.log(`🔍 VALIDANDO COMPLETUDE: Verificando se referências estão completas...`);
-    
-    // Procurar por possíveis referências incompletas ou quebradas
-    const fragmentosSuspeitos = [];
-    
-    // FRAGMENTOS M-PESA SUSPEITOS
-    // Códigos de 10 caracteres alfanuméricos (pode estar faltando 1 char)
-    const fragmentos10chars = texto.match(/\b[A-Z0-9]{10}\b/g);
-    if (fragmentos10chars) {
-      fragmentos10chars.forEach(frag => {
-        if (/[A-Z]/.test(frag) && /[0-9]/.test(frag)) {
-          fragmentosSuspeitos.push({
-            fragmento: frag,
-            tipo: 'M-Pesa_possivelmente_incompleto',
-            caracteresFaltando: 1,
-            comprimentoAtual: 10,
-            comprimentoEsperado: 11
-          });
+    console.log(`🔍 VALIDAÇÃO SIMPLIFICADA: Verificando apenas referências válidas...`);
+
+    // VALIDAÇÃO SIMPLIFICADA - Apenas verificar se há referências válidas
+    const refsValidas = [];
+
+    // Procurar M-Pesa válidas (11 chars alfanuméricos)
+    const mpesaValidas = texto.match(/\b[A-Z0-9]{11}\b/g);
+    if (mpesaValidas) {
+      mpesaValidas.forEach(ref => {
+        if (/[A-Z]/.test(ref) && /[0-9]/.test(ref)) {
+          refsValidas.push({ tipo: 'M-Pesa', referencia: ref });
         }
       });
     }
-    
-    // Códigos de 9 caracteres alfanuméricos (pode estar faltando 2 chars)
-    const fragmentos9chars = texto.match(/\b[A-Z0-9]{9}\b/g);
-    if (fragmentos9chars) {
-      fragmentos9chars.forEach(frag => {
-        if (/[A-Z]/.test(frag) && /[0-9]/.test(frag)) {
-          fragmentosSuspeitos.push({
-            fragmento: frag,
-            tipo: 'M-Pesa_possivelmente_incompleto',
-            caracteresFaltando: 2,
-            comprimentoAtual: 9,
-            comprimentoEsperado: 11
-          });
-        }
+
+    // Procurar E-Mola válidas (PP + padrão completo)
+    const emolaValidas = texto.match(/PP\d{6}\.\d{4}\.[A-Za-z]\d{5}/g);
+    if (emolaValidas) {
+      emolaValidas.forEach(ref => {
+        refsValidas.push({ tipo: 'E-Mola', referencia: ref });
       });
     }
     
-    // FRAGMENTOS E-MOLA SUSPEITOS
-    // Padrões PP incompletos
-    const emolaIncompletos = [
-      // PP250914.1134.T3827 (falta 1 dígito)
-      /\bPP\d{6}\.\d{4}\.[A-Za-z]\d{4}\b/g,
-      // PP250914.1134. (falta letra + 5 dígitos)
-      /\bPP\d{6}\.\d{4}\.\b/g,
-      // PP250914. (falta tudo após a data)
-      /\bPP\d{6}\.\b/g
-    ];
-    
-    emolaIncompletos.forEach((regex, index) => {
-      const matches = texto.match(regex);
-      if (matches) {
-        matches.forEach(match => {
-          let faltando = '';
-          if (index === 0) faltando = '1 dígito final';
-          else if (index === 1) faltando = 'letra + 5 dígitos';
-          else if (index === 2) faltando = 'hora + letra + 5 dígitos';
-          
-          fragmentosSuspeitos.push({
-            fragmento: match,
-            tipo: 'E-Mola_possivelmente_incompleto',
-            faltando: faltando,
-            comprimentoAtual: match.length,
-            comprimentoEsperado: 19 // PP250914.1134.T38273 = 19 chars
-          });
-        });
-      }
-    });
-    
-    // PROCURAR POR CARACTERES ISOLADOS PRÓXIMOS
-    if (fragmentosSuspeitos.length > 0) {
-      console.log(`⚠️ COMPLETUDE: Encontrados ${fragmentosSuspeitos.length} fragmento(s) possivelmente incompleto(s):`);
-      
-      fragmentosSuspeitos.forEach((suspeito, index) => {
-        console.log(`   ${index + 1}. ${suspeito.tipo}: "${suspeito.fragmento}" (${suspeito.comprimentoAtual}/${suspeito.comprimentoEsperado} chars)`);
-        
-        if (suspeito.tipo.includes('M-Pesa')) {
-          // Procurar caracteres isolados próximos que possam completar
-          const regexProximo = new RegExp(`${suspeito.fragmento}\\s*\\n?\\s*([A-Z0-9]{1,${suspeito.caracteresFaltando}})`, 'i');
-          const proximoMatch = texto.match(regexProximo);
-          
-          if (proximoMatch) {
-            console.log(`   🔍 POSSÍVEL COMPLEMENTO: "${proximoMatch[1]}" encontrado próximo`);
-            console.log(`   💡 SUGESTÃO: "${suspeito.fragmento}" + "${proximoMatch[1]}" = "${suspeito.fragmento}${proximoMatch[1]}"`);
-          }
-        }
-      });
-      
-      return {
-        completo: false,
-        fragmentosSuspeitos: fragmentosSuspeitos,
-        requer_reconstrucao: true
-      };
+    // Log das referências válidas encontradas
+    if (refsValidas.length > 0) {
+      console.log(`   📋 M-Pesa válidas encontradas: ${refsValidas.filter(r => r.tipo === 'M-Pesa').map(r => r.referencia).join(', ')}`);
+      console.log(`   📋 E-Mola válidas encontradas: ${refsValidas.filter(r => r.tipo === 'E-Mola').map(r => r.referencia).join(', ')}`);
     }
-    
-    // Verificar se há referências aparentemente completas
-    const referenciasMPesa = texto.match(/\b[A-Z0-9]{11}\b/g) || [];
-    const referenciasEMola = texto.match(/\bPP\d{6}\.\d{4}\.[A-Za-z]\d{5}\b/g) || [];
-    
-    // Filtrar M-Pesa válidas (11 caracteres alfanuméricos com letras E números)
-    const mPesaValidas = referenciasMPesa.filter(ref => 
-      ref.length === 11 && 
-      /^[A-Z0-9]+$/.test(ref) && 
-      /[A-Z]/.test(ref) && 
-      /[0-9]/.test(ref)
-    );
-    
-    const referenciasCompletas = mPesaValidas.length + referenciasEMola.length;
-    
-    if (referenciasCompletas > 0) {
-      console.log(`   📋 M-Pesa válidas encontradas: ${mPesaValidas.join(', ')}`);
-      console.log(`   📋 E-Mola válidas encontradas: ${referenciasEMola.join(', ')}`);
-    }
-    
-    console.log(`✅ COMPLETUDE: ${referenciasCompletas} referência(s) aparentemente completa(s) encontrada(s)`);
-    
+
+    console.log(`✅ VALIDAÇÃO SIMPLIFICADA: ${refsValidas.length} referência(s) válida(s) encontrada(s)`);
+
     return {
-      completo: referenciasCompletas > 0,
-      referenciasCompletas: referenciasCompletas,
-      mPesaCompletas: mPesaValidas.length,
-      eMolaCompletas: referenciasEMola.length,
-      fragmentosSuspeitos: fragmentosSuspeitos,
+      completo: refsValidas.length > 0,
+      referenciasCompletas: refsValidas.length,
       referenciasEncontradas: {
-        mPesa: mPesaValidas,
-        eMola: referenciasEMola
+        mPesa: refsValidas.filter(r => r.tipo === 'M-Pesa').map(r => r.referencia),
+        eMola: refsValidas.filter(r => r.tipo === 'E-Mola').map(r => r.referencia)
       }
     };
   }
@@ -3005,7 +2944,7 @@ ou
   // === LIMPEZA (CÓDIGO ORIGINAL) ===
   limparComprovantesAntigos() {
     const agora = Date.now();
-    const timeout = 45 * 60 * 1000;
+    const timeout = 15 * 60 * 1000; // Reduzido para 15 minutos
     let removidos = 0;
 
     Object.keys(this.comprovantesEmAberto).forEach(remetente => {
@@ -3017,7 +2956,7 @@ ou
     });
 
     if (removidos > 0) {
-      console.log(`🗑️ ATACADO: Removidos ${removidos} comprovantes antigos (>45min)`);
+      console.log(`🗑️ ATACADO: Removidos ${removidos} comprovantes antigos (>15min)`);
     }
   }
 
@@ -3041,18 +2980,18 @@ ou
   // === LIMPAR REFERÊNCIAS ANTIGAS ===
   limparReferenciasAntigas() {
     if (!this.referencias_processadas) return;
-    
+
     const agora = Date.now();
-    const seisHoras = 6 * 60 * 60 * 1000; // 6 horas
+    const umaHora = 1 * 60 * 60 * 1000; // 1 hora (reduzido para evitar confusão)
     let removidas = 0;
-    
+
     for (const [referencia, timestamp] of this.referencias_processadas.entries()) {
-      if (agora - timestamp > seisHoras) {
+      if (agora - timestamp > umaHora) {
         this.referencias_processadas.delete(referencia);
         removidas++;
       }
     }
-    
+
     if (removidas > 0) {
       console.log(`🧹 Referências: ${removidas} referências antigas removidas`);
     }
