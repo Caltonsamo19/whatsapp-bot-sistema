@@ -1070,7 +1070,8 @@ client.on('message', async (message) => {
 
         // === COMANDOS ADMINISTRATIVOS ===
         if (isAdmin) {
-            const comando = message.body.toLowerCase().trim();
+            const mensagemOriginal = message.body.trim();
+            const comando = mensagemOriginal.toLowerCase();
 
             if (comando === '.ia') {
                 const statusIA = ia.getStatusDetalhado();
@@ -1095,7 +1096,7 @@ client.on('message', async (message) => {
             
             // NOVO COMANDO: Testar busca de pagamento
             if (comando.startsWith('.test_busca ')) {
-                const parametros = comando.replace('.test_busca ', '').split(' ');
+                const parametros = mensagemOriginal.replace(/^\.test_busca\s+/i, '').split(' ');
                 if (parametros.length >= 2) {
                     const referencia = parametros[0];
                     const valor = parseFloat(parametros[1]);
@@ -1216,7 +1217,7 @@ client.on('message', async (message) => {
             }
 
             if (comando.startsWith('.clear_grupo ')) {
-                const nomeGrupo = comando.replace('.clear_grupo ', '');
+                const nomeGrupo = mensagemOriginal.replace(/^\.clear_grupo\s+/i, '');
                 const antes = dadosParaTasker.length;
                 
                 dadosParaTasker = dadosParaTasker.filter(d => !d.grupo.toLowerCase().includes(nomeGrupo.toLowerCase()));
@@ -1341,7 +1342,7 @@ client.on('message', async (message) => {
                     return;
                 }
 
-                const parametros = comando.replace('.pedido ', '').trim();
+                const parametros = mensagemOriginal.replace(/^\.pedido\s+/i, '').trim();
                 const partes = parametros.split(' ');
 
                 if (partes.length < 3) {
