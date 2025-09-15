@@ -99,8 +99,9 @@ let gruposLogados = new Set();
 // Configuração de administradores GLOBAIS
 const ADMINISTRADORES_GLOBAIS = [
     '258861645968@c.us',
-    '258871112049@c.us', 
-    '258852118624@c.us'
+    '258871112049@c.us',
+    '258852118624@c.us',
+    '258840326152@c.us'  // Adicionado para comandos administrativos
 ];
 
 // === CONFIGURAÇÃO DE MODERAÇÃO ===
@@ -977,7 +978,7 @@ client.on('ready', async () => {
         console.log(`   📋 ${config.nome} (${grupoId})`);
     });
     
-    console.log('\n🔧 Comandos admin: .ia .divisao .test_busca .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo');
+    console.log('\n🔧 Comandos admin: .ia .divisao .test_busca .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo .pedido');
 });
 
 client.on('group-join', async (notification) => {
@@ -1292,6 +1293,99 @@ client.on('message', async (message) => {
                     `⚙️ Config existe: ${grupoInfo.configExiste ? '✅' : '❌'}\n\n` +
                     `📋 *Grupos configurados:*\n${Object.keys(CONFIGURACAO_GRUPOS).join('\n')}`
                 );
+                return;
+            }
+
+            // NOVO COMANDO: .pedido - Permite ao admin criar pedidos diretamente
+            if (comando.startsWith('.pedido ')) {
+                const parametros = comando.replace('.pedido ', '').trim();
+                const partes = parametros.split(' ');
+
+                if (partes.length < 3) {
+                    await message.reply(
+                        `❌ *Uso do comando .pedido*\n\n` +
+                        `📝 **Formato:** .pedido REFERENCIA MEGAS NUMERO\n\n` +
+                        `💡 **Exemplos:**\n` +
+                        `• .pedido ADMIN001 10240 847777777\n` +
+                        `• .pedido PROMO123 20480 848888888\n\n` +
+                        `📊 **MEGAS em MB:** 10240 = 10GB, 20480 = 20GB, etc.`
+                    );
+                    return;
+                }
+
+                const [referencia, megas, numero] = partes;
+                const grupoAtual = message.from;
+                const configGrupo = getConfiguracaoGrupo(grupoAtual);
+
+                // Verificar se é em um grupo configurado
+                if (!grupoAtual.endsWith('@g.us')) {
+                    await message.reply('❌ Use este comando apenas em grupos configurados!');
+                    return;
+                }
+
+                if (!configGrupo) {
+                    await message.reply('❌ Este grupo não está configurado no sistema!');
+                    return;
+                }
+
+                // Validar formato dos parâmetros
+                const megasNum = parseInt(megas);
+                if (isNaN(megasNum) || megasNum <= 0) {
+                    await message.reply('❌ Megas deve ser um número positivo (ex: 10240 para 10GB)');
+                    return;
+                }
+
+                // Validar número de telefone
+                if (!/^\d{9,12}$/.test(numero)) {
+                    await message.reply('❌ Número inválido! Use formato: 847777777 ou 258847777777');
+                    return;
+                }
+
+                console.log(`🔧 ADMIN: Comando .pedido executado pelo admin`);
+                console.log(`   📋 Referência: ${referencia}`);
+                console.log(`   📊 Megas: ${megasNum} (${Math.floor(megasNum/1024)}GB)`);
+                console.log(`   📱 Número: ${numero}`);
+                console.log(`   🏢 Grupo: ${configGrupo.nome}`);
+
+                try {
+                    // Enviar pedido direto para o sistema
+                    const resultadoEnvio = await enviarParaTasker(
+                        referencia,
+                        megasNum,
+                        numero,
+                        grupoAtual,
+                        message
+                    );
+
+                    if (resultadoEnvio === null) {
+                        console.log(`🛑 ADMIN: Pedido duplicado detectado`);
+                        return; // Mensagem de duplicado já foi enviada
+                    }
+
+                    // Registrar no histórico
+                    const nomeAdmin = message._data.notifyName || 'Admin';
+                    await registrarComprador(grupoAtual, numero, `${nomeAdmin} (Admin)`, megasNum);
+
+                    // Resposta de sucesso
+                    await message.reply(
+                        `✅ *PEDIDO ADMINISTRATIVO CRIADO!*\n\n` +
+                        `💰 **Referência:** ${referencia}\n` +
+                        `📊 **Megas:** ${Math.floor(megasNum/1024)}GB (${megasNum}MB)\n` +
+                        `📱 **Número:** ${numero}\n` +
+                        `🏢 **Grupo:** ${configGrupo.nome}\n\n` +
+                        `⏳ *O sistema irá processar em instantes...*`
+                    );
+
+                    console.log(`✅ ADMIN: Pedido administrativo criado com sucesso!`);
+
+                } catch (error) {
+                    console.error(`❌ ADMIN: Erro ao criar pedido:`, error);
+                    await message.reply(
+                        `❌ *Erro ao criar pedido administrativo*\n\n` +
+                        `⚠️ ${error.message}\n\n` +
+                        `🔧 Tente novamente ou contacte o suporte técnico.`
+                    );
+                }
                 return;
             }
         }

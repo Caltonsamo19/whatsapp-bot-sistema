@@ -1194,15 +1194,17 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
   // === CALCULAR MEGAS POR VALOR (VALIDAÇÃO RIGOROSA - SEM TOLERÂNCIA) ===
   calcularMegasPorValor(valorPago, configGrupo) {
     console.log(`   🧮 ATACADO: Calculando megas para valor ${valorPago}MT (VALIDAÇÃO RIGOROSA)...`);
-    
+    console.log(`   🔍 DEBUG: Tipo de valorPago: ${typeof valorPago}, Valor: "${valorPago}"`);
+
     if (!configGrupo) {
       console.log(`   ❌ ATACADO: Configuração do grupo não disponível`);
       return null;
     }
-    
+
     // CORREÇÃO: Se configGrupo tem uma estrutura de precos (do bot divisão), usar diretamente
     if (configGrupo.precos) {
       console.log(`   🔧 ATACADO: Usando configuração de preços diretos do bot divisão`);
+      console.log(`   🔍 DEBUG: Passando valorPago: "${valorPago}" para calcularMegasPorValorDireto`);
       return this.calcularMegasPorValorDireto(valorPago, configGrupo.precos);
     }
     
@@ -1242,9 +1244,11 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
   // === CALCULAR MEGAS COM PREÇOS DIRETOS (VALIDAÇÃO RIGOROSA - SEM TOLERÂNCIA) ===
   calcularMegasPorValorDireto(valorPago, precos) {
     console.log(`   🧮 ATACADO: Calculando megas com preços diretos para valor ${valorPago}MT (VALIDAÇÃO RIGOROSA)...`);
+    console.log(`   🔍 DEBUG DIRETO: Tipo de valorPago: ${typeof valorPago}, Valor recebido: "${valorPago}"`);
     console.log(`   📋 ATACADO: Preços disponíveis:`, Object.entries(precos).map(([megas, preco]) => `${Math.floor(megas/1024)}GB=${preco}MT`).join(', '));
-    
+
     const valorNumerico = parseFloat(valorPago);
+    console.log(`   🔍 DEBUG DIRETO: valorNumerico após parseFloat: ${valorNumerico}`);
     
     // VALIDAÇÃO RIGOROSA: APENAS PREÇOS EXATOS - SEM TOLERÂNCIA
     for (const [megas, preco] of Object.entries(precos)) {
