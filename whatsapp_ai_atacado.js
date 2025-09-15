@@ -1448,57 +1448,89 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     return null;
   }
 
-  // === VALIDAR VALOR CONTRA TABELA (VALIDAÇÃO RIGOROSA) ===
+  // === VALIDAR VALOR CONTRA TABELA (VALIDAÇÃO RIGOROSA - SISTEMA DUAL) ===
   validarValorContraTabela(valorPago, configGrupo) {
-    console.log(`   🔍 VALIDAÇÃO RIGOROSA: Verificando se valor ${valorPago}MT está na tabela...`);
-    
+    console.log(`   🔍 VALIDAÇÃO RIGOROSA: Verificando se valor ${valorPago}MT está na tabela (DUAL: megas + saldo)...`);
+
     if (!configGrupo) {
       console.log(`   ❌ VALIDAÇÃO: Configuração do grupo não disponível`);
       return {
         valido: false,
         motivo: 'Configuração do grupo não disponível',
-        valoresValidos: []
+        valoresValidos: [],
+        tipoProduto: null
       };
     }
-    
-    let valoresValidos = [];
-    
-    // Verificar se tem preços diretos (estrutura do bot divisão)
+
+    let valoresValidosMegas = [];
+    let valoresValidosSaldo = [];
+
+    // 1. VERIFICAR TABELA DE MEGAS
     if (configGrupo.precos) {
-      valoresValidos = Object.values(configGrupo.precos).map(p => parseInt(p)).sort((a, b) => a - b);
-    } else if (configGrupo.tabela) {
-      // Extrair preços da tabela como texto
+      valoresValidosMegas = Object.values(configGrupo.precos).map(p => parseInt(p)).sort((a, b) => a - b);
+      console.log(`   📊 VALIDAÇÃO: Valores válidos MEGAS: ${valoresValidosMegas.map(v => `${v}MT`).join(', ')}`);
+    }
+
+    // 2. VERIFICAR TABELA DE SALDO
+    if (configGrupo.precosSaldo) {
+      valoresValidosSaldo = Object.values(configGrupo.precosSaldo).map(p => parseInt(p)).sort((a, b) => a - b);
+      console.log(`   💰 VALIDAÇÃO: Valores válidos SALDO: ${valoresValidosSaldo.map(v => `${v}MT`).join(', ')}`);
+    }
+
+    // 3. EXTRAIR DE TABELA TEXTO (FALLBACK)
+    if (valoresValidosMegas.length === 0 && valoresValidosSaldo.length === 0 && configGrupo.tabela) {
+      console.log(`   📋 VALIDAÇÃO: Extraindo preços da tabela texto...`);
       const precos = this.extrairPrecosTabela(configGrupo.tabela);
-      valoresValidos = precos.map(p => p.preco).sort((a, b) => a - b);
-    } else {
-      console.log(`   ❌ VALIDAÇÃO: Nem preços diretos nem tabela disponível`);
+      valoresValidosMegas = precos.map(p => p.preco).sort((a, b) => a - b);
+    }
+
+    // 4. VERIFICAR SE PELO MENOS UMA TABELA EXISTE
+    if (valoresValidosMegas.length === 0 && valoresValidosSaldo.length === 0) {
+      console.log(`   ❌ VALIDAÇÃO: Nem preços de megas nem saldo disponíveis`);
       return {
         valido: false,
-        motivo: 'Tabela de preços não configurada',
-        valoresValidos: []
+        motivo: 'Nenhuma tabela de preços configurada',
+        valoresValidos: [],
+        tipoProduto: null
       };
     }
-    
+
     const valorNumerico = parseFloat(valorPago);
-    const valorExiste = valoresValidos.includes(valorNumerico);
-    
-    if (valorExiste) {
-      console.log(`   ✅ VALIDAÇÃO: Valor ${valorPago}MT APROVADO - encontrado na tabela`);
+
+    // 5. VERIFICAR EM MEGAS PRIMEIRO
+    if (valoresValidosMegas.includes(valorNumerico)) {
+      console.log(`   ✅ VALIDAÇÃO: Valor ${valorPago}MT APROVADO - encontrado na tabela de MEGAS`);
       return {
         valido: true,
         valor: valorNumerico,
-        valoresValidos: valoresValidos
-      };
-    } else {
-      console.log(`   ❌ VALIDAÇÃO: Valor ${valorPago}MT REJEITADO - NÃO encontrado na tabela`);
-      console.log(`   📋 VALIDAÇÃO: Valores válidos: ${valoresValidos.map(v => `${v}MT`).join(', ')}`);
-      return {
-        valido: false,
-        motivo: `Valor ${valorPago}MT não está na tabela de preços`,
-        valorInvalido: valorNumerico,
-        valoresValidos: valoresValidos
+        valoresValidos: [...valoresValidosMegas, ...valoresValidosSaldo].sort((a, b) => a - b),
+        tipoProduto: 'megas'
       };
     }
+
+    // 6. VERIFICAR EM SALDO DEPOIS
+    if (valoresValidosSaldo.includes(valorNumerico)) {
+      console.log(`   ✅ VALIDAÇÃO: Valor ${valorPago}MT APROVADO - encontrado na tabela de SALDO`);
+      return {
+        valido: true,
+        valor: valorNumerico,
+        valoresValidos: [...valoresValidosMegas, ...valoresValidosSaldo].sort((a, b) => a - b),
+        tipoProduto: 'saldo'
+      };
+    }
+
+    // 7. VALOR NÃO ENCONTRADO EM NENHUMA TABELA
+    const todosValores = [...valoresValidosMegas, ...valoresValidosSaldo].sort((a, b) => a - b);
+    console.log(`   ❌ VALIDAÇÃO: Valor ${valorPago}MT REJEITADO - NÃO encontrado em nenhuma tabela`);
+    console.log(`   📋 VALIDAÇÃO: Valores válidos combinados: ${todosValores.map(v => `${v}MT`).join(', ')}`);
+
+    return {
+      valido: false,
+      motivo: `Valor ${valorPago}MT não está na tabela de preços`,
+      valorInvalido: valorNumerico,
+      valoresValidos: todosValores,
+      tipoProduto: null
+    };
   }
 
   // === EXTRAIR NÚMERO ÚNICO (CÓDIGO ORIGINAL) ===
@@ -2660,6 +2692,7 @@ Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"enco
         console.log(`🎯 ATACADO: Extração DIRETA ROBUSTA - Ref:${referencia} Valor:${valorLimpo}MT`);
         
         // ======= VALIDAÇÃO RIGOROSA DE VALOR =======
+        let tipoProdutoDetectado = null;
         if (configGrupo) {
           const validacao = this.validarValorContraTabela(valorLimpo, configGrupo);
           if (!validacao.valido) {
@@ -2673,7 +2706,8 @@ Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"enco
               mensagem_erro: `❌ *VALOR INVÁLIDO!*\n\n📋 *REFERÊNCIA:* ${referencia}\n💰 *VALOR ENVIADO:* ${valorLimpo}MT\n\n⚠️ Este valor não está na nossa tabela de preços.\n\n📋 *VALORES VÁLIDOS:*\n${validacao.valoresValidos.map(v => `• ${v}MT`).join('\n')}\n\n💡 Digite *tabela* para ver todos os pacotes disponíveis.`
             };
           }
-          console.log(`✅ VALIDAÇÃO RIGOROSA: Valor ${valorLimpo}MT APROVADO`);
+          tipoProdutoDetectado = validacao.tipoProduto;
+          console.log(`✅ VALIDAÇÃO RIGOROSA: Valor ${valorLimpo}MT APROVADO - Tipo: ${tipoProdutoDetectado?.toUpperCase() || 'DESCONHECIDO'}`);
         }
         
         // ====== VALIDAÇÃO DE CONSISTÊNCIA ENTRE DADOS ======
@@ -2703,7 +2737,8 @@ Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"enco
         return {
           referencia: referencia,
           valor: valorLimpo,
-          fonte: 'regex_direto_robusto'
+          fonte: 'regex_direto_robusto',
+          tipoProduto: tipoProdutoDetectado
         };
       } else {
         console.log(`⚠️ ATACADO: Extração parcial - Ref:${referencia || 'NULO'} Valor:${valor || 'NULO'}`);
@@ -2755,6 +2790,7 @@ ou
         }
 
         // ======= VALIDAÇÃO RIGOROSA DE VALOR (IA) =======
+        let tipoProdutoDetectadoIA = null;
         if (configGrupo) {
           const validacao = this.validarValorContraTabela(valorLimpo, configGrupo);
           if (!validacao.valido) {
@@ -2767,16 +2803,17 @@ ou
               valores_validos: validacao.valoresValidos,
               mensagem_erro: `❌ *VALOR INVÁLIDO!*\n\n📋 *REFERÊNCIA:* ${resultado.referencia}\n💰 *VALOR ENVIADO:* ${valorLimpo}MT\n\n⚠️ Este valor não está na nossa tabela de preços.\n\n📋 *VALORES VÁLIDOS:*\n${validacao.valoresValidos.map(v => `• ${v}MT`).join('\n')}\n\n💡 Digite *tabela* para ver todos os pacotes disponíveis.`
             };
-            
+
             // Salvar resultado inválido no cache
             this.cacheResultados.set(cacheKey, {
               resultado: resultadoInvalido,
               timestamp: Date.now()
             });
-            
+
             return resultadoInvalido;
           }
-          console.log(`✅ VALIDAÇÃO RIGOROSA (IA): Valor ${valorLimpo}MT APROVADO`);
+          tipoProdutoDetectadoIA = validacao.tipoProduto;
+          console.log(`✅ VALIDAÇÃO RIGOROSA (IA): Valor ${valorLimpo}MT APROVADO - Tipo: ${tipoProdutoDetectadoIA?.toUpperCase() || 'DESCONHECIDO'}`);
         }
         
         // ====== VALIDAÇÃO DE CONSISTÊNCIA ENTRE DADOS (IA) ======
@@ -2814,7 +2851,8 @@ ou
         const comprovanteProcessado = {
           referencia: resultado.referencia,
           valor: valorLimpo,
-          fonte: 'texto'
+          fonte: 'texto',
+          tipoProduto: tipoProdutoDetectadoIA
         };
         
         // OTIMIZAÇÃO: Salvar no cache
