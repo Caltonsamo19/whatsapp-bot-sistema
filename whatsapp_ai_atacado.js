@@ -2330,8 +2330,11 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       /([A-Z0-9]{8,15})/g                      // Genérico para casos especiais
     ];
     
-    // Padrões de valor
+    // Padrões de valor CORRIGIDOS (priorizar "Transferiste")
     const padroesValor = [
+      // PRIORIDADE: Padrão específico "Transferiste" (para evitar capturar taxa)
+      /Transferiste\s+(\d+(?:[.,]\d{1,2})?)MT/gi,
+      // Padrões genéricos como fallback
       /(\d+[.,]\d{2})\s*MT/gi,
       /(\d+)\s*MT/gi,
       /Valor[:\s]+(\d+[.,]?\d*)/gi
