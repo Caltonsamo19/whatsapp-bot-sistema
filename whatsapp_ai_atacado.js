@@ -152,15 +152,49 @@ class WhatsAppAIAtacado {
       },
       
       // === PADRÕES M-PESA (11 caracteres alfanuméricos misturados) ===
+      // CASO ESPECÍFICO: 10 chars + 1 char = 11 chars total (mais comum)
+      {
+        regex: /([A-Z0-9]{10})\s*\n?\s*([A-Z0-9]{1})(?=\s|$|\n|\.)/gi,
+        reconstruct: (match, p1, p2) => {
+          const total = p1 + p2;
+          console.log(`🔍 M-Pesa 10+1: "${p1}" + "${p2}" = "${total}" (${total.length} chars)`);
+          // Validar se totaliza exatamente 11 caracteres
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            console.log(`✅ M-Pesa 10+1 VALIDADO: ${total}`);
+            return total;
+          }
+          console.log(`❌ M-Pesa 10+1 INVÁLIDO: ${total} (${total.length} chars)`);
+          return match;
+        },
+        tipo: 'M-Pesa 10+1 chars'
+      },
+      // CASO ESPECÍFICO: 9 chars + 2 chars = 11 chars total
+      {
+        regex: /([A-Z0-9]{9})\s*\n?\s*([A-Z0-9]{2})(?=\s|$|\n|\.)/gi,
+        reconstruct: (match, p1, p2) => {
+          const total = p1 + p2;
+          console.log(`🔍 M-Pesa 9+2: "${p1}" + "${p2}" = "${total}" (${total.length} chars)`);
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            console.log(`✅ M-Pesa 9+2 VALIDADO: ${total}`);
+            return total;
+          }
+          console.log(`❌ M-Pesa 9+2 INVÁLIDO: ${total} (${total.length} chars)`);
+          return match;
+        },
+        tipo: 'M-Pesa 9+2 chars'
+      },
       // Quebra simples: 8 chars + 3 chars = 11 chars total
       {
         regex: /([A-Z0-9]{6,8})\s*\n?\s*([A-Z0-9]{3,5})(?=\s|$|\n|\.)/gi,
         reconstruct: (match, p1, p2) => {
           const total = p1 + p2;
+          console.log(`🔍 M-Pesa 6-8+3-5: "${p1}" + "${p2}" = "${total}" (${total.length} chars)`);
           // Validar se totaliza 11 caracteres
           if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            console.log(`✅ M-Pesa 11 chars VALIDADO: ${total}`);
             return total;
           }
+          console.log(`❌ M-Pesa 11 chars INVÁLIDO: ${total} (${total.length} chars)`);
           return match;
         },
         tipo: 'M-Pesa 11 chars'
@@ -376,10 +410,33 @@ class WhatsAppAIAtacado {
       console.log(`✅ Google Vision extraiu ${textoCompleto.length} caracteres`);
       console.log(`📝 Texto bruto extraído:\n"${textoCompleto}"`);
 
+      // === VALIDAR COMPLETUDE ANTES DA RECONSTRUÇÃO ===
+      console.log(`🔍 Verificando completude das referências...`);
+      const completude = this.validarCompletude(textoCompleto);
+      
+      if (!completude.completo && completude.fragmentosSuspeitos.length > 0) {
+        console.log(`⚠️ REFERÊNCIAS POSSIVELMENTE INCOMPLETAS DETECTADAS! Iniciando reconstrução forçada...`);
+      } else if (completude.completo) {
+        console.log(`✅ Referências aparentemente completas encontradas (${completude.referenciasCompletas})`);
+      }
+
       // PRÉ-PROCESSAMENTO: Tentar reconstruir referências quebradas
       console.log(`🔧 Iniciando reconstrução de referências quebradas...`);
       textoCompleto = this.reconstruirReferenciasQuebradas(textoCompleto);
       console.log(`✅ Reconstrução concluída`);
+      
+      // === VALIDAR COMPLETUDE APÓS A RECONSTRUÇÃO ===
+      console.log(`🔍 Verificando completude após reconstrução...`);
+      const completudeFinal = this.validarCompletude(textoCompleto);
+      
+      if (completudeFinal.completo) {
+        console.log(`✅ SUCESSO: ${completudeFinal.referenciasCompletas} referência(s) completa(s) após reconstrução`);
+      } else {
+        console.log(`⚠️ ATENÇÃO: Ainda há fragmentos suspeitos após reconstrução`);
+        if (completudeFinal.fragmentosSuspeitos.length > 0) {
+          console.log(`📋 Fragmentos ainda suspeitos: ${completudeFinal.fragmentosSuspeitos.map(f => f.fragmento).join(', ')}`);
+        }
+      }
 
       return textoCompleto;
 
@@ -1415,6 +1472,137 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     };
   }
 
+  // === VALIDAR COMPLETUDE DE REFERÊNCIAS ===
+  validarCompletude(texto) {
+    console.log(`🔍 VALIDANDO COMPLETUDE: Verificando se referências estão completas...`);
+    
+    // Procurar por possíveis referências incompletas ou quebradas
+    const fragmentosSuspeitos = [];
+    
+    // FRAGMENTOS M-PESA SUSPEITOS
+    // Códigos de 10 caracteres alfanuméricos (pode estar faltando 1 char)
+    const fragmentos10chars = texto.match(/\b[A-Z0-9]{10}\b/g);
+    if (fragmentos10chars) {
+      fragmentos10chars.forEach(frag => {
+        if (/[A-Z]/.test(frag) && /[0-9]/.test(frag)) {
+          fragmentosSuspeitos.push({
+            fragmento: frag,
+            tipo: 'M-Pesa_possivelmente_incompleto',
+            caracteresFaltando: 1,
+            comprimentoAtual: 10,
+            comprimentoEsperado: 11
+          });
+        }
+      });
+    }
+    
+    // Códigos de 9 caracteres alfanuméricos (pode estar faltando 2 chars)
+    const fragmentos9chars = texto.match(/\b[A-Z0-9]{9}\b/g);
+    if (fragmentos9chars) {
+      fragmentos9chars.forEach(frag => {
+        if (/[A-Z]/.test(frag) && /[0-9]/.test(frag)) {
+          fragmentosSuspeitos.push({
+            fragmento: frag,
+            tipo: 'M-Pesa_possivelmente_incompleto',
+            caracteresFaltando: 2,
+            comprimentoAtual: 9,
+            comprimentoEsperado: 11
+          });
+        }
+      });
+    }
+    
+    // FRAGMENTOS E-MOLA SUSPEITOS
+    // Padrões PP incompletos
+    const emolaIncompletos = [
+      // PP250914.1134.T3827 (falta 1 dígito)
+      /\bPP\d{6}\.\d{4}\.[A-Za-z]\d{4}\b/g,
+      // PP250914.1134. (falta letra + 5 dígitos)
+      /\bPP\d{6}\.\d{4}\.\b/g,
+      // PP250914. (falta tudo após a data)
+      /\bPP\d{6}\.\b/g
+    ];
+    
+    emolaIncompletos.forEach((regex, index) => {
+      const matches = texto.match(regex);
+      if (matches) {
+        matches.forEach(match => {
+          let faltando = '';
+          if (index === 0) faltando = '1 dígito final';
+          else if (index === 1) faltando = 'letra + 5 dígitos';
+          else if (index === 2) faltando = 'hora + letra + 5 dígitos';
+          
+          fragmentosSuspeitos.push({
+            fragmento: match,
+            tipo: 'E-Mola_possivelmente_incompleto',
+            faltando: faltando,
+            comprimentoAtual: match.length,
+            comprimentoEsperado: 19 // PP250914.1134.T38273 = 19 chars
+          });
+        });
+      }
+    });
+    
+    // PROCURAR POR CARACTERES ISOLADOS PRÓXIMOS
+    if (fragmentosSuspeitos.length > 0) {
+      console.log(`⚠️ COMPLETUDE: Encontrados ${fragmentosSuspeitos.length} fragmento(s) possivelmente incompleto(s):`);
+      
+      fragmentosSuspeitos.forEach((suspeito, index) => {
+        console.log(`   ${index + 1}. ${suspeito.tipo}: "${suspeito.fragmento}" (${suspeito.comprimentoAtual}/${suspeito.comprimentoEsperado} chars)`);
+        
+        if (suspeito.tipo.includes('M-Pesa')) {
+          // Procurar caracteres isolados próximos que possam completar
+          const regexProximo = new RegExp(`${suspeito.fragmento}\\s*\\n?\\s*([A-Z0-9]{1,${suspeito.caracteresFaltando}})`, 'i');
+          const proximoMatch = texto.match(regexProximo);
+          
+          if (proximoMatch) {
+            console.log(`   🔍 POSSÍVEL COMPLEMENTO: "${proximoMatch[1]}" encontrado próximo`);
+            console.log(`   💡 SUGESTÃO: "${suspeito.fragmento}" + "${proximoMatch[1]}" = "${suspeito.fragmento}${proximoMatch[1]}"`);
+          }
+        }
+      });
+      
+      return {
+        completo: false,
+        fragmentosSuspeitos: fragmentosSuspeitos,
+        requer_reconstrucao: true
+      };
+    }
+    
+    // Verificar se há referências aparentemente completas
+    const referenciasMPesa = texto.match(/\b[A-Z0-9]{11}\b/g) || [];
+    const referenciasEMola = texto.match(/\bPP\d{6}\.\d{4}\.[A-Za-z]\d{5}\b/g) || [];
+    
+    // Filtrar M-Pesa válidas (11 caracteres alfanuméricos com letras E números)
+    const mPesaValidas = referenciasMPesa.filter(ref => 
+      ref.length === 11 && 
+      /^[A-Z0-9]+$/.test(ref) && 
+      /[A-Z]/.test(ref) && 
+      /[0-9]/.test(ref)
+    );
+    
+    const referenciasCompletas = mPesaValidas.length + referenciasEMola.length;
+    
+    if (referenciasCompletas > 0) {
+      console.log(`   📋 M-Pesa válidas encontradas: ${mPesaValidas.join(', ')}`);
+      console.log(`   📋 E-Mola válidas encontradas: ${referenciasEMola.join(', ')}`);
+    }
+    
+    console.log(`✅ COMPLETUDE: ${referenciasCompletas} referência(s) aparentemente completa(s) encontrada(s)`);
+    
+    return {
+      completo: referenciasCompletas > 0,
+      referenciasCompletas: referenciasCompletas,
+      mPesaCompletas: mPesaValidas.length,
+      eMolaCompletas: referenciasEMola.length,
+      fragmentosSuspeitos: fragmentosSuspeitos,
+      referenciasEncontradas: {
+        mPesa: mPesaValidas,
+        eMola: referenciasEMola
+      }
+    };
+  }
+
   // === VALIDAR REFERÊNCIA MOÇAMBIQUE ===
   validarReferenciaMozambique(referencia, valor) {
     if (!referencia || typeof referencia !== 'string') {
@@ -1543,11 +1731,71 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     return { encontrado: false };
   }
 
+  // === RECONSTRUÇÃO FORÇADA PARA FRAGMENTOS SUSPEITOS ===
+  reconstrucaoForcadaFragmentos(texto) {
+    console.log(`🔧 RECONSTRUÇÃO FORÇADA: Tentando conectar fragmentos suspeitos...`);
+    
+    let textoProcessado = texto;
+    const completude = this.validarCompletude(texto);
+    
+    if (completude.fragmentosSuspeitos.length === 0) {
+      console.log(`ℹ️ Nenhum fragmento suspeito detectado para reconstrução forçada`);
+      return texto;
+    }
+    
+    // FOCO EM M-PESA: Procurar padrões 10+1 caracteres mais agressivamente
+    completude.fragmentosSuspeitos.forEach(suspeito => {
+      if (suspeito.tipo.includes('M-Pesa')) {
+        console.log(`🎯 RECONSTRUÇÃO FORÇADA M-Pesa: "${suspeito.fragmento}" (faltam ${suspeito.caracteresFaltando} char(s))`);
+        
+        // Buscar caracteres próximos com maior flexibilidade
+        const regexes = [
+          // Próximo na mesma linha ou linha seguinte
+          new RegExp(`(${suspeito.fragmento})\\s*\\n?\\s*([A-Z0-9]{1,${suspeito.caracteresFaltando}})(?=\\s|$|\\n|\\.|,)`, 'gi'),
+          // Próximo com possível pontuação no meio
+          new RegExp(`(${suspeito.fragmento})[\\s\\n\\.\\,\\-]*([A-Z0-9]{1,${suspeito.caracteresFaltando}})(?=\\s|$|\\n|\\.|,)`, 'gi'),
+          // Próximo em qualquer lugar (busca mais ampla)
+          new RegExp(`(${suspeito.fragmento})[\\s\\S]{0,10}?([A-Z0-9]{1,${suspeito.caracteresFaltando}})(?=\\s|$|\\n|\\.|,)`, 'gi')
+        ];
+        
+        for (let i = 0; i < regexes.length; i++) {
+          const matches = Array.from(textoProcessado.matchAll(regexes[i]));
+          
+          if (matches.length > 0) {
+            matches.forEach(match => {
+              const fragmento = match[1];
+              const complemento = match[2];
+              const candidato = fragmento + complemento;
+              
+              // Validar se o candidato final é uma referência M-Pesa válida
+              if (candidato.length === 11 && /^[A-Z0-9]+$/.test(candidato) && /[A-Z]/.test(candidato) && /[0-9]/.test(candidato)) {
+                const original = match[0];
+                textoProcessado = textoProcessado.replace(original, candidato);
+                console.log(`   ✅ RECONSTRUÇÃO FORÇADA SUCESSO (método ${i+1}): "${original}" → "${candidato}"`);
+                
+                // Incrementar métrica
+                this.imagemStats.referencias_reconstruidas++;
+              } else {
+                console.log(`   ❌ RECONSTRUÇÃO FORÇADA FALHOU (método ${i+1}): "${candidato}" não é M-Pesa válido`);
+              }
+            });
+            break; // Se encontrou algo neste método, não tentar os próximos
+          }
+        }
+      }
+    });
+    
+    return textoProcessado;
+  }
+
   // === RECONSTRUÇÃO MANUAL AGRESSIVA ===
   reconstrucaoManualAgressiva(texto) {
     console.log(`🔧 Aplicando reconstrução manual agressiva...`);
     
     let textoProcessado = texto;
+    
+    // NOVA: Aplicar reconstrução forçada primeiro
+    textoProcessado = this.reconstrucaoForcadaFragmentos(textoProcessado);
     
     // Remove espaços excessivos e padroniza quebras
     textoProcessado = textoProcessado.replace(/\s+/g, ' ').trim();
