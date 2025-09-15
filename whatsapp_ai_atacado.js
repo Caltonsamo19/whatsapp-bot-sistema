@@ -949,18 +949,52 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
           const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
           
           if (megasCalculados) {
-            // NOVA LÓGICA: SEMPRE aplicar subdivisão se necessário (>10GB)
-            const pedidosFinais = this.aplicarSubdivisaoSeNecessario(
-              comprovante.referencia, 
-              megasCalculados.quantidade, 
-              numeros[0]
-            );
-            
-            console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${pedidosFinais.length} bloco(s)`);
-            pedidosFinais.forEach((pedido, i) => {
-              console.log(`      📦 Bloco ${i + 1}: ${pedido} (${Math.floor(pedido.split('|')[1]/1024)}GB)`);
-            });
-            
+            // VERIFICAR SE É MEGAS (APENAS MEGAS PODE SER SUBDIVIDIDO)
+            if (megasCalculados.tipo === 'megas') {
+              // NOVA LÓGICA: SEMPRE aplicar subdivisão se necessário (>10GB)
+              const pedidosFinais = this.aplicarSubdivisaoSeNecessario(
+                comprovante.referencia,
+                megasCalculados.megas,
+                numeros[0]
+              );
+
+              console.log(`   ✅ ATACADO: PEDIDO MEGAS COMPLETO (IMAGEM + LEGENDA): ${pedidosFinais.length} bloco(s)`);
+              pedidosFinais.forEach((pedido, i) => {
+                console.log(`      📦 Bloco ${i + 1}: ${pedido} (${Math.floor(pedido.split('|')[1]/1024)}GB)`);
+              });
+
+              return {
+                sucesso: true,
+                dadosCompletos: pedidosFinais.length === 1 ? pedidosFinais[0] : pedidosFinais,
+                pedidosSubdivididos: pedidosFinais,
+                tipo: 'numero_processado',
+                numero: numeros[0],
+                megas: megasCalculados.megas,
+                subdividido: pedidosFinais.length > 1,
+                fonte: 'imagem_com_legenda',
+                metodo: comprovante.metodo,
+                tipoProduto: 'megas'
+              };
+            } else {
+              // É SALDO - NÃO PRECISA SUBDIVISÃO
+              const numeroLimpo = this.limparNumero(numeros[0]);
+              const resultado = `${comprovante.referencia}|${megasCalculados.saldo}|${numeroLimpo}`;
+
+              console.log(`   ✅ ATACADO: PEDIDO SALDO COMPLETO (IMAGEM + LEGENDA): ${resultado}`);
+
+              return {
+                sucesso: true,
+                dadosCompletos: resultado,
+                tipo: 'saldo_processado',
+                numero: numeros[0],
+                saldo: megasCalculados.saldo,
+                subdividido: false,
+                fonte: 'imagem_com_legenda',
+                metodo: comprovante.metodo,
+                tipoProduto: 'saldo'
+              };
+            }
+
             // REGISTRAR IMAGEM COMO PROCESSADA COM SUCESSO
             if (hashImagem) {
               this.registrarImagemProcessada(hashImagem, {
@@ -970,18 +1004,6 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
                 sucesso: true
               });
             }
-            
-            return { 
-              sucesso: true, 
-              dadosCompletos: pedidosFinais.length === 1 ? pedidosFinais[0] : pedidosFinais,
-              pedidosSubdivididos: pedidosFinais,
-              tipo: 'numero_processado',
-              numero: numeros[0],
-              megas: megasCalculados.megas,
-              subdividido: pedidosFinais.length > 1,
-              fonte: 'imagem_com_legenda',
-              metodo: comprovante.metodo
-            };
           } else {
             console.log(`   ❌ ATACADO: Valor ${comprovante.valor}MT não encontrado na tabela`);
             return {
@@ -1027,9 +1049,12 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
         tipo: 'comprovante_imagem_recebido',
         referencia: comprovante.referencia,
         valor: comprovante.valor,
-        megas: megasCalculados.megas,
         metodo: comprovante.metodo,
-        mensagem: `Comprovante da imagem processado! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
+        tipoProduto: megasCalculados.tipo,
+        ...(megasCalculados.tipo === 'megas' ? { megas: megasCalculados.megas } : { saldo: megasCalculados.saldo }),
+        mensagem: megasCalculados.tipo === 'megas'
+          ? `Comprovante da imagem processado! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}MB. Agora envie UM número que vai receber os megas.`
+          : `Comprovante da imagem processado! Valor: ${comprovante.valor}MT = ${megasCalculados.saldo}MT saldo. Agora envie UM número que vai receber o saldo.`
       };
     } else {
       console.log(`   ❌ ATACADO: Valor ${comprovante.valor}MT não encontrado na tabela`);
@@ -1191,9 +1216,9 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     return precosUnicos;
   }
 
-  // === CALCULAR MEGAS POR VALOR (VALIDAÇÃO RIGOROSA - SEM TOLERÂNCIA) ===
+  // === CALCULAR MEGAS OU SALDO POR VALOR (SISTEMA DUAL) ===
   calcularMegasPorValor(valorPago, configGrupo) {
-    console.log(`   🧮 ATACADO: Calculando megas para valor ${valorPago}MT (VALIDAÇÃO RIGOROSA)...`);
+    console.log(`   🧮 ATACADO: Calculando produto para valor ${valorPago}MT (SISTEMA DUAL: MEGAS → SALDO)...`);
     console.log(`   🔍 DEBUG: Tipo de valorPago: ${typeof valorPago}, Valor: "${valorPago}"`);
 
     if (!configGrupo) {
@@ -1201,11 +1226,47 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       return null;
     }
 
-    // CORREÇÃO: Se configGrupo tem uma estrutura de precos (do bot divisão), usar diretamente
+    // 1. PRIMEIRO: Tentar MEGAS
     if (configGrupo.precos) {
-      console.log(`   🔧 ATACADO: Usando configuração de preços diretos do bot divisão`);
+      console.log(`   🔧 ATACADO: Verificando tabela de MEGAS primeiro...`);
+      const resultadoMegas = this.calcularMegasPorValorDireto(valorPago, configGrupo.precos);
+      if (resultadoMegas) {
+        console.log(`   ✅ ATACADO: VALOR ENCONTRADO NA TABELA DE MEGAS!`);
+        return {
+          ...resultadoMegas,
+          tipo: 'megas'
+        };
+      }
+      console.log(`   ❌ ATACADO: Valor ${valorPago}MT não existe na tabela de megas`);
+    }
+
+    // 2. SEGUNDO: Tentar SALDO
+    if (configGrupo.precosSaldo) {
+      console.log(`   🔧 ATACADO: Verificando tabela de SALDO...`);
+      const resultadoSaldo = this.calcularSaldoPorValor(valorPago, configGrupo.precosSaldo);
+      if (resultadoSaldo) {
+        console.log(`   ✅ ATACADO: VALOR ENCONTRADO NA TABELA DE SALDO!`);
+        return {
+          ...resultadoSaldo,
+          tipo: 'saldo'
+        };
+      }
+      console.log(`   ❌ ATACADO: Valor ${valorPago}MT não existe na tabela de saldo`);
+    } else {
+      console.log(`   ⚠️ ATACADO: Grupo não tem tabela de saldo configurada`);
+    }
+
+    // 3. FALLBACK: Método original (se existe)
+    if (configGrupo.precos) {
+      console.log(`   🔧 ATACADO: Usando configuração de preços diretos do bot divisão (fallback)`);
       console.log(`   🔍 DEBUG: Passando valorPago: "${valorPago}" para calcularMegasPorValorDireto`);
-      return this.calcularMegasPorValorDireto(valorPago, configGrupo.precos);
+      const resultado = this.calcularMegasPorValorDireto(valorPago, configGrupo.precos);
+      if (resultado) {
+        return {
+          ...resultado,
+          tipo: 'megas'
+        };
+      }
     }
     
     // CASO ORIGINAL: Se tem tabela como texto, usar método original
@@ -1239,6 +1300,71 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     console.log(`   ❌ ATACADO: Valor ${valorPago}MT NÃO ENCONTRADO na tabela - REJEITADO (validação rigorosa)`);
     console.log(`   📋 ATACADO: Valores válidos disponíveis: ${precos.map(p => `${p.preco}MT`).join(', ')}`);
     return null;
+  }
+
+  // === CALCULAR SALDO POR VALOR (VALIDAÇÃO RIGOROSA - SEM TOLERÂNCIA) ===
+  calcularSaldoPorValor(valorPago, precosSaldo) {
+    console.log(`   🧮 ATACADO: Calculando saldo com preços diretos para valor ${valorPago}MT (VALIDAÇÃO RIGOROSA)...`);
+    console.log(`   🔍 DEBUG SALDO: Tipo de valorPago: ${typeof valorPago}, Valor recebido: "${valorPago}"`);
+    console.log(`   📋 ATACADO: Preços de saldo disponíveis:`, Object.entries(precosSaldo).map(([saldo, preco]) => `${saldo}MT=${preco}MT`).join(', '));
+
+    const valorNumerico = parseFloat(valorPago);
+    console.log(`   🔍 DEBUG SALDO: valorNumerico após parseFloat: ${valorNumerico}`);
+
+    if (isNaN(valorNumerico) || valorNumerico <= 0) {
+      console.log(`   ❌ ATACADO: Valor inválido para cálculo de saldo: ${valorPago}`);
+      return null;
+    }
+
+    // Buscar valor EXATO na tabela de saldo
+    for (const [saldo, preco] of Object.entries(precosSaldo)) {
+      if (preco === valorNumerico) {
+        console.log(`   ✅ ATACADO: Preço EXATO encontrado na tabela de saldo: ${valorNumerico}MT = ${saldo}MT saldo`);
+        return {
+          saldo: parseInt(saldo),
+          valorPago: valorNumerico,
+          found: true
+        };
+      }
+    }
+
+    console.log(`   ❌ ATACADO: Valor ${valorNumerico}MT não encontrado na tabela de saldo`);
+    console.log(`   📋 ATACADO: Valores válidos:`, Object.values(precosSaldo).join('MT, ') + 'MT');
+    return null;
+  }
+
+  // === FUNÇÃO AUXILIAR PARA PROCESSAR RESULTADOS DUAL (MEGAS OU SALDO) ===
+  processarResultadoDual(produto, referencia, numero) {
+    if (!produto) return null;
+
+    const numeroLimpo = this.limparNumero(numero);
+
+    if (produto.tipo === 'saldo') {
+      const resultado = `${referencia}|${produto.saldo}|${numeroLimpo}`;
+      console.log(`   ✅ ATACADO: PEDIDO SALDO COMPLETO: ${resultado}`);
+      return {
+        sucesso: true,
+        dadosCompletos: resultado,
+        tipo: 'saldo_processado',
+        numero: numeroLimpo,
+        saldo: produto.saldo,
+        valorPago: produto.valorPago,
+        tipoProduto: 'saldo'
+      };
+    } else {
+      // Manter formato original para megas
+      const resultado = `${referencia}|${produto.megas}|${numeroLimpo}`;
+      console.log(`   ✅ ATACADO: PEDIDO MEGAS COMPLETO: ${resultado}`);
+      return {
+        sucesso: true,
+        dadosCompletos: resultado,
+        tipo: 'numero_processado',
+        numero: numeroLimpo,
+        megas: produto.megas,
+        valorPago: produto.valorPago,
+        tipoProduto: 'megas'
+      };
+    }
   }
 
   // === CALCULAR MEGAS COM PREÇOS DIRETOS (VALIDAÇÃO RIGOROSA - SEM TOLERÂNCIA) ===
@@ -1609,20 +1735,15 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       console.log(`   💰 ATACADO: Comprovante: ${comprovante.referencia} - ${comprovante.valor}MT`);
       console.log(`   📱 ATACADO: Número: ${numero}`);
       
-      const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
-      
-      if (megasCalculados) {
-        const numeroLimpo = this.limparNumero(numero);
-        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLimpo}`;
-        console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO: ${resultado}`);
-        return { 
-          sucesso: true, 
-          dadosCompletos: resultado,
-          tipo: 'numero_processado',
-          numero: numeroLimpo,
-          megas: megasCalculados.megas,
-          valorPago: comprovante.valor
-        };
+      const produtoCalculado = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+
+      if (produtoCalculado) {
+        const resultado = this.processarResultadoDual(produtoCalculado, comprovante.referencia, numero);
+        if (resultado) {
+          resultado.valorPago = comprovante.valor;
+          console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (${produtoCalculado.tipo}): ${resultado.dadosCompletos}`);
+          return resultado;
+        }
       } else {
         console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
         return {
@@ -1665,8 +1786,11 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
           tipo: 'comprovante_recebido',
           referencia: comprovante.referencia,
           valor: comprovante.valor,
-          megas: megasCalculados.megas,
-          mensagem: `Comprovante recebido! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
+          tipoProduto: megasCalculados.tipo,
+          ...(megasCalculados.tipo === 'megas' ? { megas: megasCalculados.megas } : { saldo: megasCalculados.saldo }),
+          mensagem: megasCalculados.tipo === 'megas'
+            ? `Comprovante recebido! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}MB. Agora envie UM número que vai receber os megas.`
+            : `Comprovante recebido! Valor: ${comprovante.valor}MT = ${megasCalculados.saldo}MT saldo. Agora envie UM número que vai receber o saldo.`
         };
       } else {
         return {
@@ -2432,19 +2556,16 @@ Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"enco
       const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
       
       if (megasCalculados) {
-        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numero}`;
         delete this.comprovantesEmAberto[remetente];
-        
-        console.log(`   ✅ ATACADO: PEDIDO COMPLETO: ${resultado}`);
-        return { 
-          sucesso: true, 
-          dadosCompletos: resultado,
-          tipo: 'numero_processado',
-          numero: numero,
-          megas: megasCalculados.megas,
-          valorPago: comprovante.valor,
-          origem: 'comprovante_em_aberto'
-        };
+
+        // Usar função auxiliar para processar resultado dual
+        const resultadoProcessado = this.processarResultadoDual(megasCalculados, comprovante.referencia, numero);
+        if (resultadoProcessado) {
+          resultadoProcessado.valorPago = comprovante.valor;
+          resultadoProcessado.origem = 'comprovante_em_aberto';
+          console.log(`   ✅ ATACADO: PEDIDO COMPLETO (${megasCalculados.tipo}): ${resultadoProcessado.dadosCompletos}`);
+          return resultadoProcessado;
+        }
       } else {
         console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
         return {
@@ -2463,17 +2584,14 @@ Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"enco
       const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
       
       if (megasCalculados) {
-        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numero}`;
-        console.log(`   ✅ ATACADO: ENCONTRADO NO HISTÓRICO: ${resultado}`);
-        return { 
-          sucesso: true, 
-          dadosCompletos: resultado,
-          tipo: 'numero_processado',
-          numero: numero,
-          megas: megasCalculados.megas,
-          valorPago: comprovante.valor,
-          origem: 'historico'
-        };
+        // Usar função auxiliar para processar resultado dual
+        const resultadoProcessado = this.processarResultadoDual(megasCalculados, comprovante.referencia, numero);
+        if (resultadoProcessado) {
+          resultadoProcessado.valorPago = comprovante.valor;
+          resultadoProcessado.origem = 'historico';
+          console.log(`   ✅ ATACADO: ENCONTRADO NO HISTÓRICO (${megasCalculados.tipo}): ${resultadoProcessado.dadosCompletos}`);
+          return resultadoProcessado;
+        }
       } else {
         return {
           sucesso: false,

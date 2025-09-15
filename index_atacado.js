@@ -20,6 +20,16 @@ const GOOGLE_SHEETS_CONFIG_ATACADO = {
     retryDelay: 2000
 };
 
+// === CONFIGURAÇÃO GOOGLE SHEETS - SALDO (NOVA) ===
+const GOOGLE_SHEETS_CONFIG_SALDO = {
+    scriptUrl: process.env.GOOGLE_SHEETS_SCRIPT_URL_SALDO || 'https://script.google.com/macros/s/NOVA_URL_PARA_SALDO/exec',
+    planilhaUrl: 'https://docs.google.com/spreadsheets/d/NOVA_PLANILHA_SALDO/edit',
+    planilhaId: 'NOVA_PLANILHA_SALDO',
+    timeout: 30000,
+    retryAttempts: 3,
+    retryDelay: 2000
+};
+
 // === CONFIGURAÇÃO GOOGLE SHEETS - BOT RETALHO (mantida para compatibilidade) ===
 const GOOGLE_SHEETS_CONFIG = {
     scriptUrl: process.env.GOOGLE_SHEETS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbz.../exec',
@@ -142,6 +152,25 @@ const CONFIGURACAO_GRUPOS_DIVISAO = {
             81920: 1000,   // 80GB = 1000MT
             92160: 1125,   // 90GB = 1125MT
             102400: 1250   // 100GB = 1250MT
+        },
+        // === TABELA DE SALDO NET FORNECEDOR V ===
+        precosSaldo: {
+            50: 45,      // 50MT saldo = 45MT pagamento
+            100: 85,     // 100MT saldo = 85MT pagamento
+            200: 170,    // 200MT saldo = 170MT pagamento
+            300: 255,    // 300MT saldo = 255MT pagamento
+            400: 340,    // 400MT saldo = 340MT pagamento
+            500: 410,    // 500MT saldo = 410MT pagamento
+            1000: 815,   // 1000MT saldo = 815MT pagamento
+            2000: 1630,  // 2000MT saldo = 1630MT pagamento
+            3000: 2445,  // 3000MT saldo = 2445MT pagamento
+            4000: 3260,  // 4000MT saldo = 3260MT pagamento
+            5000: 4075,  // 5000MT saldo = 4075MT pagamento
+            6000: 4890,  // 6000MT saldo = 4890MT pagamento
+            7000: 5705,  // 7000MT saldo = 5705MT pagamento
+            8000: 6520,  // 8000MT saldo = 6520MT pagamento
+            9000: 7335,  // 9000MT saldo = 7335MT pagamento
+            10000: 8150  // 10000MT saldo = 8150MT pagamento
         }
     },
     '120363402160265624@g.us': {
@@ -155,6 +184,10 @@ const CONFIGURACAO_GRUPOS_DIVISAO = {
             61440: 750,    // 60GB = 750MT
             71680: 875,    // 70GB = 875MT
             81920: 1000    // 80GB = 1000MT
+        },
+        // === TABELA DE SALDO (VAZIA POR ENQUANTO) ===
+        precosSaldo: {
+            // Adicionar valores conforme necessário
         }
     }
     // Only Saldo foi removido pois não precisa de divisão automática
@@ -296,6 +329,37 @@ async function tentarComRetry(funcao, maxTentativas = 3, delay = 2000) {
             // Aguardar antes da próxima tentativa
             await new Promise(resolve => setTimeout(resolve, delay));
         }
+    }
+}
+
+// === FUNÇÃO GOOGLE SHEETS PARA SALDO ===
+async function enviarSaldoParaGoogleSheets(dadosCompletos, grupoId, timestamp) {
+    const dados = {
+        grupo_id: grupoId,
+        timestamp: timestamp,
+        dados: dadosCompletos,
+        tipo: 'saldo'
+    };
+
+    try {
+        console.log(`📊 SALDO: Enviando para Google Sheets...`);
+
+        const resultado = await tentarComRetry(async () => {
+            const response = await axios.post(GOOGLE_SHEETS_CONFIG_SALDO.scriptUrl, dados, {
+                timeout: GOOGLE_SHEETS_CONFIG_SALDO.timeout,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            return response.data;
+        }, GOOGLE_SHEETS_CONFIG_SALDO.retryAttempts, GOOGLE_SHEETS_CONFIG_SALDO.retryDelay);
+
+        console.log(`✅ SALDO: Dados enviados para Google Sheets:`, resultado);
+        return { sucesso: true, dados: resultado };
+
+    } catch (error) {
+        console.error(`❌ SALDO: Erro ao enviar para Google Sheets:`, error.message);
+        return { sucesso: false, erro: error.message };
     }
 }
 
@@ -465,6 +529,89 @@ function calcularValorEsperadoDosMegas(megas, grupoId) {
     } catch (error) {
         console.error(`❌ INDIVIDUAL: Erro ao calcular valor:`, error);
         return null;
+    }
+}
+
+// === FUNÇÃO PARA ENVIAR PEDIDOS DE SALDO ===
+async function enviarSaldoParaTasker(referencia, saldo, numero, grupoId, messageContext = null) {
+    const timestamp = new Date().toLocaleString('pt-BR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+
+    const dadosCompletos = `${referencia}|${saldo}|${numero}|${timestamp}`;
+
+    // Verificar duplicados para saldo
+    if (dadosParaTasker.some(d => d.dados === dadosCompletos)) {
+        const configGrupo = getConfiguracaoGrupo(grupoId);
+        const grupoNome = configGrupo ? configGrupo.nome : 'Grupo Desconhecido';
+
+        if (messageContext) {
+            await messageContext.reply(
+                `⚠️ *PEDIDO DE SALDO DUPLICADO*\n\n` +
+                `🔖 **Referência:** ${referencia}\n` +
+                `💰 **Saldo:** ${saldo}MT\n` +
+                `📱 **Número:** ${numero}\n\n` +
+                `⏰ **Este pedido já foi enviado anteriormente.**\n` +
+                `🔄 **Se houve erro, contacte o administrador.**`
+            );
+        }
+
+        console.log(`🛑 SALDO: Pedido duplicado detectado: ${dadosCompletos}`);
+        return null;
+    }
+
+    try {
+        const configGrupo = getConfiguracaoGrupo(grupoId);
+        const grupoNome = configGrupo ? configGrupo.nome : 'Grupo Desconhecido';
+
+        // Salvar no arquivo para Tasker
+        await salvarArquivoTasker(dadosCompletos, grupoNome, timestamp);
+
+        // Adicionar aos dados para controle
+        dadosParaTasker.push({
+            dados: dadosCompletos,
+            grupo: grupoNome,
+            timestamp: timestamp,
+            metodo: 'saldo_tasker',
+            tipo: 'saldo'
+        });
+
+        // Enviar para Google Sheets (planilha de saldo)
+        const resultadoSheets = await enviarSaldoParaGoogleSheets(dadosCompletos, grupoId, timestamp);
+
+        if (messageContext) {
+            await messageContext.reply(
+                `✅ *PEDIDO DE SALDO CRIADO!*\n\n` +
+                `🔖 **Referência:** ${referencia}\n` +
+                `💰 **Saldo:** ${saldo}MT\n` +
+                `📱 **Número:** ${numero}\n` +
+                `🏢 **Grupo:** ${grupoNome}\n\n` +
+                `🚀 **Pedido enviado para processamento!**\n` +
+                `📊 **Status Google Sheets:** ${resultadoSheets.sucesso ? '✅ Salvo' : '⚠️ Erro'}`
+            );
+        }
+
+        console.log(`✅ SALDO: Pedido criado: ${dadosCompletos}`);
+        return { sucesso: true, dados: dadosCompletos };
+
+    } catch (error) {
+        console.error(`❌ SALDO: Erro ao processar:`, error);
+
+        if (messageContext) {
+            await messageContext.reply(
+                `❌ *ERRO AO PROCESSAR SALDO*\n\n` +
+                `⚠️ ${error.message}\n\n` +
+                `🔧 Contacte o administrador se o problema persistir.`
+            );
+        }
+
+        throw error;
     }
 }
 
@@ -700,6 +847,65 @@ function obterGrupoDoNumero(numeroAdmin) {
     // Extrair apenas o número do ID completo (ex: '258840326152@c.us' -> '258840326152')
     const numeroLimpo = numeroAdmin.replace('@c.us', '');
     return MAPEAMENTO_NUMEROS_GRUPOS[numeroLimpo] || null;
+}
+
+// === NOVAS FUNÇÕES PARA SISTEMA DUAL (MEGAS + SALDO) ===
+
+function verificarTipoValor(valor, grupoId) {
+    const configGrupo = getConfiguracaoGrupo(grupoId);
+    if (!configGrupo) return null;
+
+    // 1. Primeiro verifica se existe na tabela de MEGAS
+    if (configGrupo.precos) {
+        const valoresValidos = Object.values(configGrupo.precos);
+        if (valoresValidos.includes(valor)) {
+            // Encontrar quantos megas correspondem a esse valor
+            for (const [megas, preco] of Object.entries(configGrupo.precos)) {
+                if (preco === valor) {
+                    return {
+                        tipo: 'megas',
+                        quantidade: parseInt(megas),
+                        valor: valor,
+                        unidade: 'MB'
+                    };
+                }
+            }
+        }
+    }
+
+    // 2. Se não existe em MEGAS, verifica na tabela de SALDO
+    if (configGrupo.precosSaldo) {
+        const valoresValidosSaldo = Object.values(configGrupo.precosSaldo);
+        if (valoresValidosSaldo.includes(valor)) {
+            // Encontrar quanto saldo corresponde a esse valor
+            for (const [saldo, preco] of Object.entries(configGrupo.precosSaldo)) {
+                if (preco === valor) {
+                    return {
+                        tipo: 'saldo',
+                        quantidade: parseInt(saldo),
+                        valor: valor,
+                        unidade: 'MT'
+                    };
+                }
+            }
+        }
+    }
+
+    // 3. Valor não encontrado em nenhuma tabela
+    return null;
+}
+
+function obterTabelasDisponiveis(grupoId) {
+    const configGrupo = getConfiguracaoGrupo(grupoId);
+    if (!configGrupo) return { megas: [], saldo: [] };
+
+    const valoresMegas = configGrupo.precos ? Object.values(configGrupo.precos) : [];
+    const valoresSaldo = configGrupo.precosSaldo ? Object.values(configGrupo.precosSaldo) : [];
+
+    return {
+        megas: valoresMegas,
+        saldo: valoresSaldo
+    };
 }
 
 function isGrupoMonitorado(chatId) {
@@ -1585,14 +1791,17 @@ client.on('message', async (message) => {
                         );
                         return;
                         
-                    } else if (resultadoIA.tipo === 'numero_processado') {
+                    } else if (resultadoIA.tipo === 'numero_processado' || resultadoIA.tipo === 'saldo_processado') {
                         const dadosCompletos = resultadoIA.dadosCompletos;
-                        const [referencia, megas, numero] = dadosCompletos.split('|');
+                        const [referencia, produto, numero] = dadosCompletos.split('|');
                         const nomeContato = message._data.notifyName || 'N/A';
                         const autorMensagem = message.author || 'Desconhecido';
-                        
-                        // Converter megas para formato numérico
-                        const megasConvertido = converterMegasParaNumero(megas);
+
+                        // Verificar se é saldo ou megas
+                        const isSaldo = resultadoIA.tipo === 'saldo_processado';
+
+                        // Converter produto para formato numérico (megas ou saldo)
+                        const produtoConvertido = isSaldo ? parseInt(produto) : converterMegasParaNumero(produto);
                         
                         // === NOVA VERIFICAÇÃO: CONFIRMAR PAGAMENTO ANTES DE PROCESSAR ===
                         console.log(`🔍 INDIVIDUAL: Verificando pagamento antes de processar screenshot...`);
