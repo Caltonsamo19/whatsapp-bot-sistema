@@ -17,6 +17,23 @@ class WhatsAppAIAtacado {
       calls: 0,
       cacheHits: 0
     };
+
+    // MÉTRICAS DE PROCESSAMENTO DE IMAGENS ROBUSTAS
+    this.imagemStats = {
+      total: 0,
+      sucessos: 0,
+      falhas: 0,
+      metodos: {
+        hibrido_direto: 0,
+        abordagem_alternativa: 0,
+        regex_direto: 0,
+        prompt_simplificado: 0,
+        gpt4_vision_fallback: 0
+      },
+      referencias_reconstruidas: 0,
+      referencias_validadas: 0,
+      referencias_rejeitadas: 0
+    };
     
     // Configurar Google Vision com verificação robusta
     this.googleVisionEnabled = process.env.GOOGLE_VISION_ENABLED === 'true';
@@ -85,96 +102,362 @@ class WhatsAppAIAtacado {
       console.log('⚠️ Google Vision desabilitado via GOOGLE_VISION_ENABLED');
     }
     
+    // INICIALIZAR SISTEMA DE CONTROLE DE REFERÊNCIAS
+    this.referencias_processadas = new Map();
+    
     setInterval(() => {
       this.limparComprovantesAntigos();
       this.limparCacheAntigo(); // OTIMIZAÇÃO: Limpar cache junto
+      this.limparReferenciasAntigas(); // NOVO: Limpar referências antigas
     }, 10 * 60 * 1000);
     
     const visionStatus = this.googleVisionEnabled ? 'Google Vision + GPT-4' : 'GPT-4 Vision';
     console.log(`🧠 IA WhatsApp ATACADO v5.0 inicializada - ${visionStatus}`);
   }
 
-  // === RECONSTRUIR REFERÊNCIAS QUEBRADAS (COPIADO EXATAMENTE DO BOT DE REFERÊNCIA) ===
+  // === RECONSTRUIR REFERÊNCIAS QUEBRADAS (VERSÃO MELHORADA E ROBUSTA) ===
   reconstruirReferenciasQuebradas(texto) {
-    console.log('🔧 Reconstruindo referências quebradas...');
+    console.log('🔧 Reconstruindo referências quebradas - VERSÃO ROBUSTA...');
+    console.log(`📝 Texto original (${texto.length} chars): ${texto.substring(0, 200)}...`);
     
-    // Padrões comuns de referências M-Pesa/E-Mola quebradas
+    // Padrões EXPANDIDOS de referências M-Pesa/E-Mola quebradas
     const padroes = [
-      // PP250901.1250.B + 64186 = PP250901.1250.B64186
+      // === PADRÕES E-MOLA (PP + AAMMDD + . + HHMM + . + Letra + 5 Números) ===
+      // Padrão completo: PP250914.1134.T38273
+      // PP250914.1134.T + 38273 = PP250914.1134.T38273
       {
-        regex: /(PP\d{6}\.\d{4}\.B)\s*\n?\s*(\d{4,6})/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`
-      },
-      // CHMOH4HICK + 2 = CHMOH4HICK2 (caso específico: referência + número isolado)
-      {
-        regex: /(CHMOH4HICK)\s*\n?\s*(\d+)/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`
-      },
-      // Padrão genérico: CÓDIGO + número isolado = CÓDIGONÚMERO
-      {
-        regex: /([A-Z]{8,12}[A-Z])\s*\n?\s*(\d{1,3})(?=\s*\.|\s*\n|\s*$)/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`
-      },
-      // CI6H85P + TN4 = CI6H85PTN4
-      {
-        regex: /([A-Z]\w{5,7}[A-Z])\s*\n?\s*([A-Z0-9]{2,4})/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`
-      },
-      // CGC4GQ1 + 7W84 = CGC4GQ17W84
-      {
-        regex: /([A-Z]{3}\d[A-Z]{2}\d)\s*\n?\s*(\d?[A-Z0-9]{3,4})/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`
-      },
-      // Confirmado + CÓDIGO = CÓDIGO (remover prefixos)
-      {
-        regex: /Confirmado\s*\n?\s*([A-Z0-9]{8,15})/gi,
-        reconstruct: (match, p1) => p1
-      },
-      // ID genérico: XXXXX + XXXXX = XXXXXXXXXX
-      {
-        regex: /([A-Z0-9]{5,8})\s*\n?\s*([A-Z0-9]{3,6})/gi,
+        regex: /(PP\d{6}\.\d{4}\.[A-Za-z])\s*\n?\s*(\d{5})/gi,
         reconstruct: (match, p1, p2) => {
-          // Só juntar se parecer fazer sentido (não números aleatórios)
-          if (/^[A-Z]/.test(p1) && (p1.length + p2.length >= 8 && p1.length + p2.length <= 15)) {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [Letra+5Digitos]: "${p1}" + "${p2}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: letra + 5 dígitos'
+      },
+      // CASOS ESPECÍFICOS DE QUEBRA E-MOLA (NOVOS)
+      // PP250914.1134.T3827 + 3 = PP250914.1134.T38273 (1 dígito faltando)
+      {
+        regex: /(PP\d{6}\.\d{4}\.[A-Za-z]\d{4})\s*\n?\s*(\d{1})/gi,
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [1Digito]: "${p1}" + "${p2}" = "${resultado}"`);
+          // Validar se tem exatamente 19 caracteres
+          if (resultado.length === 19 && /^PP\d{6}\.\d{4}\.[A-Za-z]\d{5}$/.test(resultado)) {
+            console.log(`✅ E-Mola [1Digito]: VÁLIDO`);
+            return resultado;
+          }
+          console.log(`❌ E-Mola [1Digito]: INVÁLIDO (${resultado.length} chars)`);
+          return match;
+        },
+        tipo: 'E-Mola: 1 dígito final'
+      },
+      // PP250914.1134.T382 + 73 = PP250914.1134.T38273 (2 dígitos faltando)
+      {
+        regex: /(PP\d{6}\.\d{4}\.[A-Za-z]\d{3})\s*\n?\s*(\d{2})/gi,
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [2Digitos]: "${p1}" + "${p2}" = "${resultado}"`);
+          if (resultado.length === 19 && /^PP\d{6}\.\d{4}\.[A-Za-z]\d{5}$/.test(resultado)) {
+            console.log(`✅ E-Mola [2Digitos]: VÁLIDO`);
+            return resultado;
+          }
+          console.log(`❌ E-Mola [2Digitos]: INVÁLIDO`);
+          return match;
+        },
+        tipo: 'E-Mola: 2 dígitos finais'
+      },
+      // PP250914.1134.T38 + 273 = PP250914.1134.T38273 (3 dígitos faltando)
+      {
+        regex: /(PP\d{6}\.\d{4}\.[A-Za-z]\d{2})\s*\n?\s*(\d{3})/gi,
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [3Digitos]: "${p1}" + "${p2}" = "${resultado}"`);
+          if (resultado.length === 19 && /^PP\d{6}\.\d{4}\.[A-Za-z]\d{5}$/.test(resultado)) {
+            console.log(`✅ E-Mola [3Digitos]: VÁLIDO`);
+            return resultado;
+          }
+          console.log(`❌ E-Mola [3Digitos]: INVÁLIDO`);
+          return match;
+        },
+        tipo: 'E-Mola: 3 dígitos finais'
+      },
+      // PP250914.1134. + T38273 = PP250914.1134.T38273
+      {
+        regex: /(PP\d{6}\.\d{4}\.)\s*\n?\s*([A-Za-z]\d{5})/gi,
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [SemLetra]: "${p1}" + "${p2}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: sem letra inicial'
+      },
+      // PP250914. + 1134.T38273 = PP250914.1134.T38273
+      {
+        regex: /(PP\d{6}\.)\s*\n?\s*(\d{4}\.[A-Za-z]\d{5})/gi,
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [SemHora]: "${p1}" + "${p2}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: sem hora'
+      },
+      // PP + 250914.1134.T38273 = PP250914.1134.T38273
+      {
+        regex: /(PP)\s*\n?\s*(\d{6}\.\d{4}\.[A-Za-z]\d{5})/gi,
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [SemPrefixo]: "${p1}" + "${p2}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: sem prefixo'
+      },
+      // Quebra em 3 partes: PP250914 + 1134 + T38273
+      {
+        regex: /(PP\d{6})\s*\n?\s*(\d{4})\s*\n?\s*([A-Za-z]\d{5})/gi,
+        reconstruct: (match, p1, p2, p3) => {
+          const resultado = `${p1}.${p2}.${p3}`;
+          console.log(`🔧 E-Mola [Tripla]: "${p1}" + "${p2}" + "${p3}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: tripla quebra'
+      },
+      // Quebra em 4 partes: PP + 250914 + 1134 + T38273
+      {
+        regex: /(PP)\s*\n?\s*(\d{6})\s*\n?\s*(\d{4})\s*\n?\s*([A-Za-z]\d{5})/gi,
+        reconstruct: (match, p1, p2, p3, p4) => {
+          const resultado = `${p1}${p2}.${p3}.${p4}`;
+          console.log(`🔧 E-Mola [Quádrupla]: "${p1}" + "${p2}" + "${p3}" + "${p4}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: quádrupla quebra'
+      },
+      
+      // === PADRÕES M-PESA (11 caracteres alfanuméricos misturados) ===
+      // CASO ESPECÍFICO: 10 chars + 1 char = 11 chars total (mais comum)
+      {
+        regex: /([A-Z0-9]{10})\s*\n?\s*([A-Z0-9]{1})(?=\s|$|\n|\.)/gi,
+        reconstruct: (match, p1, p2) => {
+          const total = p1 + p2;
+          console.log(`🔍 M-Pesa 10+1: "${p1}" + "${p2}" = "${total}" (${total.length} chars)`);
+          // Validar se totaliza exatamente 11 caracteres
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            console.log(`✅ M-Pesa 10+1 VALIDADO: ${total}`);
+            return total;
+          }
+          console.log(`❌ M-Pesa 10+1 INVÁLIDO: ${total} (${total.length} chars)`);
+          return match;
+        },
+        tipo: 'M-Pesa 10+1 chars'
+      },
+      // CASO ESPECÍFICO: 9 chars + 2 chars = 11 chars total
+      {
+        regex: /([A-Z0-9]{9})\s*\n?\s*([A-Z0-9]{2})(?=\s|$|\n|\.)/gi,
+        reconstruct: (match, p1, p2) => {
+          const total = p1 + p2;
+          console.log(`🔍 M-Pesa 9+2: "${p1}" + "${p2}" = "${total}" (${total.length} chars)`);
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            console.log(`✅ M-Pesa 9+2 VALIDADO: ${total}`);
+            return total;
+          }
+          console.log(`❌ M-Pesa 9+2 INVÁLIDO: ${total} (${total.length} chars)`);
+          return match;
+        },
+        tipo: 'M-Pesa 9+2 chars'
+      },
+      // Quebra simples: 8 chars + 3 chars = 11 chars total
+      {
+        regex: /([A-Z0-9]{6,8})\s*\n?\s*([A-Z0-9]{3,5})(?=\s|$|\n|\.)/gi,
+        reconstruct: (match, p1, p2) => {
+          const total = p1 + p2;
+          console.log(`🔍 M-Pesa 6-8+3-5: "${p1}" + "${p2}" = "${total}" (${total.length} chars)`);
+          // Validar se totaliza 11 caracteres
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            console.log(`✅ M-Pesa 11 chars VALIDADO: ${total}`);
+            return total;
+          }
+          console.log(`❌ M-Pesa 11 chars INVÁLIDO: ${total} (${total.length} chars)`);
+          return match;
+        },
+        tipo: 'M-Pesa 11 chars'
+      },
+      // Quebra 7+4: CHMOH4H + ICK2 = CHMOH4HICK2 (exemplo de 11 chars)
+      {
+        regex: /([A-Z0-9]{7})\s*\n?\s*([A-Z0-9]{4})(?=\s|$|\n|\.)/gi,
+        reconstruct: (match, p1, p2) => {
+          const total = p1 + p2;
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            return total;
+          }
+          return match;
+        },
+        tipo: 'M-Pesa 7+4'
+      },
+      // Quebra 5+6: CH4OH + 4HICK2 = CH4OH4HICK2
+      {
+        regex: /([A-Z0-9]{5})\s*\n?\s*([A-Z0-9]{6})(?=\s|$|\n|\.)/gi,
+        reconstruct: (match, p1, p2) => {
+          const total = p1 + p2;
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            return total;
+          }
+          return match;
+        },
+        tipo: 'M-Pesa 5+6'
+      },
+      // Quebra em 3 partes: CHM + OH4H + ICK2 = CHMOH4HICK2
+      {
+        regex: /([A-Z0-9]{3})\s*\n?\s*([A-Z0-9]{4})\s*\n?\s*([A-Z0-9]{4})(?=\s|$|\n|\.)/gi,
+        reconstruct: (match, p1, p2, p3) => {
+          const total = p1 + p2 + p3;
+          if (total.length === 11 && /^[A-Z0-9]+$/.test(total) && /[A-Z]/.test(total) && /[0-9]/.test(total)) {
+            return total;
+          }
+          return match;
+        },
+        tipo: 'M-Pesa tripla 3+4+4'
+      },
+      
+      // === PADRÕES GENÉRICOS MAIS ROBUSTOS ===
+      // Código longo + sufixo curto
+      {
+        regex: /([A-Z]{6,12})\s*\n?\s*([A-Z0-9]{1,4})(?=\s|$|\n)/gi,
+        reconstruct: (match, p1, p2) => {
+          const comprimentoTotal = p1.length + p2.length;
+          // M-Pesa típico: 8-15 caracteres
+          if (comprimentoTotal >= 8 && comprimentoTotal <= 15 && /^[A-Z]/.test(p1)) {
             return `${p1}${p2}`;
           }
           return match;
-        }
+        },
+        tipo: 'Genérico'
+      },
+      // Código médio + sufixo médio
+      {
+        regex: /([A-Z0-9]{4,8})\s*\n?\s*([A-Z0-9]{3,6})(?=\s|$|\n)/gi,
+        reconstruct: (match, p1, p2) => {
+          const comprimentoTotal = p1.length + p2.length;
+          // Verificar se não são números de telefone ou valores
+          if (comprimentoTotal >= 8 && comprimentoTotal <= 15 && 
+              !/^\d+$/.test(p1) && !/^\d+$/.test(p2) && 
+              /^[A-Z]/.test(p1)) {
+            return `${p1}${p2}`;
+          }
+          return match;
+        },
+        tipo: 'Genérico'
+      },
+      
+      // === LIMPEZA DE PREFIXOS ===
+      // Confirmado + CÓDIGO = CÓDIGO
+      {
+        regex: /(?:Confirmado|ID da transacao|Transacao|Ref\.?)\s*:?\s*\n?\s*([A-Z0-9]{8,15})/gi,
+        reconstruct: (match, p1) => p1,
+        tipo: 'Limpeza'
+      },
+      
+      // === PADRÕES DE MÚLTIPLAS QUEBRAS ===
+      // Código quebrado em 3 partes: ABC + DEF + 123
+      {
+        regex: /([A-Z]{3,6})\s*\n?\s*([A-Z]{2,4})\s*\n?\s*([A-Z0-9]{2,4})/gi,
+        reconstruct: (match, p1, p2, p3) => {
+          const comprimentoTotal = p1.length + p2.length + p3.length;
+          if (comprimentoTotal >= 8 && comprimentoTotal <= 15) {
+            return `${p1}${p2}${p3}`;
+          }
+          return match;
+        },
+        tipo: 'Tripla quebra'
       }
     ];
 
     let textoProcessado = texto;
     let alteracoes = 0;
 
+    // PRIMEIRA PASSADA: Aplicar todos os padrões
     for (const padrao of padroes) {
       const matches = [...textoProcessado.matchAll(padrao.regex)];
       for (const match of matches) {
         const original = match[0];
         
-        // Chamar função de reconstrução com todos os grupos capturados
         let reconstruido;
         if (match.length === 2) {
-          // Apenas um grupo (ex: "Confirmado CODIGO")
           reconstruido = padrao.reconstruct(match[0], match[1]);
-        } else {
-          // Dois grupos (ex: "CODIGO1 CODIGO2")
+        } else if (match.length === 3) {
           reconstruido = padrao.reconstruct(match[0], match[1], match[2]);
+        } else if (match.length === 4) {
+          reconstruido = padrao.reconstruct(match[0], match[1], match[2], match[3]);
         }
         
         if (reconstruido !== original && reconstruido !== match[0]) {
           textoProcessado = textoProcessado.replace(original, reconstruido);
-          console.log(`   🔧 Reconstruído: "${original.replace(/\n/g, '\\n')}" → "${reconstruido}"`);
+          console.log(`   🔧 [${padrao.tipo}] "${original.replace(/\n/g, '\\n')}" → "${reconstruido}"`);
           alteracoes++;
         }
       }
     }
 
+    // SEGUNDA PASSADA: Detectar referências órfãs e tentar conectar
+    const referenciasOrfas = this.detectarReferenciasOrfas(textoProcessado);
+    if (referenciasOrfas.length > 0) {
+      console.log(`🔍 Detectadas ${referenciasOrfas.length} possíveis referências órfãs`);
+      const textoComOrfas = this.conectarReferenciasOrfas(textoProcessado, referenciasOrfas);
+      if (textoComOrfas !== textoProcessado) {
+        textoProcessado = textoComOrfas;
+        alteracoes++;
+        console.log(`   🔗 Referências órfãs conectadas`);
+      }
+    }
+
     if (alteracoes > 0) {
       console.log(`✅ ${alteracoes} referência(s) reconstruída(s)`);
+      console.log(`📝 Texto processado: ${textoProcessado.substring(0, 200)}...`);
+      
+      // MÉTRICAS: Referências reconstruídas
+      this.imagemStats.referencias_reconstruidas += alteracoes;
     } else {
       console.log(`ℹ️ Nenhuma referência quebrada detectada`);
     }
 
+    return textoProcessado;
+  }
+
+  // === DETECTAR REFERÊNCIAS ÓRFÃS ===
+  detectarReferenciasOrfas(texto) {
+    const linhas = texto.split('\n');
+    const orfas = [];
+    
+    for (let i = 0; i < linhas.length - 1; i++) {
+      const linhaAtual = linhas[i].trim();
+      const proximaLinha = linhas[i + 1].trim();
+      
+      // Detectar possível início de referência seguido de continuação
+      if (/^[A-Z]{3,8}$/.test(linhaAtual) && /^[A-Z0-9]{2,6}$/.test(proximaLinha)) {
+        orfas.push({
+          linha1: linhaAtual,
+          linha2: proximaLinha,
+          posicao: i
+        });
+      }
+    }
+    
+    return orfas;
+  }
+
+  // === CONECTAR REFERÊNCIAS ÓRFÃS ===
+  conectarReferenciasOrfas(texto, orfas) {
+    let textoProcessado = texto;
+    
+    for (const orfa of orfas) {
+      const padrao = new RegExp(`${orfa.linha1}\\s*\\n\\s*${orfa.linha2}`, 'g');
+      const reconstruida = `${orfa.linha1}${orfa.linha2}`;
+      
+      // Verificar se o comprimento faz sentido para uma referência
+      if (reconstruida.length >= 8 && reconstruida.length <= 15) {
+        textoProcessado = textoProcessado.replace(padrao, reconstruida);
+        console.log(`   🔗 Órfã conectada: "${orfa.linha1}\\n${orfa.linha2}" → "${reconstruida}"`);
+      }
+    }
+    
     return textoProcessado;
   }
 
@@ -206,11 +489,35 @@ class WhatsAppAIAtacado {
       // O primeiro item contém todo o texto detectado
       let textoCompleto = result.textAnnotations[0].description;
       console.log(`✅ Google Vision extraiu ${textoCompleto.length} caracteres`);
-      console.log(`📝 Texto extraído: ${textoCompleto.length} caracteres`);
+      console.log(`📝 Texto bruto extraído:\n"${textoCompleto}"`);
+
+      // === VALIDAR COMPLETUDE ANTES DA RECONSTRUÇÃO ===
+      console.log(`🔍 Verificando completude das referências...`);
+      const completude = this.validarCompletude(textoCompleto);
+      
+      if (!completude.completo && completude.fragmentosSuspeitos.length > 0) {
+        console.log(`⚠️ REFERÊNCIAS POSSIVELMENTE INCOMPLETAS DETECTADAS! Iniciando reconstrução forçada...`);
+      } else if (completude.completo) {
+        console.log(`✅ Referências aparentemente completas encontradas (${completude.referenciasCompletas})`);
+      }
 
       // PRÉ-PROCESSAMENTO: Tentar reconstruir referências quebradas
+      console.log(`🔧 Iniciando reconstrução de referências quebradas...`);
       textoCompleto = this.reconstruirReferenciasQuebradas(textoCompleto);
-      console.log(`🔧 Texto processado`);
+      console.log(`✅ Reconstrução concluída`);
+      
+      // === VALIDAR COMPLETUDE APÓS A RECONSTRUÇÃO ===
+      console.log(`🔍 Verificando completude após reconstrução...`);
+      const completudeFinal = this.validarCompletude(textoCompleto);
+      
+      if (completudeFinal.completo) {
+        console.log(`✅ SUCESSO: ${completudeFinal.referenciasCompletas} referência(s) completa(s) após reconstrução`);
+      } else {
+        console.log(`⚠️ ATENÇÃO: Ainda há fragmentos suspeitos após reconstrução`);
+        if (completudeFinal.fragmentosSuspeitos.length > 0) {
+          console.log(`📋 Fragmentos ainda suspeitos: ${completudeFinal.fragmentosSuspeitos.map(f => f.fragmento).join(', ')}`);
+        }
+      }
 
       return textoCompleto;
 
@@ -233,16 +540,42 @@ class WhatsAppAIAtacado {
       return cached.resultado;
     }
     
-    // OTIMIZAÇÃO: Prompt específico para extrair referência correta
-    const prompt = `Extrair dados de comprovante M-Pesa/E-Mola:
+    // PROMPT MELHORADO: Com especificações exatas dos padrões
+    const prompt = `Analisa este texto extraído de comprovante M-Pesa/E-Mola de Moçambique:
+
 "${textoExtraido}"
 
-IMPORTANTE: 
-- Referência = código alfanumérico (ex: CIC4HCIVDEY, PP250911.2253.L16474)
-- Valor = quantia em MT transferida
-- NÃO usar números de telefone como referência
+PADRÕES OFICIAIS DE REFERÊNCIAS:
 
-JSON: {"encontrado":true,"referencia":"CIC4HCIVDEY","valor":125} ou {"encontrado":false}`;
+📱 **E-MOLA**: PP + [AAMMDD] + "." + [HHMM] + "." + [Letra + 5 números]
+   • Exemplo: PP250914.1134.T38273
+   • PP = prefixo fixo
+   • 250914 = data (14/09/2025)
+   • 1134 = hora (11:34)
+   • T38273 = código (letra + 5 números)
+
+📱 **M-PESA**: Exatamente 11 caracteres alfanuméricos misturados
+   • Exemplo: CHMOH4HICK2
+   • Contém letras e números misturados
+   • Total: 11 caracteres
+
+INSTRUÇÕES CRÍTICAS:
+1. A referência pode estar QUEBRADA em múltiplas linhas
+2. Reconstrói juntando as partes quebradas
+3. NÃO usar números de telefone (258..., 84..., 85...)
+4. VALOR em MT (Meticais): "125.00MT", "125MT", etc.
+
+EXEMPLOS DE RECONSTRUÇÃO:
+• "PP250914.1134.T" + "38273" = "PP250914.1134.T38273"
+• "CHMOH4H" + "ICK2" = "CHMOH4HICK2"
+• "PP250914" + "1134" + "T38273" = "PP250914.1134.T38273"
+
+RESPOSTA JSON:
+{"encontrado": true, "referencia": "PP250914.1134.T38273", "valor": "125.00"}
+ou 
+{"encontrado": false}
+
+Analisa TODO o texto e reconstrói a referência completa:`;
 
     try {
       this.tokenStats.calls++;
@@ -258,6 +591,33 @@ JSON: {"encontrado":true,"referencia":"CIC4HCIVDEY","valor":125} ou {"encontrado
       const resultado = this.extrairJSON(resposta.choices[0].message.content);
       console.log(`✅ JSON extraído (GPT-4):`, resultado);
       
+      // VALIDAÇÃO RIGOROSA: Verificar se a referência extraída é válida
+      if (resultado.encontrado) {
+        const validacao = this.validarReferenciaMozambique(resultado.referencia, resultado.valor);
+        if (!validacao.valida) {
+          console.log(`❌ Validação falhou: ${validacao.motivo}`);
+          console.log(`📝 Referência rejeitada: "${resultado.referencia}"`);
+          
+          // MÉTRICAS: Referência rejeitada
+          this.imagemStats.referencias_rejeitadas++;
+          
+          // Tentar extrair referência alternativa do texto original
+          const referenciaAlternativa = this.buscarReferenciaAlternativa(textoExtraido);
+          if (referenciaAlternativa) {
+            console.log(`🔄 Usando referência alternativa: "${referenciaAlternativa}"`);
+            resultado.referencia = referenciaAlternativa;
+            this.imagemStats.referencias_validadas++;
+          } else {
+            console.log(`❌ Nenhuma referência válida encontrada`);
+            resultado.encontrado = false;
+          }
+        } else {
+          console.log(`✅ Referência validada: ${resultado.referencia} (${validacao.tipo})`);
+          // MÉTRICAS: Referência validada
+          this.imagemStats.referencias_validadas++;
+        }
+      }
+      
       // OTIMIZAÇÃO: Salvar no cache
       this.cacheResultados.set(cacheKey, {
         resultado: resultado,
@@ -272,39 +632,183 @@ JSON: {"encontrado":true,"referencia":"CIC4HCIVDEY","valor":125} ou {"encontrado
     }
   }
 
-  // === PROCESSAR IMAGEM COM MÉTODO HÍBRIDO (NOVA FUNÇÃO PRINCIPAL) ===
+  // === GERAR HASH ÚNICO DA IMAGEM ===
+  gerarHashImagem(imagemBase64) {
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256');
+    hash.update(imagemBase64);
+    const hashCompleto = hash.digest('hex');
+    const hashCurto = hashCompleto.substring(0, 16); // 16 caracteres únicos
+    return {
+      completo: hashCompleto,
+      curto: hashCurto,
+      timestamp: Date.now()
+    };
+  }
+
+  // === VERIFICAR SE IMAGEM JÁ FOI PROCESSADA ===
+  verificarImagemDuplicada(hashImagem) {
+    // Verificar se essa imagem já foi processada recentemente (últimas 2 horas)
+    const timeout = 2 * 60 * 60 * 1000; // 2 horas
+    const agora = Date.now();
+    
+    if (!this.imagensProcessadas) {
+      this.imagensProcessadas = new Map();
+    }
+    
+    // Limpar imagens antigas
+    for (const [hash, dados] of this.imagensProcessadas.entries()) {
+      if (agora - dados.timestamp > timeout) {
+        this.imagensProcessadas.delete(hash);
+      }
+    }
+    
+    // Verificar se esta imagem específica já foi processada
+    const imagemExistente = this.imagensProcessadas.get(hashImagem.curto);
+    if (imagemExistente) {
+      console.log(`⚠️ DUPLICATA DETECTADA: Imagem já processada há ${Math.floor((agora - imagemExistente.timestamp) / 60000)} minutos`);
+      console.log(`🔍 Hash: ${hashImagem.curto}`);
+      console.log(`📋 Resultado anterior: ${imagemExistente.referencia} - ${imagemExistente.valor}MT`);
+      return {
+        isDuplicata: true,
+        dadosAnteriores: imagemExistente
+      };
+    }
+    
+    return { isDuplicata: false };
+  }
+
+  // === REGISTRAR IMAGEM PROCESSADA ===
+  registrarImagemProcessada(hashImagem, resultado) {
+    if (!this.imagensProcessadas) {
+      this.imagensProcessadas = new Map();
+    }
+    
+    this.imagensProcessadas.set(hashImagem.curto, {
+      timestamp: hashImagem.timestamp,
+      hash: hashImagem.curto,
+      referencia: resultado.referencia || 'N/A',
+      valor: resultado.valor || 'N/A',
+      remetente: resultado.remetente || 'N/A',
+      sucesso: resultado.sucesso || false
+    });
+    
+    console.log(`📝 IMAGEM REGISTRADA: ${hashImagem.curto} - ${resultado.referencia || 'N/A'}`);
+  }
+
+  // === PROCESSAR IMAGEM COM MÉTODO HÍBRIDO ROBUSTO (VERSÃO MELHORADA + ANTI-DUPLICAÇÃO) ===
   async processarImagemHibrida(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
-    console.log(`🔄 Método híbrido: Google Vision + GPT-4 para ${remetente}`);
+    console.log(`🔄 MÉTODO HÍBRIDO ROBUSTO: Google Vision + GPT-4 para ${remetente}`);
+    
+    // === SISTEMA ANTI-DUPLICAÇÃO ===
+    const hashImagem = this.gerarHashImagem(imagemBase64);
+    console.log(`🔍 Hash da imagem: ${hashImagem.curto}`);
+    
+    const verificacaoDuplicata = this.verificarImagemDuplicada(hashImagem);
+    if (verificacaoDuplicata.isDuplicata) {
+      const dadosAnteriores = verificacaoDuplicata.dadosAnteriores;
+      return {
+        sucesso: false,
+        tipo: 'imagem_duplicada',
+        hashImagem: hashImagem.curto,
+        dadosAnteriores: dadosAnteriores,
+        mensagem: `⚠️ *IMAGEM DUPLICADA*\n\n🔍 Esta imagem já foi processada anteriormente.\n\n📋 *Dados do processamento anterior:*\n• Referência: ${dadosAnteriores.referencia}\n• Valor: ${dadosAnteriores.valor}MT\n• Processado há: ${Math.floor((Date.now() - dadosAnteriores.timestamp) / 60000)} minutos\n\n💡 Se precisa reprocessar, envie uma nova captura de tela.`
+      };
+    }
+    
+    // MÉTRICAS: Incrementar contador total
+    this.imagemStats.total++;
     
     try {
-      // ETAPA 1: Tentar extrair texto com Google Vision
+      // ETAPA 1: Extrair texto com Google Vision (com logs detalhados)
+      console.log(`📷 Etapa 1/3: Extraindo texto da imagem...`);
       const textoExtraido = await this.extrairTextoGoogleVision(imagemBase64);
+      console.log(`✅ Google Vision extraiu ${textoExtraido.length} caracteres`);
       
-      // ETAPA 2: Interpretar texto com GPT-4 (mais barato que Vision)
+      // ETAPA 2: Interpretar texto com GPT-4 robusto
+      console.log(`🧠 Etapa 2/3: Interpretando texto com GPT-4...`);
       const resultadoGPT = await this.interpretarComprovanteComGPT(textoExtraido);
       
       if (resultadoGPT.encontrado) {
-        console.log(`✅ Método híbrido funcionou: ${resultadoGPT.referencia} - ${resultadoGPT.valor}MT`);
+        console.log(`✅ SUCESSO HÍBRIDO: ${resultadoGPT.referencia} - ${resultadoGPT.valor}MT`);
+        console.log(`📊 Etapa 3/3: Processando comprovante extraído...`);
         
+        // MÉTRICAS: Sucesso com método híbrido direto
+        this.imagemStats.sucessos++;
+        this.imagemStats.metodos.hibrido_direto++;
+        
+        // VALIDAÇÃO ROBUSTA DO VALOR EXTRAÍDO
+        const valorLimpo = this.limparValor(resultadoGPT.valor);
+        if (!valorLimpo || valorLimpo === '0' || valorLimpo === 'undefined' || valorLimpo === 'null') {
+          console.error(`❌ ATACADO: Valor inválido extraído via GPT: "${resultadoGPT.valor}" → "${valorLimpo}"`);
+          throw new Error(`Valor inválido: ${resultadoGPT.valor}`);
+        }
+
         const comprovante = {
           referencia: resultadoGPT.referencia,
-          valor: this.limparValor(resultadoGPT.valor),
-          fonte: 'google_vision_gpt',
-          metodo: 'hibrido'
+          valor: valorLimpo,
+          fonte: 'google_vision_gpt_v2',
+          metodo: 'hibrido_robusto',
+          textoOriginal: textoExtraido.substring(0, 100) // Para debug
         };
         
-        return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem);
+        return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem, hashImagem);
       } else {
-        console.log(`❌ Método híbrido falhou - não encontrou dados`);
-        throw new Error('Google Vision + GPT-4 não conseguiu extrair dados');
+        console.log(`❌ GPT-4 não encontrou dados no texto extraído`);
+        console.log(`📝 Texto que foi analisado: "${textoExtraido.substring(0, 300)}..."`);
+        
+        // ETAPA 3: Tentar múltiplas abordagens de reconstrução
+        console.log(`🔄 Etapa 3/3: Tentando abordagens alternativas...`);
+        const resultadoAlternativo = await this.tentarAbordagensAlternativas(textoExtraido);
+        
+        if (resultadoAlternativo.encontrado) {
+          console.log(`✅ SUCESSO COM ABORDAGEM ALTERNATIVA: ${resultadoAlternativo.referencia}`);
+          
+          // MÉTRICAS: Sucesso com abordagem alternativa
+          this.imagemStats.sucessos++;
+          this.imagemStats.metodos.abordagem_alternativa++;
+          
+          // VALIDAÇÃO ROBUSTA DO VALOR ALTERNATIVO
+          const valorLimpoAlt = this.limparValor(resultadoAlternativo.valor);
+          if (!valorLimpoAlt || valorLimpoAlt === '0' || valorLimpoAlt === 'undefined' || valorLimpoAlt === 'null') {
+            console.error(`❌ ATACADO: Valor inválido extraído via abordagem alternativa: "${resultadoAlternativo.valor}" → "${valorLimpoAlt}"`);
+            throw new Error(`Valor alternativo inválido: ${resultadoAlternativo.valor}`);
+          }
+
+          const comprovante = {
+            referencia: resultadoAlternativo.referencia,
+            valor: valorLimpoAlt,
+            fonte: 'google_vision_gpt_alternativo',
+            metodo: 'hibrido_alternativo'
+          };
+          
+          return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem, hashImagem);
+        }
+        
+        throw new Error('Nenhuma abordagem conseguiu extrair dados da imagem');
       }
       
     } catch (error) {
-      console.error('❌ Erro no método híbrido:', error.message);
+      console.error(`❌ MÉTODO HÍBRIDO ROBUSTO FALHOU: ${error.message}`);
       console.log('🔄 Fallback: Tentando com GPT-4 Vision diretamente...');
       
-      // FALLBACK: Usar GPT-4 Vision diretamente (método original)
-      return await this.processarImagemGPT4Vision(imagemBase64, remetente, timestamp, configGrupo, legendaImagem);
+      // MÉTRICAS: Tentar fallback
+      this.imagemStats.metodos.gpt4_vision_fallback++;
+      
+      try {
+        // FALLBACK: Usar GPT-4 Vision diretamente (método original)
+        const resultado = await this.processarImagemGPT4Vision(imagemBase64, remetente, timestamp, configGrupo, legendaImagem);
+        
+        // Se chegou aqui, o fallback funcionou
+        this.imagemStats.sucessos++;
+        return resultado;
+        
+      } catch (fallbackError) {
+        // MÉTRICAS: Falha completa
+        this.imagemStats.falhas++;
+        console.error(`❌ Fallback também falhou: ${fallbackError.message}`);
+        throw fallbackError;
+      }
     }
   }
 
@@ -363,9 +867,16 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       console.log(`   ✅ ATACADO: JSON extraído da imagem:`, resultado);
       
       if (resultado.encontrado) {
+        // VALIDAÇÃO ROBUSTA DO VALOR FALLBACK
+        const valorLimpoFallback = this.limparValor(resultado.valor);
+        if (!valorLimpoFallback || valorLimpoFallback === '0' || valorLimpoFallback === 'undefined' || valorLimpoFallback === 'null') {
+          console.error(`❌ ATACADO: Valor inválido extraído via fallback: "${resultado.valor}" → "${valorLimpoFallback}"`);
+          return null;
+        }
+
         const comprovante = {
           referencia: resultado.referencia,
-          valor: this.limparValor(resultado.valor),
+          valor: valorLimpoFallback,
           fonte: 'gpt4_vision',
           metodo: 'fallback'
         };
@@ -407,8 +918,37 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
   }
 
   // === PROCESSAR COMPROVANTE EXTRAÍDO (FUNÇÃO AUXILIAR) ===
-  async processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo = null, legendaImagem = null) {
+  async processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo = null, legendaImagem = null, hashImagem = null) {
     console.log(`   ✅ ATACADO: Dados extraídos da imagem: ${comprovante.referencia} - ${comprovante.valor}MT (${comprovante.metodo})`);
+    
+    // ====== VALIDAÇÃO DE CONSISTÊNCIA ENTRE DADOS ======
+    const textoCompleto = (comprovante.textoOriginal || '') + ' ' + (legendaImagem || '');
+    const validacaoConsistencia = this.validarConsistenciaComprovante(
+      comprovante.referencia, 
+      comprovante.valor, 
+      textoCompleto
+    );
+    
+    if (!validacaoConsistencia.valida) {
+      console.log(`❌ ATACADO: FALHA NA VALIDAÇÃO DE CONSISTÊNCIA - ${validacaoConsistencia.motivo}`);
+      if (validacaoConsistencia.inconsistencias) {
+        validacaoConsistencia.inconsistencias.forEach(inc => console.log(`   ⚠️ ${inc}`));
+      }
+      
+      return {
+        sucesso: false,
+        tipo: 'dados_inconsistentes',
+        inconsistencias: validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo],
+        referencia: comprovante.referencia,
+        valor: comprovante.valor,
+        mensagem: `❌ *DADOS INCONSISTENTES DETECTADOS!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n⚠️ *PROBLEMAS:*\n${(validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo]).map(inc => `• ${inc}`).join('\n')}\n\n💡 Verifique o comprovante e tente novamente.`
+      };
+    }
+    
+    // REGISTRAR REFERÊNCIA COMO PROCESSADA
+    if (this.referencias_processadas) {
+      this.referencias_processadas.set(comprovante.referencia, Date.now());
+    }
     
     const temLegendaValida = legendaImagem && 
                             typeof legendaImagem === 'string' && 
@@ -430,29 +970,61 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
           const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
           
           if (megasCalculados) {
-            // NOVA LÓGICA: SEMPRE aplicar subdivisão se necessário (>10GB)
-            const pedidosFinais = this.aplicarSubdivisaoSeNecessario(
-              comprovante.referencia, 
-              megasCalculados.quantidade, 
-              numeros[0]
-            );
-            
-            console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (IMAGEM + LEGENDA): ${pedidosFinais.length} bloco(s)`);
-            pedidosFinais.forEach((pedido, i) => {
-              console.log(`      📦 Bloco ${i + 1}: ${pedido} (${Math.floor(pedido.split('|')[1]/1024)}GB)`);
-            });
-            
-            return { 
-              sucesso: true, 
-              dadosCompletos: pedidosFinais.length === 1 ? pedidosFinais[0] : pedidosFinais,
-              pedidosSubdivididos: pedidosFinais,
-              tipo: 'numero_processado',
-              numero: numeros[0],
-              megas: megasCalculados.megas,
-              subdividido: pedidosFinais.length > 1,
-              fonte: 'imagem_com_legenda',
-              metodo: comprovante.metodo
-            };
+            // VERIFICAR SE É MEGAS (APENAS MEGAS PODE SER SUBDIVIDIDO)
+            if (megasCalculados.tipo === 'megas') {
+              // NOVA LÓGICA: SEMPRE aplicar subdivisão se necessário (>10GB)
+              const pedidosFinais = this.aplicarSubdivisaoSeNecessario(
+                comprovante.referencia,
+                megasCalculados.megas,
+                numeros[0]
+              );
+
+              console.log(`   ✅ ATACADO: PEDIDO MEGAS COMPLETO (IMAGEM + LEGENDA): ${pedidosFinais.length} bloco(s)`);
+              pedidosFinais.forEach((pedido, i) => {
+                console.log(`      📦 Bloco ${i + 1}: ${pedido} (${Math.floor(pedido.split('|')[1]/1024)}GB)`);
+              });
+
+              return {
+                sucesso: true,
+                dadosCompletos: pedidosFinais.length === 1 ? pedidosFinais[0] : pedidosFinais,
+                pedidosSubdivididos: pedidosFinais,
+                tipo: 'numero_processado',
+                numero: numeros[0],
+                megas: megasCalculados.megas,
+                subdividido: pedidosFinais.length > 1,
+                fonte: 'imagem_com_legenda',
+                metodo: comprovante.metodo,
+                tipoProduto: 'megas'
+              };
+            } else {
+              // É SALDO - NÃO PRECISA SUBDIVISÃO
+              const numeroLimpo = this.limparNumero(numeros[0]);
+              const resultado = `${comprovante.referencia}|${megasCalculados.saldo}|${numeroLimpo}`;
+
+              console.log(`   ✅ ATACADO: PEDIDO SALDO COMPLETO (IMAGEM + LEGENDA): ${resultado}`);
+
+              return {
+                sucesso: true,
+                dadosCompletos: resultado,
+                tipo: 'saldo_processado',
+                numero: numeros[0],
+                saldo: megasCalculados.saldo,
+                subdividido: false,
+                fonte: 'imagem_com_legenda',
+                metodo: comprovante.metodo,
+                tipoProduto: 'saldo'
+              };
+            }
+
+            // REGISTRAR IMAGEM COMO PROCESSADA COM SUCESSO
+            if (hashImagem) {
+              this.registrarImagemProcessada(hashImagem, {
+                referencia: comprovante.referencia,
+                valor: comprovante.valor,
+                remetente: remetente,
+                sucesso: true
+              });
+            }
           } else {
             console.log(`   ❌ ATACADO: Valor ${comprovante.valor}MT não encontrado na tabela`);
             return {
@@ -483,14 +1055,27 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     if (megasCalculados) {
       await this.processarComprovante(comprovante, remetente, timestamp);
       
+      // REGISTRAR IMAGEM COMO PROCESSADA COM SUCESSO
+      if (hashImagem) {
+        this.registrarImagemProcessada(hashImagem, {
+          referencia: comprovante.referencia,
+          valor: comprovante.valor,
+          remetente: remetente,
+          sucesso: true
+        });
+      }
+      
       return { 
         sucesso: true, 
         tipo: 'comprovante_imagem_recebido',
         referencia: comprovante.referencia,
         valor: comprovante.valor,
-        megas: megasCalculados.megas,
         metodo: comprovante.metodo,
-        mensagem: `Comprovante da imagem processado! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
+        tipoProduto: megasCalculados.tipo,
+        ...(megasCalculados.tipo === 'megas' ? { megas: megasCalculados.megas } : { saldo: megasCalculados.saldo }),
+        mensagem: megasCalculados.tipo === 'megas'
+          ? `Comprovante da imagem processado! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}MB. Agora envie UM número que vai receber os megas.`
+          : `Comprovante da imagem processado! Valor: ${comprovante.valor}MT = ${megasCalculados.saldo}MT saldo. Agora envie UM número que vai receber o saldo.`
       };
     } else {
       console.log(`   ❌ ATACADO: Valor ${comprovante.valor}MT não encontrado na tabela`);
@@ -652,19 +1237,57 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     return precosUnicos;
   }
 
-  // === CALCULAR MEGAS POR VALOR (MELHORADO COM SUPORTE A PREÇOS DIRETOS) ===
+  // === CALCULAR MEGAS OU SALDO POR VALOR (SISTEMA DUAL) ===
   calcularMegasPorValor(valorPago, configGrupo) {
-    console.log(`   🧮 ATACADO: Calculando megas para valor ${valorPago}MT...`);
-    
+    console.log(`   🧮 ATACADO: Calculando produto para valor ${valorPago}MT (SISTEMA DUAL: MEGAS → SALDO)...`);
+    console.log(`   🔍 DEBUG: Tipo de valorPago: ${typeof valorPago}, Valor: "${valorPago}"`);
+
     if (!configGrupo) {
       console.log(`   ❌ ATACADO: Configuração do grupo não disponível`);
       return null;
     }
-    
-    // CORREÇÃO: Se configGrupo tem uma estrutura de precos (do bot divisão), usar diretamente
+
+    // 1. PRIMEIRO: Tentar MEGAS
     if (configGrupo.precos) {
-      console.log(`   🔧 ATACADO: Usando configuração de preços diretos do bot divisão`);
-      return this.calcularMegasPorValorDireto(valorPago, configGrupo.precos);
+      console.log(`   🔧 ATACADO: Verificando tabela de MEGAS primeiro...`);
+      const resultadoMegas = this.calcularMegasPorValorDireto(valorPago, configGrupo.precos);
+      if (resultadoMegas) {
+        console.log(`   ✅ ATACADO: VALOR ENCONTRADO NA TABELA DE MEGAS!`);
+        return {
+          ...resultadoMegas,
+          tipo: 'megas'
+        };
+      }
+      console.log(`   ❌ ATACADO: Valor ${valorPago}MT não existe na tabela de megas`);
+    }
+
+    // 2. SEGUNDO: Tentar SALDO
+    if (configGrupo.precosSaldo) {
+      console.log(`   🔧 ATACADO: Verificando tabela de SALDO...`);
+      const resultadoSaldo = this.calcularSaldoPorValor(valorPago, configGrupo.precosSaldo);
+      if (resultadoSaldo) {
+        console.log(`   ✅ ATACADO: VALOR ENCONTRADO NA TABELA DE SALDO!`);
+        return {
+          ...resultadoSaldo,
+          tipo: 'saldo'
+        };
+      }
+      console.log(`   ❌ ATACADO: Valor ${valorPago}MT não existe na tabela de saldo`);
+    } else {
+      console.log(`   ⚠️ ATACADO: Grupo não tem tabela de saldo configurada`);
+    }
+
+    // 3. FALLBACK: Método original (se existe)
+    if (configGrupo.precos) {
+      console.log(`   🔧 ATACADO: Usando configuração de preços diretos do bot divisão (fallback)`);
+      console.log(`   🔍 DEBUG: Passando valorPago: "${valorPago}" para calcularMegasPorValorDireto`);
+      const resultado = this.calcularMegasPorValorDireto(valorPago, configGrupo.precos);
+      if (resultado) {
+        return {
+          ...resultado,
+          tipo: 'megas'
+        };
+      }
     }
     
     // CASO ORIGINAL: Se tem tabela como texto, usar método original
@@ -682,9 +1305,10 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     
     const valorNumerico = parseFloat(valorPago);
     
+    // VALIDAÇÃO RIGOROSA: APENAS PREÇOS EXATOS - SEM TOLERÂNCIA
     const precoExato = precos.find(p => p.preco === valorNumerico);
     if (precoExato) {
-      console.log(`   ✅ ATACADO: Preço exato encontrado: ${precoExato.descricao}`);
+      console.log(`   ✅ ATACADO: Preço EXATO encontrado na tabela: ${precoExato.descricao} = ${valorNumerico}MT`);
       return {
         megas: precoExato.descricao,
         quantidade: precoExato.quantidade,
@@ -693,40 +1317,92 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       };
     }
     
-    const tolerancia = 5;
-    const precoProximo = precos.find(p => 
-      Math.abs(p.preco - valorNumerico) <= tolerancia
-    );
-    
-    if (precoProximo) {
-      console.log(`   ⚡ ATACADO: Preço aproximado encontrado: ${precoProximo.descricao}`);
-      return {
-        megas: precoProximo.descricao,
-        quantidade: precoProximo.quantidade,
-        tipo: precoProximo.tipo,
-        preco: precoProximo.preco,
-        aproximado: true,
-        diferenca: Math.abs(precoProximo.preco - valorNumerico)
-      };
-    }
-    
-    console.log(`   ❌ ATACADO: Nenhum pacote encontrado para valor ${valorPago}MT`);
+    // RIGOROSO: Se não encontrar valor exato, REJEITAR completamente
+    console.log(`   ❌ ATACADO: Valor ${valorPago}MT NÃO ENCONTRADO na tabela - REJEITADO (validação rigorosa)`);
+    console.log(`   📋 ATACADO: Valores válidos disponíveis: ${precos.map(p => `${p.preco}MT`).join(', ')}`);
     return null;
   }
 
-  // === NOVO: CALCULAR MEGAS COM PREÇOS DIRETOS ===
-  calcularMegasPorValorDireto(valorPago, precos) {
-    console.log(`   🧮 ATACADO: Calculando megas com preços diretos para valor ${valorPago}MT...`);
-    console.log(`   📋 ATACADO: Preços disponíveis:`, Object.entries(precos).map(([megas, preco]) => `${Math.floor(megas/1024)}GB=${preco}MT`).join(', '));
-    
+  // === CALCULAR SALDO POR VALOR (VALIDAÇÃO RIGOROSA - SEM TOLERÂNCIA) ===
+  calcularSaldoPorValor(valorPago, precosSaldo) {
+    console.log(`   🧮 ATACADO: Calculando saldo com preços diretos para valor ${valorPago}MT (VALIDAÇÃO RIGOROSA)...`);
+    console.log(`   🔍 DEBUG SALDO: Tipo de valorPago: ${typeof valorPago}, Valor recebido: "${valorPago}"`);
+    console.log(`   📋 ATACADO: Preços de saldo disponíveis:`, Object.entries(precosSaldo).map(([saldo, preco]) => `${saldo}MT=${preco}MT`).join(', '));
+
     const valorNumerico = parseFloat(valorPago);
+    console.log(`   🔍 DEBUG SALDO: valorNumerico após parseFloat: ${valorNumerico}`);
+
+    if (isNaN(valorNumerico) || valorNumerico <= 0) {
+      console.log(`   ❌ ATACADO: Valor inválido para cálculo de saldo: ${valorPago}`);
+      return null;
+    }
+
+    // Buscar valor EXATO na tabela de saldo
+    for (const [saldo, preco] of Object.entries(precosSaldo)) {
+      if (preco === valorNumerico) {
+        console.log(`   ✅ ATACADO: Preço EXATO encontrado na tabela de saldo: ${valorNumerico}MT = ${saldo}MT saldo`);
+        return {
+          saldo: parseInt(saldo),
+          valorPago: valorNumerico,
+          found: true
+        };
+      }
+    }
+
+    console.log(`   ❌ ATACADO: Valor ${valorNumerico}MT não encontrado na tabela de saldo`);
+    console.log(`   📋 ATACADO: Valores válidos:`, Object.values(precosSaldo).join('MT, ') + 'MT');
+    return null;
+  }
+
+  // === FUNÇÃO AUXILIAR PARA PROCESSAR RESULTADOS DUAL (MEGAS OU SALDO) ===
+  processarResultadoDual(produto, referencia, numero) {
+    if (!produto) return null;
+
+    const numeroLimpo = this.limparNumero(numero);
+
+    if (produto.tipo === 'saldo') {
+      const resultado = `${referencia}|${produto.saldo}|${numeroLimpo}`;
+      console.log(`   ✅ ATACADO: PEDIDO SALDO COMPLETO: ${resultado}`);
+      return {
+        sucesso: true,
+        dadosCompletos: resultado,
+        tipo: 'saldo_processado',
+        numero: numeroLimpo,
+        saldo: produto.saldo,
+        valorPago: produto.valorPago,
+        tipoProduto: 'saldo'
+      };
+    } else {
+      // Manter formato original para megas
+      const resultado = `${referencia}|${produto.megas}|${numeroLimpo}`;
+      console.log(`   ✅ ATACADO: PEDIDO MEGAS COMPLETO: ${resultado}`);
+      return {
+        sucesso: true,
+        dadosCompletos: resultado,
+        tipo: 'numero_processado',
+        numero: numeroLimpo,
+        megas: produto.megas,
+        valorPago: produto.valorPago,
+        tipoProduto: 'megas'
+      };
+    }
+  }
+
+  // === CALCULAR MEGAS COM PREÇOS DIRETOS (VALIDAÇÃO RIGOROSA - SEM TOLERÂNCIA) ===
+  calcularMegasPorValorDireto(valorPago, precos) {
+    console.log(`   🧮 ATACADO: Calculando megas com preços diretos para valor ${valorPago}MT (VALIDAÇÃO RIGOROSA)...`);
+    console.log(`   🔍 DEBUG DIRETO: Tipo de valorPago: ${typeof valorPago}, Valor recebido: "${valorPago}"`);
+    console.log(`   📋 ATACADO: Preços disponíveis:`, Object.entries(precos).map(([megas, preco]) => `${Math.floor(megas/1024)}GB=${preco}MT`).join(', '));
+
+    const valorNumerico = parseFloat(valorPago);
+    console.log(`   🔍 DEBUG DIRETO: valorNumerico após parseFloat: ${valorNumerico}`);
     
-    // Procurar preço exato
+    // VALIDAÇÃO RIGOROSA: APENAS PREÇOS EXATOS - SEM TOLERÂNCIA
     for (const [megas, preco] of Object.entries(precos)) {
       if (parseInt(preco) === valorNumerico) {
         const gb = Math.floor(parseInt(megas) / 1024);
         const megasTexto = `${gb}GB`;
-        console.log(`   ✅ ATACADO: Preço exato encontrado: ${valorNumerico}MT = ${megasTexto}`);
+        console.log(`   ✅ ATACADO: Preço EXATO encontrado na tabela: ${valorNumerico}MT = ${megasTexto}`);
         return {
           megas: megasTexto,
           quantidade: parseInt(megas),
@@ -736,27 +1412,64 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       }
     }
     
-    // Procurar preço aproximado (tolerância de 5MT)
-    const tolerancia = 5;
-    for (const [megas, preco] of Object.entries(precos)) {
-      const diferenca = Math.abs(parseInt(preco) - valorNumerico);
-      if (diferenca <= tolerancia) {
-        const gb = Math.floor(parseInt(megas) / 1024);
-        const megasTexto = `${gb}GB`;
-        console.log(`   ⚡ ATACADO: Preço aproximado encontrado: ${valorNumerico}MT ≈ ${megasTexto} (diferença: ${diferenca}MT)`);
-        return {
-          megas: megasTexto,
-          quantidade: parseInt(megas),
-          tipo: 'GB',
-          preco: parseInt(preco),
-          aproximado: true,
-          diferenca: diferenca
-        };
-      }
+    // RIGOROSO: Se não encontrar valor exato, REJEITAR completamente
+    const valoresValidos = Object.values(precos).map(p => `${p}MT`).sort((a, b) => parseInt(a) - parseInt(b));
+    console.log(`   ❌ ATACADO: Valor ${valorPago}MT NÃO ENCONTRADO na tabela - REJEITADO (validação rigorosa)`);
+    console.log(`   📋 ATACADO: Valores válidos disponíveis: ${valoresValidos.join(', ')}`);
+    return null;
+  }
+
+  // === VALIDAR VALOR CONTRA TABELA (VALIDAÇÃO RIGOROSA) ===
+  validarValorContraTabela(valorPago, configGrupo) {
+    console.log(`   🔍 VALIDAÇÃO RIGOROSA: Verificando se valor ${valorPago}MT está na tabela...`);
+    
+    if (!configGrupo) {
+      console.log(`   ❌ VALIDAÇÃO: Configuração do grupo não disponível`);
+      return {
+        valido: false,
+        motivo: 'Configuração do grupo não disponível',
+        valoresValidos: []
+      };
     }
     
-    console.log(`   ❌ ATACADO: Valor ${valorPago}MT não encontrado na tabela de preços`);
-    return null;
+    let valoresValidos = [];
+    
+    // Verificar se tem preços diretos (estrutura do bot divisão)
+    if (configGrupo.precos) {
+      valoresValidos = Object.values(configGrupo.precos).map(p => parseInt(p)).sort((a, b) => a - b);
+    } else if (configGrupo.tabela) {
+      // Extrair preços da tabela como texto
+      const precos = this.extrairPrecosTabela(configGrupo.tabela);
+      valoresValidos = precos.map(p => p.preco).sort((a, b) => a - b);
+    } else {
+      console.log(`   ❌ VALIDAÇÃO: Nem preços diretos nem tabela disponível`);
+      return {
+        valido: false,
+        motivo: 'Tabela de preços não configurada',
+        valoresValidos: []
+      };
+    }
+    
+    const valorNumerico = parseFloat(valorPago);
+    const valorExiste = valoresValidos.includes(valorNumerico);
+    
+    if (valorExiste) {
+      console.log(`   ✅ VALIDAÇÃO: Valor ${valorPago}MT APROVADO - encontrado na tabela`);
+      return {
+        valido: true,
+        valor: valorNumerico,
+        valoresValidos: valoresValidos
+      };
+    } else {
+      console.log(`   ❌ VALIDAÇÃO: Valor ${valorPago}MT REJEITADO - NÃO encontrado na tabela`);
+      console.log(`   📋 VALIDAÇÃO: Valores válidos: ${valoresValidos.map(v => `${v}MT`).join(', ')}`);
+      return {
+        valido: false,
+        motivo: `Valor ${valorPago}MT não está na tabela de preços`,
+        valorInvalido: valorNumerico,
+        valoresValidos: valoresValidos
+      };
+    }
   }
 
   // === EXTRAIR NÚMERO ÚNICO (CÓDIGO ORIGINAL) ===
@@ -932,7 +1645,7 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       if (msg.tipo === 'texto') {
         console.log(`   🔍 ATACADO: Verificando mensagem: "${msg.mensagem.substring(0, 50)}..."`);
         
-        const comprovante = await this.analisarComprovante(msg.mensagem);
+        const comprovante = await this.analisarComprovante(msg.mensagem, configGrupo);
         if (comprovante) {
           const tempoDecorrido = Math.floor((timestamp - msg.timestamp) / 60000);
           console.log(`   ✅ ATACADO: Comprovante encontrado no histórico: ${comprovante.referencia} - ${comprovante.valor}MT (${tempoDecorrido} min atrás)`);
@@ -1023,7 +1736,19 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     
     let comprovante = null;
     if (textoComprovante && textoComprovante.length > 10) {
-      comprovante = await this.analisarComprovante(textoComprovante);
+      comprovante = await this.analisarComprovante(textoComprovante, configGrupo);
+    }
+    
+    // VERIFICAR SE VALOR É INVÁLIDO (VALIDAÇÃO RIGOROSA)
+    if (comprovante && comprovante.encontrado === false && comprovante.motivo === 'valor_nao_esta_na_tabela') {
+      console.log(`   ❌ ATACADO: VALOR INVÁLIDO DETECTADO - ${comprovante.valor_invalido}MT`);
+      return {
+        sucesso: false,
+        tipo: 'valor_nao_encontrado_na_tabela',
+        valor: comprovante.valor_invalido,
+        referencia: comprovante.referencia,
+        mensagem: comprovante.mensagem_erro
+      };
     }
     
     if (comprovante && numero) {
@@ -1031,20 +1756,15 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       console.log(`   💰 ATACADO: Comprovante: ${comprovante.referencia} - ${comprovante.valor}MT`);
       console.log(`   📱 ATACADO: Número: ${numero}`);
       
-      const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
-      
-      if (megasCalculados) {
-        const numeroLimpo = this.limparNumero(numero);
-        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numeroLimpo}`;
-        console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO: ${resultado}`);
-        return { 
-          sucesso: true, 
-          dadosCompletos: resultado,
-          tipo: 'numero_processado',
-          numero: numeroLimpo,
-          megas: megasCalculados.megas,
-          valorPago: comprovante.valor
-        };
+      const produtoCalculado = this.calcularMegasPorValor(comprovante.valor, configGrupo);
+
+      if (produtoCalculado) {
+        const resultado = this.processarResultadoDual(produtoCalculado, comprovante.referencia, numero);
+        if (resultado) {
+          resultado.valorPago = comprovante.valor;
+          console.log(`   ✅ ATACADO: PEDIDO COMPLETO IMEDIATO (${produtoCalculado.tipo}): ${resultado.dadosCompletos}`);
+          return resultado;
+        }
       } else {
         console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
         return {
@@ -1063,6 +1783,18 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     }
     
     if (comprovante && !numero) {
+      // VERIFICAR SE VALOR É INVÁLIDO (VALIDAÇÃO RIGOROSA) - SEGUNDA VERIFICAÇÃO
+      if (comprovante.encontrado === false && comprovante.motivo === 'valor_nao_esta_na_tabela') {
+        console.log(`   ❌ ATACADO: VALOR INVÁLIDO DETECTADO (só comprovante) - ${comprovante.valor_invalido}MT`);
+        return {
+          sucesso: false,
+          tipo: 'valor_nao_encontrado_na_tabela',
+          valor: comprovante.valor_invalido,
+          referencia: comprovante.referencia,
+          mensagem: comprovante.mensagem_erro
+        };
+      }
+      
       console.log(`   💰 ATACADO: Apenas comprovante detectado: ${comprovante.referencia} - ${comprovante.valor}MT`);
       
       const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
@@ -1075,8 +1807,11 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
           tipo: 'comprovante_recebido',
           referencia: comprovante.referencia,
           valor: comprovante.valor,
-          megas: megasCalculados.megas,
-          mensagem: `Comprovante recebido! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}. Agora envie UM número que vai receber os megas.`
+          tipoProduto: megasCalculados.tipo,
+          ...(megasCalculados.tipo === 'megas' ? { megas: megasCalculados.megas } : { saldo: megasCalculados.saldo }),
+          mensagem: megasCalculados.tipo === 'megas'
+            ? `Comprovante recebido! Valor: ${comprovante.valor}MT = ${megasCalculados.megas}MB. Agora envie UM número que vai receber os megas.`
+            : `Comprovante recebido! Valor: ${comprovante.valor}MT = ${megasCalculados.saldo}MT saldo. Agora envie UM número que vai receber o saldo.`
         };
       } else {
         return {
@@ -1096,12 +1831,640 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     };
   }
 
+  // === VALIDAR COMPLETUDE DE REFERÊNCIAS ===
+  validarCompletude(texto) {
+    console.log(`🔍 VALIDANDO COMPLETUDE: Verificando se referências estão completas...`);
+    
+    // Procurar por possíveis referências incompletas ou quebradas
+    const fragmentosSuspeitos = [];
+    
+    // FRAGMENTOS M-PESA SUSPEITOS
+    // Códigos de 10 caracteres alfanuméricos (pode estar faltando 1 char)
+    const fragmentos10chars = texto.match(/\b[A-Z0-9]{10}\b/g);
+    if (fragmentos10chars) {
+      fragmentos10chars.forEach(frag => {
+        if (/[A-Z]/.test(frag) && /[0-9]/.test(frag)) {
+          fragmentosSuspeitos.push({
+            fragmento: frag,
+            tipo: 'M-Pesa_possivelmente_incompleto',
+            caracteresFaltando: 1,
+            comprimentoAtual: 10,
+            comprimentoEsperado: 11
+          });
+        }
+      });
+    }
+    
+    // Códigos de 9 caracteres alfanuméricos (pode estar faltando 2 chars)
+    const fragmentos9chars = texto.match(/\b[A-Z0-9]{9}\b/g);
+    if (fragmentos9chars) {
+      fragmentos9chars.forEach(frag => {
+        if (/[A-Z]/.test(frag) && /[0-9]/.test(frag)) {
+          fragmentosSuspeitos.push({
+            fragmento: frag,
+            tipo: 'M-Pesa_possivelmente_incompleto',
+            caracteresFaltando: 2,
+            comprimentoAtual: 9,
+            comprimentoEsperado: 11
+          });
+        }
+      });
+    }
+    
+    // FRAGMENTOS E-MOLA SUSPEITOS
+    // Padrões PP incompletos
+    const emolaIncompletos = [
+      // PP250914.1134.T3827 (falta 1 dígito)
+      /\bPP\d{6}\.\d{4}\.[A-Za-z]\d{4}\b/g,
+      // PP250914.1134. (falta letra + 5 dígitos)
+      /\bPP\d{6}\.\d{4}\.\b/g,
+      // PP250914. (falta tudo após a data)
+      /\bPP\d{6}\.\b/g
+    ];
+    
+    emolaIncompletos.forEach((regex, index) => {
+      const matches = texto.match(regex);
+      if (matches) {
+        matches.forEach(match => {
+          let faltando = '';
+          if (index === 0) faltando = '1 dígito final';
+          else if (index === 1) faltando = 'letra + 5 dígitos';
+          else if (index === 2) faltando = 'hora + letra + 5 dígitos';
+          
+          fragmentosSuspeitos.push({
+            fragmento: match,
+            tipo: 'E-Mola_possivelmente_incompleto',
+            faltando: faltando,
+            comprimentoAtual: match.length,
+            comprimentoEsperado: 19 // PP250914.1134.T38273 = 19 chars
+          });
+        });
+      }
+    });
+    
+    // PROCURAR POR CARACTERES ISOLADOS PRÓXIMOS
+    if (fragmentosSuspeitos.length > 0) {
+      console.log(`⚠️ COMPLETUDE: Encontrados ${fragmentosSuspeitos.length} fragmento(s) possivelmente incompleto(s):`);
+      
+      fragmentosSuspeitos.forEach((suspeito, index) => {
+        console.log(`   ${index + 1}. ${suspeito.tipo}: "${suspeito.fragmento}" (${suspeito.comprimentoAtual}/${suspeito.comprimentoEsperado} chars)`);
+        
+        if (suspeito.tipo.includes('M-Pesa')) {
+          // Procurar caracteres isolados próximos que possam completar
+          const regexProximo = new RegExp(`${suspeito.fragmento}\\s*\\n?\\s*([A-Z0-9]{1,${suspeito.caracteresFaltando}})`, 'i');
+          const proximoMatch = texto.match(regexProximo);
+          
+          if (proximoMatch) {
+            console.log(`   🔍 POSSÍVEL COMPLEMENTO: "${proximoMatch[1]}" encontrado próximo`);
+            console.log(`   💡 SUGESTÃO: "${suspeito.fragmento}" + "${proximoMatch[1]}" = "${suspeito.fragmento}${proximoMatch[1]}"`);
+          }
+        }
+      });
+      
+      return {
+        completo: false,
+        fragmentosSuspeitos: fragmentosSuspeitos,
+        requer_reconstrucao: true
+      };
+    }
+    
+    // Verificar se há referências aparentemente completas
+    const referenciasMPesa = texto.match(/\b[A-Z0-9]{11}\b/g) || [];
+    const referenciasEMola = texto.match(/\bPP\d{6}\.\d{4}\.[A-Za-z]\d{5}\b/g) || [];
+    
+    // Filtrar M-Pesa válidas (11 caracteres alfanuméricos com letras E números)
+    const mPesaValidas = referenciasMPesa.filter(ref => 
+      ref.length === 11 && 
+      /^[A-Z0-9]+$/.test(ref) && 
+      /[A-Z]/.test(ref) && 
+      /[0-9]/.test(ref)
+    );
+    
+    const referenciasCompletas = mPesaValidas.length + referenciasEMola.length;
+    
+    if (referenciasCompletas > 0) {
+      console.log(`   📋 M-Pesa válidas encontradas: ${mPesaValidas.join(', ')}`);
+      console.log(`   📋 E-Mola válidas encontradas: ${referenciasEMola.join(', ')}`);
+    }
+    
+    console.log(`✅ COMPLETUDE: ${referenciasCompletas} referência(s) aparentemente completa(s) encontrada(s)`);
+    
+    return {
+      completo: referenciasCompletas > 0,
+      referenciasCompletas: referenciasCompletas,
+      mPesaCompletas: mPesaValidas.length,
+      eMolaCompletas: referenciasEMola.length,
+      fragmentosSuspeitos: fragmentosSuspeitos,
+      referenciasEncontradas: {
+        mPesa: mPesaValidas,
+        eMola: referenciasEMola
+      }
+    };
+  }
+
+  // === VALIDAR REFERÊNCIA MOÇAMBIQUE ===
+  validarReferenciaMozambique(referencia, valor) {
+    if (!referencia || typeof referencia !== 'string') {
+      return { valida: false, motivo: 'Referência vazia ou inválida' };
+    }
+
+    const ref = referencia.trim().toUpperCase();
+    
+    // VALIDAÇÃO 1: Verificar se não é número de telefone
+    if (/^(258|84|85|86|87)\d{6,9}$/.test(ref)) {
+      return { valida: false, motivo: 'Parece ser número de telefone' };
+    }
+    
+    // VALIDAÇÃO 2: Verificar se não é valor monetário
+    if (/^\d+([.,]\d{1,2})?$/.test(ref)) {
+      return { valida: false, motivo: 'Parece ser valor monetário' };
+    }
+    
+    // VALIDAÇÃO 3: Muito curto
+    if (ref.length < 8) {
+      return { valida: false, motivo: 'Muito curto (< 8 caracteres)' };
+    }
+    
+    // VALIDAÇÃO 4: Muito longo
+    if (ref.length > 20) {
+      return { valida: false, motivo: 'Muito longo (> 20 caracteres)' };
+    }
+    
+    // VALIDAÇÃO 5: Padrões específicos válidos
+    
+    // E-Mola: PP + AAMMDD + . + HHMM + . + Letra + 5 números
+    // Exemplo: PP250914.1134.T38273
+    if (/^PP\d{6}\.\d{4}\.[A-Za-z]\d{5}$/.test(ref)) {
+      return { valida: true, tipo: 'E-Mola padrão oficial' };
+    }
+    
+    // M-Pesa: Exatamente 11 caracteres alfanuméricos misturados
+    // Deve ter pelo menos 1 letra e 1 número
+    if (ref.length === 11 && /^[A-Z0-9]+$/.test(ref) && /[A-Z]/.test(ref) && /[0-9]/.test(ref)) {
+      return { valida: true, tipo: 'M-Pesa padrão oficial' };
+    }
+    
+    // VALIDAÇÃO 6: Padrão genérico (deve ter pelo menos algumas letras)
+    const temLetras = /[A-Z]/.test(ref);
+    const temNumeros = /\d/.test(ref);
+    const somenteAlfanumerico = /^[A-Z0-9]+$/.test(ref);
+    
+    if (temLetras && temNumeros && somenteAlfanumerico && ref.length >= 8 && ref.length <= 15) {
+      return { valida: true, tipo: 'Genérico válido' };
+    }
+    
+    return { 
+      valida: false, 
+      motivo: `Padrão não reconhecido: ${ref.length} chars, letras: ${temLetras}, números: ${temNumeros}` 
+    };
+  }
+
+  // === VALIDAÇÃO DE CONSISTÊNCIA E-MOLA ===
+  validarConsistenciaEMola(referencia, valor) {
+    try {
+      // Extrair data e hora da referência E-Mola: PP250914.1134.T38273
+      const match = referencia.match(/^PP(\d{2})(\d{2})(\d{2})\.(\d{2})(\d{2})\.[A-Za-z](\d{5})$/);
+      if (!match) {
+        return { valida: false, motivo: 'Formato E-Mola inválido na validação de consistência' };
+      }
+
+      const [, ano, mes, dia, hora, minuto, codigo] = match;
+      
+      // VALIDAÇÃO 1: Data válida
+      const anoCompleto = parseInt('20' + ano);
+      const mesNum = parseInt(mes);
+      const diaNum = parseInt(dia);
+      
+      if (mesNum < 1 || mesNum > 12) {
+        return { valida: false, motivo: `E-Mola: Mês inválido (${mesNum})` };
+      }
+      
+      if (diaNum < 1 || diaNum > 31) {
+        return { valida: false, motivo: `E-Mola: Dia inválido (${diaNum})` };
+      }
+      
+      // VALIDAÇÃO 2: Hora válida
+      const horaNum = parseInt(hora);
+      const minutoNum = parseInt(minuto);
+      
+      if (horaNum > 23) {
+        return { valida: false, motivo: `E-Mola: Hora inválida (${horaNum})` };
+      }
+      
+      if (minutoNum > 59) {
+        return { valida: false, motivo: `E-Mola: Minuto inválido (${minutoNum})` };
+      }
+      
+      // VALIDAÇÃO 3: Data não muito antiga (máximo 6 meses)
+      const dataTransacao = new Date(anoCompleto, mesNum - 1, diaNum, horaNum, minutoNum);
+      const agora = new Date();
+      const seisEMeses = 6 * 30 * 24 * 60 * 60 * 1000;
+      
+      if ((agora - dataTransacao) > seisEMeses) {
+        console.log(`⚠️ E-Mola: Transação muito antiga (${dataTransacao.toLocaleDateString()})`);
+      }
+      
+      // VALIDAÇÃO 4: Código sequencial válido
+      const codigoNum = parseInt(codigo);
+      if (codigoNum === 0) {
+        return { valida: false, motivo: 'E-Mola: Código sequencial inválido (00000)' };
+      }
+      
+      console.log(`✅ E-Mola consistente: ${diaNum}/${mesNum}/${anoCompleto} às ${horaNum}:${minutoNum} [${codigo}]`);
+      return { valida: true, motivo: 'E-Mola consistente' };
+      
+    } catch (error) {
+      console.error(`❌ Erro validação E-Mola: ${error.message}`);
+      return { valida: false, motivo: `Erro na validação E-Mola: ${error.message}` };
+    }
+  }
+
+  // === VALIDAÇÃO DE CONSISTÊNCIA M-PESA ===
+  validarConsistenciaMPesa(referencia, valor) {
+    try {
+      // VALIDAÇÃO 1: Padrão específico M-Pesa - deve ser bem distribuído
+      const letras = referencia.match(/[A-Z]/g) || [];
+      const numeros = referencia.match(/\d/g) || [];
+      
+      if (letras.length < 2) {
+        return { valida: false, motivo: 'M-Pesa: Poucas letras (mínimo 2)' };
+      }
+      
+      if (numeros.length < 3) {
+        return { valida: false, motivo: 'M-Pesa: Poucos números (mínimo 3)' };
+      }
+      
+      // VALIDAÇÃO 2: Não deve ser sequência óbvia
+      const sequencias = ['1234567890', 'ABCDEFGHIJK', '0000000000', 'AAAAAAAAAAA'];
+      for (const seq of sequencias) {
+        if (referencia.includes(seq.substring(0, 5))) {
+          return { valida: false, motivo: 'M-Pesa: Sequência muito óbvia detectada' };
+        }
+      }
+      
+      // VALIDAÇÃO 3: Distribuição balanceada
+      const primeiraMetade = referencia.substring(0, 5);
+      const segundaMetade = referencia.substring(6, 11);
+      
+      const letrasP1 = (primeiraMetade.match(/[A-Z]/g) || []).length;
+      const letrasP2 = (segundaMetade.match(/[A-Z]/g) || []).length;
+      
+      // Pelo menos uma letra em cada metade é indicativo de boa distribuição
+      if (letrasP1 === 0 || letrasP2 === 0) {
+        console.log(`⚠️ M-Pesa: Distribuição desbalanceada [${letrasP1}|${letrasP2}]`);
+      }
+      
+      console.log(`✅ M-Pesa consistente: ${letras.length} letras, ${numeros.length} números`);
+      return { valida: true, motivo: 'M-Pesa consistente' };
+      
+    } catch (error) {
+      console.error(`❌ Erro validação M-Pesa: ${error.message}`);
+      return { valida: false, motivo: `Erro na validação M-Pesa: ${error.message}` };
+    }
+  }
+
+  // === VALIDAÇÃO CRUZADA DE DADOS (SIMPLIFICADA) ===
+  validarConsistenciaComprovante(referencia, valor, textoCompleto = '') {
+    try {
+      console.log(`🔍 VALIDAÇÃO CRUZADA: ref=${referencia}, valor=${valor}MT`);
+      
+      const inconsistencias = [];
+      
+      // VALIDAÇÃO 1: Verificar duplicidade de referência (ÚNICA VALIDAÇÃO RIGOROSA)
+      if (this.referencias_processadas && this.referencias_processadas.has(referencia)) {
+        const ultimoUso = this.referencias_processadas.get(referencia);
+        const tempoDecorrido = Date.now() - ultimoUso;
+        const duasHoras = 2 * 60 * 60 * 1000;
+        
+        if (tempoDecorrido < duasHoras) {
+          inconsistencias.push(`Referência ${referencia} já foi processada há ${Math.floor(tempoDecorrido/60000)} minutos`);
+        }
+      }
+      
+      // VALIDAÇÃO 2: Apenas valores extremos
+      if (valor) {
+        const valorNum = parseFloat(valor);
+        if (valorNum <= 0) {
+          inconsistencias.push(`Valor inválido: ${valor}MT`);
+        }
+        if (valorNum > 100000) {
+          inconsistencias.push(`Valor extremamente alto: ${valor}MT`);
+        }
+      }
+      
+      if (inconsistencias.length > 0) {
+        console.log(`❌ INCONSISTÊNCIAS DETECTADAS:`, inconsistencias);
+        return {
+          valida: false,
+          inconsistencias: inconsistencias,
+          motivo: `${inconsistencias.length} inconsistência(s) detectada(s)`
+        };
+      }
+      
+      console.log(`✅ VALIDAÇÃO CRUZADA: Dados consistentes`);
+      return { valida: true, motivo: 'Dados consistentes' };
+      
+    } catch (error) {
+      console.error(`❌ Erro validação cruzada: ${error.message}`);
+      return { valida: true, motivo: 'Erro na validação - permitindo processamento' }; // FALHA SEGURA
+    }
+  }
+
+  // === BUSCAR REFERÊNCIA ALTERNATIVA ===
+  buscarReferenciaAlternativa(texto) {
+    console.log(`🔍 Buscando referência alternativa no texto...`);
+    
+    // Padrões mais específicos para busca direta baseados nos padrões oficiais
+    const padroes = [
+      // E-Mola: PP + 6 dígitos + . + 4 dígitos + . + letra + 5 números
+      /PP\d{6}\.\d{4}\.[A-Za-z]\d{5}/gi,
+      // M-Pesa: Exatamente 11 caracteres alfanuméricos misturados
+      /\b[A-Z0-9]{11}\b/g,
+      // E-Mola com possíveis espaços: PP 250914.1134.T38273
+      /PP\s*\d{6}\.\d{4}\.[A-Za-z]\d{5}/gi,
+      // Qualquer código que pareça ser referência válida
+      /\b[A-Z][A-Z0-9]{7,19}\b/g
+    ];
+    
+    for (const padrao of padroes) {
+      const matches = texto.match(padrao);
+      if (matches && matches.length > 0) {
+        // Filtrar candidatos válidos
+        for (const match of matches) {
+          const validacao = this.validarReferenciaMozambique(match);
+          if (validacao.valida) {
+            console.log(`✅ Referência alternativa encontrada: ${match} (${validacao.tipo})`);
+            return match.toUpperCase();
+          }
+        }
+      }
+    }
+    
+    console.log(`❌ Nenhuma referência alternativa válida encontrada`);
+    return null;
+  }
+
+  // === TENTAR ABORDAGENS ALTERNATIVAS ===
+  async tentarAbordagensAlternativas(textoExtraido) {
+    console.log(`🔄 Testando abordagens alternativas para extração...`);
+    
+    // ABORDAGEM 1: Reconstrução manual mais agressiva
+    const textoReconstruido = this.reconstrucaoManualAgressiva(textoExtraido);
+    if (textoReconstruido !== textoExtraido) {
+      console.log(`🔧 Tentativa 1: Reconstrução manual agressiva aplicada`);
+      const resultado1 = await this.interpretarComprovanteComGPT(textoReconstruido);
+      if (resultado1.encontrado) {
+        console.log(`✅ Abordagem 1 funcionou!`);
+        return resultado1;
+      }
+    }
+    
+    // ABORDAGEM 2: Busca por padrões regex diretos
+    console.log(`🔧 Tentativa 2: Busca direta por padrões regex`);
+    const resultado2 = this.extrairDiretoPorRegex(textoExtraido);
+    if (resultado2.encontrado) {
+      console.log(`✅ Abordagem 2 funcionou!`);
+      this.imagemStats.metodos.regex_direto++;
+      return resultado2;
+    }
+    
+    // ABORDAGEM 3: Prompt simplificado para GPT
+    console.log(`🔧 Tentativa 3: Prompt simplificado`);
+    const resultado3 = await this.interpretarComPromptSimplificado(textoExtraido);
+    if (resultado3.encontrado) {
+      console.log(`✅ Abordagem 3 funcionou!`);
+      this.imagemStats.metodos.prompt_simplificado++;
+      return resultado3;
+    }
+    
+    console.log(`❌ Todas as abordagens alternativas falharam`);
+    return { encontrado: false };
+  }
+
+  // === RECONSTRUÇÃO FORÇADA PARA FRAGMENTOS SUSPEITOS ===
+  reconstrucaoForcadaFragmentos(texto) {
+    console.log(`🔧 RECONSTRUÇÃO FORÇADA: Tentando conectar fragmentos suspeitos...`);
+    
+    let textoProcessado = texto;
+    const completude = this.validarCompletude(texto);
+    
+    if (completude.fragmentosSuspeitos.length === 0) {
+      console.log(`ℹ️ Nenhum fragmento suspeito detectado para reconstrução forçada`);
+      return texto;
+    }
+    
+    // FOCO EM M-PESA: Procurar padrões 10+1 caracteres mais agressivamente
+    completude.fragmentosSuspeitos.forEach(suspeito => {
+      if (suspeito.tipo.includes('M-Pesa')) {
+        console.log(`🎯 RECONSTRUÇÃO FORÇADA M-Pesa: "${suspeito.fragmento}" (faltam ${suspeito.caracteresFaltando} char(s))`);
+        
+        // Buscar caracteres próximos com maior flexibilidade
+        const regexes = [
+          // Próximo na mesma linha ou linha seguinte
+          new RegExp(`(${suspeito.fragmento})\\s*\\n?\\s*([A-Z0-9]{1,${suspeito.caracteresFaltando}})(?=\\s|$|\\n|\\.|,)`, 'gi'),
+          // Próximo com possível pontuação no meio
+          new RegExp(`(${suspeito.fragmento})[\\s\\n\\.\\,\\-]*([A-Z0-9]{1,${suspeito.caracteresFaltando}})(?=\\s|$|\\n|\\.|,)`, 'gi'),
+          // Próximo em qualquer lugar (busca mais ampla)
+          new RegExp(`(${suspeito.fragmento})[\\s\\S]{0,10}?([A-Z0-9]{1,${suspeito.caracteresFaltando}})(?=\\s|$|\\n|\\.|,)`, 'gi')
+        ];
+        
+        for (let i = 0; i < regexes.length; i++) {
+          const matches = Array.from(textoProcessado.matchAll(regexes[i]));
+          
+          if (matches.length > 0) {
+            matches.forEach(match => {
+              const fragmento = match[1];
+              const complemento = match[2];
+              const candidato = fragmento + complemento;
+              
+              // Validar se o candidato final é uma referência M-Pesa válida
+              if (candidato.length === 11 && /^[A-Z0-9]+$/.test(candidato) && /[A-Z]/.test(candidato) && /[0-9]/.test(candidato)) {
+                const original = match[0];
+                textoProcessado = textoProcessado.replace(original, candidato);
+                console.log(`   ✅ RECONSTRUÇÃO FORÇADA SUCESSO (método ${i+1}): "${original}" → "${candidato}"`);
+                
+                // Incrementar métrica
+                this.imagemStats.referencias_reconstruidas++;
+              } else {
+                console.log(`   ❌ RECONSTRUÇÃO FORÇADA FALHOU (método ${i+1}): "${candidato}" não é M-Pesa válido`);
+              }
+            });
+            break; // Se encontrou algo neste método, não tentar os próximos
+          }
+        }
+      }
+    });
+    
+    return textoProcessado;
+  }
+
+  // === RECONSTRUÇÃO MANUAL AGRESSIVA ===
+  reconstrucaoManualAgressiva(texto) {
+    console.log(`🔧 Aplicando reconstrução manual agressiva...`);
+    
+    let textoProcessado = texto;
+    
+    // NOVA: Aplicar reconstrução forçada primeiro
+    textoProcessado = this.reconstrucaoForcadaFragmentos(textoProcessado);
+    
+    // Remove espaços excessivos e padroniza quebras
+    textoProcessado = textoProcessado.replace(/\s+/g, ' ').trim();
+    
+    // Restaura quebras de linha importantes
+    textoProcessado = textoProcessado.replace(/\. /g, '.\n');
+    textoProcessado = textoProcessado.replace(/([A-Z]{3,}) ([A-Z0-9]{2,})/g, '$1$2');
+    textoProcessado = textoProcessado.replace(/(PP\d{6}\.\d{4}\.) ([A-Z]\d+)/g, '$1$2');
+    
+    return textoProcessado;
+  }
+
+  // === EXTRAIR DIRETO POR REGEX ===
+  extrairDiretoPorRegex(texto) {
+    console.log(`🔍 Buscando padrões diretos com regex...`);
+    
+    // Padrões de referência baseados nos padrões oficiais
+    const padroes = [
+      /(PP\d{6}\.\d{4}\.[A-Za-z]\d{5})/g,     // E-Mola padrão oficial
+      /([A-Z0-9]{11})/g,                       // M-Pesa padrão oficial (11 chars)
+      /(PP\s*\d{6}\.\d{4}\.[A-Za-z]\d{5})/g,  // E-Mola com espaços
+      /([A-Z0-9]{8,15})/g                      // Genérico para casos especiais
+    ];
+    
+    // Padrões de valor
+    const padroesValor = [
+      /(\d+[.,]\d{2})\s*MT/gi,
+      /(\d+)\s*MT/gi,
+      /Valor[:\s]+(\d+[.,]?\d*)/gi
+    ];
+    
+    let referencia = null;
+    let valor = null;
+    
+    // Buscar referência com validação rigorosa
+    for (const padrao of padroes) {
+      const match = texto.match(padrao);
+      if (match && match.length > 0) {
+        // Usar validação para filtrar candidatos
+        for (const candidato of match) {
+          const validacao = this.validarReferenciaMozambique(candidato);
+          if (validacao.valida) {
+            console.log(`✅ Regex encontrou referência válida: ${candidato} (${validacao.tipo})`);
+            referencia = candidato.toUpperCase();
+            break;
+          }
+        }
+        
+        if (referencia) break;
+      }
+    }
+    
+    // Buscar valor
+    for (const padrao of padroesValor) {
+      const match = texto.match(padrao);
+      if (match && match[1]) {
+        valor = match[1].replace(',', '.');
+        break;
+      }
+    }
+    
+    if (referencia && valor) {
+      console.log(`✅ Regex encontrou: ${referencia} - ${valor}MT`);
+      return { 
+        encontrado: true, 
+        referencia: referencia, 
+        valor: valor 
+      };
+    }
+    
+    console.log(`❌ Regex não encontrou padrões válidos`);
+    return { encontrado: false };
+  }
+
+  // === INTERPRETAR COM PROMPT SIMPLIFICADO ===
+  async interpretarComPromptSimplificado(textoExtraido) {
+    const promptSimples = `Extrai só a referência e valor deste comprovante:
+"${textoExtraido}"
+
+Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"encontrado":false}`;
+
+    try {
+      const resposta = await this.openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [{ role: "user", content: promptSimples }],
+        max_tokens: 50,
+        temperature: 0
+      });
+
+      return this.extrairJSON(resposta.choices[0].message.content);
+    } catch (error) {
+      console.error('❌ Erro no prompt simplificado:', error.message);
+      return { encontrado: false };
+    }
+  }
+
   // === PROCESSAMENTO DE IMAGEM MELHORADO ===
   async processarImagem(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
     console.log(`   📸 ATACADO: Processando imagem de ${remetente} com método híbrido (Google Vision + GPT-4)`);
     
     // Usar o novo método híbrido Google Vision + GPT-4
     return await this.processarImagemHibrida(imagemBase64, remetente, timestamp, configGrupo, legendaImagem);
+  }
+
+  // === OBTER ESTATÍSTICAS DE PROCESSAMENTO DE IMAGENS ===
+  getImagemStats() {
+    const stats = this.imagemStats;
+    const taxaSucesso = stats.total > 0 ? ((stats.sucessos / stats.total) * 100).toFixed(1) : '0.0';
+    
+    let relatorio = `📊 *ESTATÍSTICAS DE PROCESSAMENTO DE IMAGENS ROBUSTAS*\n`;
+    relatorio += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    
+    relatorio += `📈 **RESUMO GERAL**\n`;
+    relatorio += `• Total processadas: ${stats.total}\n`;
+    relatorio += `• Sucessos: ${stats.sucessos} (${taxaSucesso}%)\n`;
+    relatorio += `• Falhas: ${stats.falhas}\n\n`;
+    
+    relatorio += `🔧 **MÉTODOS UTILIZADOS**\n`;
+    relatorio += `• Híbrido direto: ${stats.metodos.hibrido_direto}\n`;
+    relatorio += `• Abordagem alternativa: ${stats.metodos.abordagem_alternativa}\n`;
+    relatorio += `• Regex direto: ${stats.metodos.regex_direto}\n`;
+    relatorio += `• Prompt simplificado: ${stats.metodos.prompt_simplificado}\n`;
+    relatorio += `• GPT-4 Vision fallback: ${stats.metodos.gpt4_vision_fallback}\n\n`;
+    
+    relatorio += `🔍 **PROCESSAMENTO DE REFERÊNCIAS**\n`;
+    relatorio += `• Referencias reconstruídas: ${stats.referencias_reconstruidas}\n`;
+    relatorio += `• Referencias validadas: ${stats.referencias_validadas}\n`;
+    relatorio += `• Referencias rejeitadas: ${stats.referencias_rejeitadas}\n\n`;
+    
+    relatorio += `💾 **CACHE E TOKENS**\n`;
+    relatorio += `• Chamadas GPT: ${this.tokenStats.calls}\n`;
+    relatorio += `• Cache hits: ${this.tokenStats.cacheHits}\n`;
+    
+    const taxaCache = this.tokenStats.calls > 0 ? 
+      ((this.tokenStats.cacheHits / (this.tokenStats.calls + this.tokenStats.cacheHits)) * 100).toFixed(1) : '0.0';
+    relatorio += `• Taxa de cache: ${taxaCache}%`;
+    
+    return relatorio;
+  }
+
+  // === RESETAR ESTATÍSTICAS ===
+  resetImagemStats() {
+    this.imagemStats = {
+      total: 0,
+      sucessos: 0,
+      falhas: 0,
+      metodos: {
+        hibrido_direto: 0,
+        abordagem_alternativa: 0,
+        regex_direto: 0,
+        prompt_simplificado: 0,
+        gpt4_vision_fallback: 0
+      },
+      referencias_reconstruidas: 0,
+      referencias_validadas: 0,
+      referencias_rejeitadas: 0
+    };
+    
+    console.log('📊 Estatísticas de processamento de imagens resetadas');
   }
 
   // === EXTRAIR NÚMEROS SIMPLES ===
@@ -1214,19 +2577,16 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
       
       if (megasCalculados) {
-        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numero}`;
         delete this.comprovantesEmAberto[remetente];
-        
-        console.log(`   ✅ ATACADO: PEDIDO COMPLETO: ${resultado}`);
-        return { 
-          sucesso: true, 
-          dadosCompletos: resultado,
-          tipo: 'numero_processado',
-          numero: numero,
-          megas: megasCalculados.megas,
-          valorPago: comprovante.valor,
-          origem: 'comprovante_em_aberto'
-        };
+
+        // Usar função auxiliar para processar resultado dual
+        const resultadoProcessado = this.processarResultadoDual(megasCalculados, comprovante.referencia, numero);
+        if (resultadoProcessado) {
+          resultadoProcessado.valorPago = comprovante.valor;
+          resultadoProcessado.origem = 'comprovante_em_aberto';
+          console.log(`   ✅ ATACADO: PEDIDO COMPLETO (${megasCalculados.tipo}): ${resultadoProcessado.dadosCompletos}`);
+          return resultadoProcessado;
+        }
       } else {
         console.log(`   ❌ ATACADO: Não foi possível calcular megas para valor ${comprovante.valor}MT`);
         return {
@@ -1245,17 +2605,14 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
       const megasCalculados = this.calcularMegasPorValor(comprovante.valor, configGrupo);
       
       if (megasCalculados) {
-        const resultado = `${comprovante.referencia}|${megasCalculados.megas}|${numero}`;
-        console.log(`   ✅ ATACADO: ENCONTRADO NO HISTÓRICO: ${resultado}`);
-        return { 
-          sucesso: true, 
-          dadosCompletos: resultado,
-          tipo: 'numero_processado',
-          numero: numero,
-          megas: megasCalculados.megas,
-          valorPago: comprovante.valor,
-          origem: 'historico'
-        };
+        // Usar função auxiliar para processar resultado dual
+        const resultadoProcessado = this.processarResultadoDual(megasCalculados, comprovante.referencia, numero);
+        if (resultadoProcessado) {
+          resultadoProcessado.valorPago = comprovante.valor;
+          resultadoProcessado.origem = 'historico';
+          console.log(`   ✅ ATACADO: ENCONTRADO NO HISTÓRICO (${megasCalculados.tipo}): ${resultadoProcessado.dadosCompletos}`);
+          return resultadoProcessado;
+        }
       } else {
         return {
           sucesso: false,
@@ -1275,35 +2632,155 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     };
   }
 
-  // === ANALISAR COMPROVANTE (OTIMIZADO COM CACHE) ===
-  async analisarComprovante(mensagem) {
+  // === ANALISAR COMPROVANTE (VERSÃO ROBUSTA - ACEITA QUALQUER FORMATO + VALIDAÇÃO RIGOROSA) ===
+  async analisarComprovante(mensagem, configGrupo = null) {
+    // DETECÇÃO MÚLTIPLA: Verificar diferentes indicadores de comprovante
     const temConfirmado = /^confirmado/i.test(mensagem.trim());
     const temID = /^id\s/i.test(mensagem.trim());
     const temIDdaTransacao = /^id da transacao/i.test(mensagem.trim());
     const temTransferiste = /transferiste\s+\d+/i.test(mensagem);
     
-    // FORÇAR reconhecimento para comprovantes óbvios
-    if (temConfirmado || temID || temIDdaTransacao || temTransferiste) {
-      console.log(`🎯 ATACADO: Comprovante DETECTADO - Confirmado:${temConfirmado} ID:${temID} IDTransacao:${temIDdaTransacao} Transferiste:${temTransferiste}`);
+    // DETECÇÃO ROBUSTA: Procurar por padrões de referência E valor em QUALQUER lugar do texto
+    const temReferenciaEMola = /PP\d{6}\.\d{4}\.[A-Za-z]\d{5}/i.test(mensagem);
+    const temReferenciaMPesa = /\b[A-Z0-9]{11}\b/i.test(mensagem);
+    const temValorMT = /\d+(?:[.,]\d{1,2})?\s*MT/i.test(mensagem);
+    const temValorTransferido = /(?:valor|transferiste|montante)\s*:?\s*\d+/i.test(mensagem);
+    
+    // CRITÉRIO FLEXÍVEL: Aceitar se for formato tradicional OU se tiver referência + valor
+    const formatoTradicional = temConfirmado || temID || temIDdaTransacao || temTransferiste;
+    const temDadosCompletos = (temReferenciaEMola || temReferenciaMPesa) && (temValorMT || temValorTransferido);
+    
+    if (formatoTradicional) {
+      console.log(`🎯 ATACADO: Comprovante FORMATO TRADICIONAL - Confirmado:${temConfirmado} ID:${temID} IDTransacao:${temIDdaTransacao} Transferiste:${temTransferiste}`);
+    } else if (temDadosCompletos) {
+      console.log(`🎯 ATACADO: Comprovante FORMATO FLEXÍVEL - EMola:${temReferenciaEMola} MPesa:${temReferenciaMPesa} ValorMT:${temValorMT} ValorTransf:${temValorTransferido}`);
     } else {
+      console.log(`❌ ATACADO: Texto não reconhecido como comprovante - faltam dados essenciais`);
       return null;
     }
 
-    // EXTRAÇÃO DIRETA POR REGEX (FALLBACK GARANTIDO)
+    // EXTRAÇÃO DIRETA POR REGEX ROBUSTA (MÚLTIPLOS PADRÕES)
     try {
-      const refMatch = mensagem.match(/(?:ID da transacao|Confirmado)\s+([A-Z0-9][A-Z0-9.]*[A-Z0-9])/i);
-      const valorMatch = mensagem.match(/Transferiste\s+(\d+(?:\.\d+)?)MT/i);
+      let referencia = null;
+      let valor = null;
       
-      if (refMatch && valorMatch) {
-        console.log(`🎯 ATACADO: Extração DIRETA por regex - Ref:${refMatch[1]} Valor:${valorMatch[1]}`);
+      // BUSCAR REFERÊNCIA: Múltiplos padrões
+      const padroesRef = [
+        // Padrões tradicionais
+        /(?:ID da transacao|Confirmado)\s+([A-Z0-9][A-Z0-9.]*[A-Z0-9])/i,
+        // E-Mola direto
+        /(PP\d{6}\.\d{4}\.[A-Za-z]\d{5})/i,
+        // M-Pesa direto (11 caracteres)
+        /\b([A-Z0-9]{11})\b/,
+        // Qualquer código após palavras-chave
+        /(?:referencia|codigo|ref|id)\s*:?\s*([A-Z0-9][A-Z0-9.]{7,})/i,
+        // Código isolado que pareça ser referência
+        /\b([A-Z][A-Z0-9]{7,19})\b/
+      ];
+      
+      for (const padrao of padroesRef) {
+        const matches = [...mensagem.matchAll(new RegExp(padrao.source, padrao.flags + 'g'))];
+        
+        for (const match of matches) {
+          const candidato = match[1];
+          if (candidato) {
+            const validacao = this.validarReferenciaMozambique(candidato);
+            if (validacao.valida) {
+              referencia = candidato.trim();
+              console.log(`✅ Referência encontrada via regex: ${referencia} (${validacao.tipo})`);
+              break;
+            }
+          }
+        }
+        
+        if (referencia) break;
+      }
+      
+      // BUSCAR VALOR: Múltiplos padrões ROBUSTOS (melhorados)
+      const padroesValor = [
+        // Padrões específicos para "Transferiste" com diferentes formatos
+        /Transferiste\s+(\d+(?:,\d{3})*(?:\.\d+)?)MT/i,     // 1,250.00MT ou 1,000MT
+        /Transferiste\s+(\d+,\d{3}(?:\.\d{2})?)MT/i,        // 1,250.00MT específico
+        /Transferiste\s+(\d+(?:[.,]\d{1,2})?)MT/i,          // Padrão original melhorado
+        // Padrões genéricos com MT
+        /(?:valor|montante)\s*:?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*MT/i,
+        /(\d+(?:,\d{3})*(?:\.\d+)?)\s*MT/i,                 // Genérico com separador de milhares
+        /(\d+(?:[.,]\d{1,2})?)\s*MT/i,                      // Padrão simples
+        // Padrões sem MT como fallback
+        /(?:valor|montante)\s*:?\s*(\d+(?:[.,]\d{1,2})?)/i
+      ];
+      
+      for (const padrao of padroesValor) {
+        const match = mensagem.match(padrao);
+        if (match && match[1]) {
+          valor = this.normalizarValorRobusto(match[1]);
+          console.log(`✅ Valor encontrado via regex: ${match[1]} → ${valor}MT`);
+          break;
+        }
+      }
+      
+      if (referencia && valor && valor !== null && valor !== undefined) {
+        const valorLimpo = this.limparValor(valor);
+
+        // VALIDAÇÃO ADICIONAL: Garantir que valor não seja undefined/null após limpeza
+        if (!valorLimpo || valorLimpo === '0' || valorLimpo === 'undefined' || valorLimpo === 'null') {
+          console.error(`❌ ATACADO: Valor limpo inválido: original="${valor}" → limpo="${valorLimpo}"`);
+          return null;
+        }
+
+        console.log(`🎯 ATACADO: Extração DIRETA ROBUSTA - Ref:${referencia} Valor:${valorLimpo}MT`);
+        
+        // ======= VALIDAÇÃO RIGOROSA DE VALOR =======
+        if (configGrupo) {
+          const validacao = this.validarValorContraTabela(valorLimpo, configGrupo);
+          if (!validacao.valido) {
+            console.log(`❌ VALIDAÇÃO RIGOROSA: Valor ${valorLimpo}MT REJEITADO - ${validacao.motivo}`);
+            return {
+              encontrado: false,
+              valor_invalido: valorLimpo,
+              referencia: referencia,
+              motivo: 'valor_nao_esta_na_tabela',
+              valores_validos: validacao.valoresValidos,
+              mensagem_erro: `❌ *VALOR INVÁLIDO!*\n\n📋 *REFERÊNCIA:* ${referencia}\n💰 *VALOR ENVIADO:* ${valorLimpo}MT\n\n⚠️ Este valor não está na nossa tabela de preços.\n\n📋 *VALORES VÁLIDOS:*\n${validacao.valoresValidos.map(v => `• ${v}MT`).join('\n')}\n\n💡 Digite *tabela* para ver todos os pacotes disponíveis.`
+            };
+          }
+          console.log(`✅ VALIDAÇÃO RIGOROSA: Valor ${valorLimpo}MT APROVADO`);
+        }
+        
+        // ====== VALIDAÇÃO DE CONSISTÊNCIA ENTRE DADOS ======
+        const validacaoConsistencia = this.validarConsistenciaComprovante(
+          referencia, 
+          valorLimpo, 
+          mensagem
+        );
+        
+        if (!validacaoConsistencia.valida) {
+          console.log(`❌ VALIDAÇÃO CONSISTÊNCIA (REGEX): ${validacaoConsistencia.motivo}`);
+          return {
+            encontrado: false,
+            referencia: referencia,
+            valor_invalido: valorLimpo,
+            motivo: 'dados_inconsistentes',
+            inconsistencias: validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo],
+            mensagem_erro: `❌ *DADOS INCONSISTENTES!*\n\n📋 *REFERÊNCIA:* ${referencia}\n💰 *VALOR:* ${valorLimpo}MT\n\n⚠️ *PROBLEMAS:*\n${(validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo]).map(inc => `• ${inc}`).join('\n')}\n\n💡 Verifique o comprovante e tente novamente.`
+          };
+        }
+        
+        // REGISTRAR REFERÊNCIA COMO PROCESSADA
+        if (this.referencias_processadas) {
+          this.referencias_processadas.set(referencia, Date.now());
+        }
+        
         return {
-          referencia: refMatch[1].trim(),
-          valor: this.limparValor(valorMatch[1]),
-          fonte: 'regex_direto'
+          referencia: referencia,
+          valor: valorLimpo,
+          fonte: 'regex_direto_robusto'
         };
+      } else {
+        console.log(`⚠️ ATACADO: Extração parcial - Ref:${referencia || 'NULO'} Valor:${valor || 'NULO'}`);
       }
     } catch (regexError) {
-      console.log(`⚠️ ATACADO: Regex direto falhou, tentando IA...`);
+      console.log(`⚠️ ATACADO: Regex robusto falhou, tentando IA... Erro: ${regexError.message}`);
     }
 
     // OTIMIZAÇÃO: Verificar cache primeiro
@@ -1340,9 +2817,74 @@ ou
       const resultado = this.extrairJSONMelhorado(resposta.choices[0].message.content);
       
       if (resultado.encontrado) {
+        const valorLimpo = this.limparValor(resultado.valor);
+
+        // VALIDAÇÃO ROBUSTA DO VALOR DA IA
+        if (!valorLimpo || valorLimpo === '0' || valorLimpo === 'undefined' || valorLimpo === 'null') {
+          console.error(`❌ ATACADO: Valor inválido extraído via IA: "${resultado.valor}" → "${valorLimpo}"`);
+          return null;
+        }
+
+        // ======= VALIDAÇÃO RIGOROSA DE VALOR (IA) =======
+        if (configGrupo) {
+          const validacao = this.validarValorContraTabela(valorLimpo, configGrupo);
+          if (!validacao.valido) {
+            console.log(`❌ VALIDAÇÃO RIGOROSA (IA): Valor ${valorLimpo}MT REJEITADO - ${validacao.motivo}`);
+            const resultadoInvalido = {
+              encontrado: false,
+              valor_invalido: valorLimpo,
+              referencia: resultado.referencia,
+              motivo: 'valor_nao_esta_na_tabela',
+              valores_validos: validacao.valoresValidos,
+              mensagem_erro: `❌ *VALOR INVÁLIDO!*\n\n📋 *REFERÊNCIA:* ${resultado.referencia}\n💰 *VALOR ENVIADO:* ${valorLimpo}MT\n\n⚠️ Este valor não está na nossa tabela de preços.\n\n📋 *VALORES VÁLIDOS:*\n${validacao.valoresValidos.map(v => `• ${v}MT`).join('\n')}\n\n💡 Digite *tabela* para ver todos os pacotes disponíveis.`
+            };
+            
+            // Salvar resultado inválido no cache
+            this.cacheResultados.set(cacheKey, {
+              resultado: resultadoInvalido,
+              timestamp: Date.now()
+            });
+            
+            return resultadoInvalido;
+          }
+          console.log(`✅ VALIDAÇÃO RIGOROSA (IA): Valor ${valorLimpo}MT APROVADO`);
+        }
+        
+        // ====== VALIDAÇÃO DE CONSISTÊNCIA ENTRE DADOS (IA) ======
+        const validacaoConsistencia = this.validarConsistenciaComprovante(
+          resultado.referencia, 
+          valorLimpo, 
+          mensagem
+        );
+        
+        if (!validacaoConsistencia.valida) {
+          console.log(`❌ VALIDAÇÃO CONSISTÊNCIA (IA): ${validacaoConsistencia.motivo}`);
+          const resultadoInconsistente = {
+            encontrado: false,
+            referencia: resultado.referencia,
+            valor_invalido: valorLimpo,
+            motivo: 'dados_inconsistentes',
+            inconsistencias: validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo],
+            mensagem_erro: `❌ *DADOS INCONSISTENTES!*\n\n📋 *REFERÊNCIA:* ${resultado.referencia}\n💰 *VALOR:* ${valorLimpo}MT\n\n⚠️ *PROBLEMAS:*\n${(validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo]).map(inc => `• ${inc}`).join('\n')}\n\n💡 Verifique o comprovante e tente novamente.`
+          };
+          
+          // Salvar resultado inconsistente no cache
+          this.cacheResultados.set(cacheKey, {
+            resultado: resultadoInconsistente,
+            timestamp: Date.now()
+          });
+          
+          return resultadoInconsistente;
+        }
+        
+        // REGISTRAR REFERÊNCIA COMO PROCESSADA
+        if (this.referencias_processadas) {
+          this.referencias_processadas.set(resultado.referencia, Date.now());
+        }
+        
         const comprovanteProcessado = {
           referencia: resultado.referencia,
-          valor: this.limparValor(resultado.valor),
+          valor: valorLimpo,
           fonte: 'texto'
         };
         
@@ -1379,14 +2921,80 @@ ou
     console.log(`   ⏳ ATACADO: Comprovante de ${remetente} guardado, aguardando número...`);
   }
 
-  // === LIMPAR VALOR MONETÁRIO (CÓDIGO ORIGINAL) ===
+  // === NORMALIZAR VALOR ROBUSTO (MELHORADO) ===
+  normalizarValorRobusto(valor) {
+    if (typeof valor === 'number') {
+        return valor;
+    }
+
+    if (typeof valor === 'string') {
+        let valorLimpo = valor.trim();
+
+        // Casos especiais: valores com múltiplos zeros após vírgula (ex: "1,0000" = 1000MT)
+        // Padrão: número seguido de vírgula e só zeros
+        const regexZerosAposVirgula = /^(\d+),0+$/;
+        const matchZeros = valorLimpo.match(regexZerosAposVirgula);
+        if (matchZeros) {
+            // "1,0000" significa 1000 meticais (vírgula + zeros = multiplicador de milhares)
+            const baseNumero = parseInt(matchZeros[1]);
+            const numeroZeros = valorLimpo.split(',')[1].length;
+            // Para "1,0000": base=1, zeros=4, então 1 * 1000 = 1000
+            const multiplicador = numeroZeros >= 3 ? 1000 : Math.pow(10, numeroZeros);
+            return baseNumero * multiplicador;
+        }
+
+        // Detectar se vírgula é separador de milhares ou decimal
+        const temVirgulaSeguida3Digitos = /,\d{3}($|\D)/.test(valorLimpo);
+
+        if (temVirgulaSeguida3Digitos) {
+            // Vírgula como separador de milhares: "1,000" ou "10,500.50"
+            valorLimpo = valorLimpo.replace(/,(?=\d{3}($|\D))/g, '');
+        } else {
+            // Vírgula como separador decimal: "1,50" → "1.50"
+            valorLimpo = valorLimpo.replace(',', '.');
+        }
+
+        const valorNumerico = parseFloat(valorLimpo);
+
+        if (isNaN(valorNumerico)) {
+            console.warn(`⚠️ ATACADO: Valor não pôde ser normalizado: "${valor}"`);
+            return null;
+        }
+
+        // Retorna inteiro se não tem decimais significativos
+        return (Math.abs(valorNumerico % 1) < 0.0001) ? Math.round(valorNumerico) : valorNumerico;
+    }
+
+    return null;
+  }
+
+  // === LIMPAR VALOR MONETÁRIO (MELHORADO COM VALIDAÇÕES) ===
   limparValor(valor) {
-    if (!valor) return '0';
-    
-    let valorStr = valor.toString();
+    // VALIDAÇÃO INICIAL: Verificar se valor existe e não é undefined/null
+    if (!valor || valor === undefined || valor === null || valor === 'undefined' || valor === 'null') {
+      console.warn(`⚠️ ATACADO: limparValor recebeu valor inválido: "${valor}"`);
+      return null; // Retorna null em vez de '0' para detectar problemas
+    }
+
+    let valorStr = valor.toString().trim();
+
+    // VALIDAÇÃO: Se string vazia após trim
+    if (valorStr === '' || valorStr === 'undefined' || valorStr === 'null') {
+      console.warn(`⚠️ ATACADO: Valor string vazia após conversão: "${valor}" → "${valorStr}"`);
+      return null;
+    }
+
+    // Remover unidades monetárias
     valorStr = valorStr.replace(/\s*(MT|mt|meticais?|metical)\s*/gi, '');
     valorStr = valorStr.trim();
-    
+
+    // USAR A FUNÇÃO ROBUSTA PRIMEIRO
+    const valorRobusto = this.normalizarValorRobusto(valorStr);
+    if (valorRobusto !== null && valorRobusto !== undefined && !isNaN(valorRobusto)) {
+      return valorRobusto.toString();
+    }
+
+    // FALLBACK: Lógica original como backup
     if (valorStr.includes(',') && valorStr.includes('.')) {
       valorStr = valorStr.replace(/,/g, '');
     } else if (valorStr.includes(',')) {
@@ -1397,15 +3005,22 @@ ou
         valorStr = valorStr.replace(/,/g, '');
       }
     }
-    
+
     const match = valorStr.match(/\d+\.?\d*/);
     if (match) {
       const numero = parseFloat(match[0]);
-      return numero.toString();
+      if (!isNaN(numero) && numero > 0) {
+        return numero.toString();
+      }
     }
-    
+
     const digitos = valorStr.replace(/[^\d]/g, '');
-    return digitos || '0';
+    if (digitos && digitos !== '0') {
+      return digitos;
+    }
+
+    console.warn(`⚠️ ATACADO: Não foi possível extrair valor numérico de: "${valor}"`);
+    return null; // Retorna null para detectar falhas
   }
 
   // === HISTÓRICO (CÓDIGO ORIGINAL) ===
@@ -1458,6 +3073,26 @@ ou
     }
   }
 
+  // === LIMPAR REFERÊNCIAS ANTIGAS ===
+  limparReferenciasAntigas() {
+    if (!this.referencias_processadas) return;
+    
+    const agora = Date.now();
+    const seisHoras = 6 * 60 * 60 * 1000; // 6 horas
+    let removidas = 0;
+    
+    for (const [referencia, timestamp] of this.referencias_processadas.entries()) {
+      if (agora - timestamp > seisHoras) {
+        this.referencias_processadas.delete(referencia);
+        removidas++;
+      }
+    }
+    
+    if (removidas > 0) {
+      console.log(`🧹 Referências: ${removidas} referências antigas removidas`);
+    }
+  }
+
   // === STATUS (CÓDIGO ORIGINAL) ===
   getStatus() {
     return {
@@ -1500,42 +3135,33 @@ ou
   // === NOVA FUNCIONALIDADE: SUBDIVISÃO EM BLOCOS DE 10GB PARA IMAGENS ===
   aplicarSubdivisaoSeNecessario(referenciaBase, megasTotal, numero) {
     console.log(`🔧 ATACADO: Verificando se ${megasTotal}MB (${Math.floor(megasTotal/1024)}GB) precisa subdivisão...`);
-    
+
     // Se for 10GB ou menos, não precisa subdividir
     if (megasTotal <= 10240) {
       console.log(`   ✅ ATACADO: ${Math.floor(megasTotal/1024)}GB ≤ 10GB - Não precisa subdividir`);
       return [`${referenciaBase}|${megasTotal}|${numero}`];
     }
-    
-    // Precisa subdividir em blocos de 10GB
-    const numeroBlocos = Math.ceil(megasTotal / 10240);
-    const megasPorBloco = Math.floor(megasTotal / numeroBlocos);
-    const megasRestante = megasTotal % numeroBlocos;
-    
-    console.log(`   🔧 ATACADO: ${Math.floor(megasTotal/1024)}GB → ${numeroBlocos} blocos de ~${Math.floor(megasPorBloco/1024)}GB`);
-    
+
+    // CORREÇÃO: Subdividir em blocos EXATOS de 10GB
     const pedidosSubdivididos = [];
-    
-    // Criar subdivisões
-    for (let i = 0; i < numeroBlocos; i++) {
-      let megasBloco = megasPorBloco;
-      
-      // Distribuir resto nos primeiros blocos
-      if (i < megasRestante) {
-        megasBloco += 1;
-      }
-      
-      // Garantir que nenhum bloco exceda 10GB
-      if (megasBloco > 10240) {
-        megasBloco = 10240;
-      }
-      
-      const novaReferencia = referenciaBase + String(i + 1);
+    let megasRestantes = megasTotal;
+    let contadorBloco = 1;
+
+    console.log(`   🔧 ATACADO: ${Math.floor(megasTotal/1024)}GB → Criando blocos de EXATAMENTE 10GB`);
+
+    // Criar blocos de exatamente 10GB
+    while (megasRestantes > 0) {
+      const megasBloco = megasRestantes >= 10240 ? 10240 : megasRestantes;
+
+      const novaReferencia = referenciaBase + String(contadorBloco);
       const pedidoSubdividido = `${novaReferencia}|${megasBloco}|${numero}`;
-      
+
       pedidosSubdivididos.push(pedidoSubdividido);
-      
-      console.log(`      📦 ATACADO: Bloco ${i + 1}/${numeroBlocos}: ${novaReferencia} - ${Math.floor(megasBloco/1024)}GB (${megasBloco}MB)`);
+
+      console.log(`      📦 ATACADO: Bloco ${contadorBloco}: ${novaReferencia} - ${Math.floor(megasBloco/1024)}GB (${megasBloco}MB)`);
+
+      megasRestantes -= megasBloco;
+      contadorBloco++;
     }
     
     // Validar se a subdivisão preservou o total
