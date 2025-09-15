@@ -102,9 +102,13 @@ class WhatsAppAIAtacado {
       console.log('⚠️ Google Vision desabilitado via GOOGLE_VISION_ENABLED');
     }
     
+    // INICIALIZAR SISTEMA DE CONTROLE DE REFERÊNCIAS
+    this.referencias_processadas = new Map();
+    
     setInterval(() => {
       this.limparComprovantesAntigos();
       this.limparCacheAntigo(); // OTIMIZAÇÃO: Limpar cache junto
+      this.limparReferenciasAntigas(); // NOVO: Limpar referências antigas
     }, 10 * 60 * 1000);
     
     const visionStatus = this.googleVisionEnabled ? 'Google Vision + GPT-4' : 'GPT-4 Vision';
@@ -123,32 +127,109 @@ class WhatsAppAIAtacado {
       // PP250914.1134.T + 38273 = PP250914.1134.T38273
       {
         regex: /(PP\d{6}\.\d{4}\.[A-Za-z])\s*\n?\s*(\d{5})/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`,
-        tipo: 'E-Mola completo'
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [Letra+5Digitos]: "${p1}" + "${p2}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: letra + 5 dígitos'
+      },
+      // CASOS ESPECÍFICOS DE QUEBRA E-MOLA (NOVOS)
+      // PP250914.1134.T3827 + 3 = PP250914.1134.T38273 (1 dígito faltando)
+      {
+        regex: /(PP\d{6}\.\d{4}\.[A-Za-z]\d{4})\s*\n?\s*(\d{1})/gi,
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [1Digito]: "${p1}" + "${p2}" = "${resultado}"`);
+          // Validar se tem exatamente 19 caracteres
+          if (resultado.length === 19 && /^PP\d{6}\.\d{4}\.[A-Za-z]\d{5}$/.test(resultado)) {
+            console.log(`✅ E-Mola [1Digito]: VÁLIDO`);
+            return resultado;
+          }
+          console.log(`❌ E-Mola [1Digito]: INVÁLIDO (${resultado.length} chars)`);
+          return match;
+        },
+        tipo: 'E-Mola: 1 dígito final'
+      },
+      // PP250914.1134.T382 + 73 = PP250914.1134.T38273 (2 dígitos faltando)
+      {
+        regex: /(PP\d{6}\.\d{4}\.[A-Za-z]\d{3})\s*\n?\s*(\d{2})/gi,
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [2Digitos]: "${p1}" + "${p2}" = "${resultado}"`);
+          if (resultado.length === 19 && /^PP\d{6}\.\d{4}\.[A-Za-z]\d{5}$/.test(resultado)) {
+            console.log(`✅ E-Mola [2Digitos]: VÁLIDO`);
+            return resultado;
+          }
+          console.log(`❌ E-Mola [2Digitos]: INVÁLIDO`);
+          return match;
+        },
+        tipo: 'E-Mola: 2 dígitos finais'
+      },
+      // PP250914.1134.T38 + 273 = PP250914.1134.T38273 (3 dígitos faltando)
+      {
+        regex: /(PP\d{6}\.\d{4}\.[A-Za-z]\d{2})\s*\n?\s*(\d{3})/gi,
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [3Digitos]: "${p1}" + "${p2}" = "${resultado}"`);
+          if (resultado.length === 19 && /^PP\d{6}\.\d{4}\.[A-Za-z]\d{5}$/.test(resultado)) {
+            console.log(`✅ E-Mola [3Digitos]: VÁLIDO`);
+            return resultado;
+          }
+          console.log(`❌ E-Mola [3Digitos]: INVÁLIDO`);
+          return match;
+        },
+        tipo: 'E-Mola: 3 dígitos finais'
       },
       // PP250914.1134. + T38273 = PP250914.1134.T38273
       {
         regex: /(PP\d{6}\.\d{4}\.)\s*\n?\s*([A-Za-z]\d{5})/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`,
-        tipo: 'E-Mola sem letra'
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [SemLetra]: "${p1}" + "${p2}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: sem letra inicial'
       },
       // PP250914. + 1134.T38273 = PP250914.1134.T38273
       {
         regex: /(PP\d{6}\.)\s*\n?\s*(\d{4}\.[A-Za-z]\d{5})/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`,
-        tipo: 'E-Mola sem hora'
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [SemHora]: "${p1}" + "${p2}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: sem hora'
       },
       // PP + 250914.1134.T38273 = PP250914.1134.T38273
       {
         regex: /(PP)\s*\n?\s*(\d{6}\.\d{4}\.[A-Za-z]\d{5})/gi,
-        reconstruct: (match, p1, p2) => `${p1}${p2}`,
-        tipo: 'E-Mola sem prefixo'
+        reconstruct: (match, p1, p2) => {
+          const resultado = `${p1}${p2}`;
+          console.log(`🔧 E-Mola [SemPrefixo]: "${p1}" + "${p2}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: sem prefixo'
       },
       // Quebra em 3 partes: PP250914 + 1134 + T38273
       {
         regex: /(PP\d{6})\s*\n?\s*(\d{4})\s*\n?\s*([A-Za-z]\d{5})/gi,
-        reconstruct: (match, p1, p2, p3) => `${p1}.${p2}.${p3}`,
-        tipo: 'E-Mola tripla quebra'
+        reconstruct: (match, p1, p2, p3) => {
+          const resultado = `${p1}.${p2}.${p3}`;
+          console.log(`🔧 E-Mola [Tripla]: "${p1}" + "${p2}" + "${p3}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: tripla quebra'
+      },
+      // Quebra em 4 partes: PP + 250914 + 1134 + T38273
+      {
+        regex: /(PP)\s*\n?\s*(\d{6})\s*\n?\s*(\d{4})\s*\n?\s*([A-Za-z]\d{5})/gi,
+        reconstruct: (match, p1, p2, p3, p4) => {
+          const resultado = `${p1}${p2}.${p3}.${p4}`;
+          console.log(`🔧 E-Mola [Quádrupla]: "${p1}" + "${p2}" + "${p3}" + "${p4}" = "${resultado}"`);
+          return resultado;
+        },
+        tipo: 'E-Mola: quádrupla quebra'
       },
       
       // === PADRÕES M-PESA (11 caracteres alfanuméricos misturados) ===
@@ -551,9 +632,89 @@ Analisa TODO o texto e reconstrói a referência completa:`;
     }
   }
 
-  // === PROCESSAR IMAGEM COM MÉTODO HÍBRIDO ROBUSTO (VERSÃO MELHORADA) ===
+  // === GERAR HASH ÚNICO DA IMAGEM ===
+  gerarHashImagem(imagemBase64) {
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256');
+    hash.update(imagemBase64);
+    const hashCompleto = hash.digest('hex');
+    const hashCurto = hashCompleto.substring(0, 16); // 16 caracteres únicos
+    return {
+      completo: hashCompleto,
+      curto: hashCurto,
+      timestamp: Date.now()
+    };
+  }
+
+  // === VERIFICAR SE IMAGEM JÁ FOI PROCESSADA ===
+  verificarImagemDuplicada(hashImagem) {
+    // Verificar se essa imagem já foi processada recentemente (últimas 2 horas)
+    const timeout = 2 * 60 * 60 * 1000; // 2 horas
+    const agora = Date.now();
+    
+    if (!this.imagensProcessadas) {
+      this.imagensProcessadas = new Map();
+    }
+    
+    // Limpar imagens antigas
+    for (const [hash, dados] of this.imagensProcessadas.entries()) {
+      if (agora - dados.timestamp > timeout) {
+        this.imagensProcessadas.delete(hash);
+      }
+    }
+    
+    // Verificar se esta imagem específica já foi processada
+    const imagemExistente = this.imagensProcessadas.get(hashImagem.curto);
+    if (imagemExistente) {
+      console.log(`⚠️ DUPLICATA DETECTADA: Imagem já processada há ${Math.floor((agora - imagemExistente.timestamp) / 60000)} minutos`);
+      console.log(`🔍 Hash: ${hashImagem.curto}`);
+      console.log(`📋 Resultado anterior: ${imagemExistente.referencia} - ${imagemExistente.valor}MT`);
+      return {
+        isDuplicata: true,
+        dadosAnteriores: imagemExistente
+      };
+    }
+    
+    return { isDuplicata: false };
+  }
+
+  // === REGISTRAR IMAGEM PROCESSADA ===
+  registrarImagemProcessada(hashImagem, resultado) {
+    if (!this.imagensProcessadas) {
+      this.imagensProcessadas = new Map();
+    }
+    
+    this.imagensProcessadas.set(hashImagem.curto, {
+      timestamp: hashImagem.timestamp,
+      hash: hashImagem.curto,
+      referencia: resultado.referencia || 'N/A',
+      valor: resultado.valor || 'N/A',
+      remetente: resultado.remetente || 'N/A',
+      sucesso: resultado.sucesso || false
+    });
+    
+    console.log(`📝 IMAGEM REGISTRADA: ${hashImagem.curto} - ${resultado.referencia || 'N/A'}`);
+  }
+
+  // === PROCESSAR IMAGEM COM MÉTODO HÍBRIDO ROBUSTO (VERSÃO MELHORADA + ANTI-DUPLICAÇÃO) ===
   async processarImagemHibrida(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
     console.log(`🔄 MÉTODO HÍBRIDO ROBUSTO: Google Vision + GPT-4 para ${remetente}`);
+    
+    // === SISTEMA ANTI-DUPLICAÇÃO ===
+    const hashImagem = this.gerarHashImagem(imagemBase64);
+    console.log(`🔍 Hash da imagem: ${hashImagem.curto}`);
+    
+    const verificacaoDuplicata = this.verificarImagemDuplicada(hashImagem);
+    if (verificacaoDuplicata.isDuplicata) {
+      const dadosAnteriores = verificacaoDuplicata.dadosAnteriores;
+      return {
+        sucesso: false,
+        tipo: 'imagem_duplicada',
+        hashImagem: hashImagem.curto,
+        dadosAnteriores: dadosAnteriores,
+        mensagem: `⚠️ *IMAGEM DUPLICADA*\n\n🔍 Esta imagem já foi processada anteriormente.\n\n📋 *Dados do processamento anterior:*\n• Referência: ${dadosAnteriores.referencia}\n• Valor: ${dadosAnteriores.valor}MT\n• Processado há: ${Math.floor((Date.now() - dadosAnteriores.timestamp) / 60000)} minutos\n\n💡 Se precisa reprocessar, envie uma nova captura de tela.`
+      };
+    }
     
     // MÉTRICAS: Incrementar contador total
     this.imagemStats.total++;
@@ -584,7 +745,7 @@ Analisa TODO o texto e reconstrói a referência completa:`;
           textoOriginal: textoExtraido.substring(0, 100) // Para debug
         };
         
-        return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem);
+        return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem, hashImagem);
       } else {
         console.log(`❌ GPT-4 não encontrou dados no texto extraído`);
         console.log(`📝 Texto que foi analisado: "${textoExtraido.substring(0, 300)}..."`);
@@ -607,7 +768,7 @@ Analisa TODO o texto e reconstrói a referência completa:`;
             metodo: 'hibrido_alternativo'
           };
           
-          return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem);
+          return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem, hashImagem);
         }
         
         throw new Error('Nenhuma abordagem conseguiu extrair dados da imagem');
@@ -736,8 +897,37 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
   }
 
   // === PROCESSAR COMPROVANTE EXTRAÍDO (FUNÇÃO AUXILIAR) ===
-  async processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo = null, legendaImagem = null) {
+  async processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo = null, legendaImagem = null, hashImagem = null) {
     console.log(`   ✅ ATACADO: Dados extraídos da imagem: ${comprovante.referencia} - ${comprovante.valor}MT (${comprovante.metodo})`);
+    
+    // ====== VALIDAÇÃO DE CONSISTÊNCIA ENTRE DADOS ======
+    const textoCompleto = (comprovante.textoOriginal || '') + ' ' + (legendaImagem || '');
+    const validacaoConsistencia = this.validarConsistenciaComprovante(
+      comprovante.referencia, 
+      comprovante.valor, 
+      textoCompleto
+    );
+    
+    if (!validacaoConsistencia.valida) {
+      console.log(`❌ ATACADO: FALHA NA VALIDAÇÃO DE CONSISTÊNCIA - ${validacaoConsistencia.motivo}`);
+      if (validacaoConsistencia.inconsistencias) {
+        validacaoConsistencia.inconsistencias.forEach(inc => console.log(`   ⚠️ ${inc}`));
+      }
+      
+      return {
+        sucesso: false,
+        tipo: 'dados_inconsistentes',
+        inconsistencias: validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo],
+        referencia: comprovante.referencia,
+        valor: comprovante.valor,
+        mensagem: `❌ *DADOS INCONSISTENTES DETECTADOS!*\n\n📋 *REFERÊNCIA:* ${comprovante.referencia}\n💰 *VALOR:* ${comprovante.valor}MT\n\n⚠️ *PROBLEMAS:*\n${(validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo]).map(inc => `• ${inc}`).join('\n')}\n\n💡 Verifique o comprovante e tente novamente.`
+      };
+    }
+    
+    // REGISTRAR REFERÊNCIA COMO PROCESSADA
+    if (this.referencias_processadas) {
+      this.referencias_processadas.set(comprovante.referencia, Date.now());
+    }
     
     const temLegendaValida = legendaImagem && 
                             typeof legendaImagem === 'string' && 
@@ -770,6 +960,16 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
             pedidosFinais.forEach((pedido, i) => {
               console.log(`      📦 Bloco ${i + 1}: ${pedido} (${Math.floor(pedido.split('|')[1]/1024)}GB)`);
             });
+            
+            // REGISTRAR IMAGEM COMO PROCESSADA COM SUCESSO
+            if (hashImagem) {
+              this.registrarImagemProcessada(hashImagem, {
+                referencia: comprovante.referencia,
+                valor: comprovante.valor,
+                remetente: remetente,
+                sucesso: true
+              });
+            }
             
             return { 
               sucesso: true, 
@@ -811,6 +1011,16 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     
     if (megasCalculados) {
       await this.processarComprovante(comprovante, remetente, timestamp);
+      
+      // REGISTRAR IMAGEM COMO PROCESSADA COM SUCESSO
+      if (hashImagem) {
+        this.registrarImagemProcessada(hashImagem, {
+          referencia: comprovante.referencia,
+          valor: comprovante.valor,
+          remetente: remetente,
+          sucesso: true
+        });
+      }
       
       return { 
         sucesso: true, 
@@ -1660,6 +1870,157 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     };
   }
 
+  // === VALIDAÇÃO DE CONSISTÊNCIA E-MOLA ===
+  validarConsistenciaEMola(referencia, valor) {
+    try {
+      // Extrair data e hora da referência E-Mola: PP250914.1134.T38273
+      const match = referencia.match(/^PP(\d{2})(\d{2})(\d{2})\.(\d{2})(\d{2})\.[A-Za-z](\d{5})$/);
+      if (!match) {
+        return { valida: false, motivo: 'Formato E-Mola inválido na validação de consistência' };
+      }
+
+      const [, ano, mes, dia, hora, minuto, codigo] = match;
+      
+      // VALIDAÇÃO 1: Data válida
+      const anoCompleto = parseInt('20' + ano);
+      const mesNum = parseInt(mes);
+      const diaNum = parseInt(dia);
+      
+      if (mesNum < 1 || mesNum > 12) {
+        return { valida: false, motivo: `E-Mola: Mês inválido (${mesNum})` };
+      }
+      
+      if (diaNum < 1 || diaNum > 31) {
+        return { valida: false, motivo: `E-Mola: Dia inválido (${diaNum})` };
+      }
+      
+      // VALIDAÇÃO 2: Hora válida
+      const horaNum = parseInt(hora);
+      const minutoNum = parseInt(minuto);
+      
+      if (horaNum > 23) {
+        return { valida: false, motivo: `E-Mola: Hora inválida (${horaNum})` };
+      }
+      
+      if (minutoNum > 59) {
+        return { valida: false, motivo: `E-Mola: Minuto inválido (${minutoNum})` };
+      }
+      
+      // VALIDAÇÃO 3: Data não muito antiga (máximo 6 meses)
+      const dataTransacao = new Date(anoCompleto, mesNum - 1, diaNum, horaNum, minutoNum);
+      const agora = new Date();
+      const seisEMeses = 6 * 30 * 24 * 60 * 60 * 1000;
+      
+      if ((agora - dataTransacao) > seisEMeses) {
+        console.log(`⚠️ E-Mola: Transação muito antiga (${dataTransacao.toLocaleDateString()})`);
+      }
+      
+      // VALIDAÇÃO 4: Código sequencial válido
+      const codigoNum = parseInt(codigo);
+      if (codigoNum === 0) {
+        return { valida: false, motivo: 'E-Mola: Código sequencial inválido (00000)' };
+      }
+      
+      console.log(`✅ E-Mola consistente: ${diaNum}/${mesNum}/${anoCompleto} às ${horaNum}:${minutoNum} [${codigo}]`);
+      return { valida: true, motivo: 'E-Mola consistente' };
+      
+    } catch (error) {
+      console.error(`❌ Erro validação E-Mola: ${error.message}`);
+      return { valida: false, motivo: `Erro na validação E-Mola: ${error.message}` };
+    }
+  }
+
+  // === VALIDAÇÃO DE CONSISTÊNCIA M-PESA ===
+  validarConsistenciaMPesa(referencia, valor) {
+    try {
+      // VALIDAÇÃO 1: Padrão específico M-Pesa - deve ser bem distribuído
+      const letras = referencia.match(/[A-Z]/g) || [];
+      const numeros = referencia.match(/\d/g) || [];
+      
+      if (letras.length < 2) {
+        return { valida: false, motivo: 'M-Pesa: Poucas letras (mínimo 2)' };
+      }
+      
+      if (numeros.length < 3) {
+        return { valida: false, motivo: 'M-Pesa: Poucos números (mínimo 3)' };
+      }
+      
+      // VALIDAÇÃO 2: Não deve ser sequência óbvia
+      const sequencias = ['1234567890', 'ABCDEFGHIJK', '0000000000', 'AAAAAAAAAAA'];
+      for (const seq of sequencias) {
+        if (referencia.includes(seq.substring(0, 5))) {
+          return { valida: false, motivo: 'M-Pesa: Sequência muito óbvia detectada' };
+        }
+      }
+      
+      // VALIDAÇÃO 3: Distribuição balanceada
+      const primeiraMetade = referencia.substring(0, 5);
+      const segundaMetade = referencia.substring(6, 11);
+      
+      const letrasP1 = (primeiraMetade.match(/[A-Z]/g) || []).length;
+      const letrasP2 = (segundaMetade.match(/[A-Z]/g) || []).length;
+      
+      // Pelo menos uma letra em cada metade é indicativo de boa distribuição
+      if (letrasP1 === 0 || letrasP2 === 0) {
+        console.log(`⚠️ M-Pesa: Distribuição desbalanceada [${letrasP1}|${letrasP2}]`);
+      }
+      
+      console.log(`✅ M-Pesa consistente: ${letras.length} letras, ${numeros.length} números`);
+      return { valida: true, motivo: 'M-Pesa consistente' };
+      
+    } catch (error) {
+      console.error(`❌ Erro validação M-Pesa: ${error.message}`);
+      return { valida: false, motivo: `Erro na validação M-Pesa: ${error.message}` };
+    }
+  }
+
+  // === VALIDAÇÃO CRUZADA DE DADOS (SIMPLIFICADA) ===
+  validarConsistenciaComprovante(referencia, valor, textoCompleto = '') {
+    try {
+      console.log(`🔍 VALIDAÇÃO CRUZADA: ref=${referencia}, valor=${valor}MT`);
+      
+      const inconsistencias = [];
+      
+      // VALIDAÇÃO 1: Verificar duplicidade de referência (ÚNICA VALIDAÇÃO RIGOROSA)
+      if (this.referencias_processadas && this.referencias_processadas.has(referencia)) {
+        const ultimoUso = this.referencias_processadas.get(referencia);
+        const tempoDecorrido = Date.now() - ultimoUso;
+        const duasHoras = 2 * 60 * 60 * 1000;
+        
+        if (tempoDecorrido < duasHoras) {
+          inconsistencias.push(`Referência ${referencia} já foi processada há ${Math.floor(tempoDecorrido/60000)} minutos`);
+        }
+      }
+      
+      // VALIDAÇÃO 2: Apenas valores extremos
+      if (valor) {
+        const valorNum = parseFloat(valor);
+        if (valorNum <= 0) {
+          inconsistencias.push(`Valor inválido: ${valor}MT`);
+        }
+        if (valorNum > 100000) {
+          inconsistencias.push(`Valor extremamente alto: ${valor}MT`);
+        }
+      }
+      
+      if (inconsistencias.length > 0) {
+        console.log(`❌ INCONSISTÊNCIAS DETECTADAS:`, inconsistencias);
+        return {
+          valida: false,
+          inconsistencias: inconsistencias,
+          motivo: `${inconsistencias.length} inconsistência(s) detectada(s)`
+        };
+      }
+      
+      console.log(`✅ VALIDAÇÃO CRUZADA: Dados consistentes`);
+      return { valida: true, motivo: 'Dados consistentes' };
+      
+    } catch (error) {
+      console.error(`❌ Erro validação cruzada: ${error.message}`);
+      return { valida: true, motivo: 'Erro na validação - permitindo processamento' }; // FALHA SEGURA
+    }
+  }
+
   // === BUSCAR REFERÊNCIA ALTERNATIVA ===
   buscarReferenciaAlternativa(texto) {
     console.log(`🔍 Buscando referência alternativa no texto...`);
@@ -2230,6 +2591,30 @@ Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"enco
           console.log(`✅ VALIDAÇÃO RIGOROSA: Valor ${valorLimpo}MT APROVADO`);
         }
         
+        // ====== VALIDAÇÃO DE CONSISTÊNCIA ENTRE DADOS ======
+        const validacaoConsistencia = this.validarConsistenciaComprovante(
+          referencia, 
+          valorLimpo, 
+          mensagem
+        );
+        
+        if (!validacaoConsistencia.valida) {
+          console.log(`❌ VALIDAÇÃO CONSISTÊNCIA (REGEX): ${validacaoConsistencia.motivo}`);
+          return {
+            encontrado: false,
+            referencia: referencia,
+            valor_invalido: valorLimpo,
+            motivo: 'dados_inconsistentes',
+            inconsistencias: validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo],
+            mensagem_erro: `❌ *DADOS INCONSISTENTES!*\n\n📋 *REFERÊNCIA:* ${referencia}\n💰 *VALOR:* ${valorLimpo}MT\n\n⚠️ *PROBLEMAS:*\n${(validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo]).map(inc => `• ${inc}`).join('\n')}\n\n💡 Verifique o comprovante e tente novamente.`
+          };
+        }
+        
+        // REGISTRAR REFERÊNCIA COMO PROCESSADA
+        if (this.referencias_processadas) {
+          this.referencias_processadas.set(referencia, Date.now());
+        }
+        
         return {
           referencia: referencia,
           valor: valorLimpo,
@@ -2301,6 +2686,38 @@ ou
             return resultadoInvalido;
           }
           console.log(`✅ VALIDAÇÃO RIGOROSA (IA): Valor ${valorLimpo}MT APROVADO`);
+        }
+        
+        // ====== VALIDAÇÃO DE CONSISTÊNCIA ENTRE DADOS (IA) ======
+        const validacaoConsistencia = this.validarConsistenciaComprovante(
+          resultado.referencia, 
+          valorLimpo, 
+          mensagem
+        );
+        
+        if (!validacaoConsistencia.valida) {
+          console.log(`❌ VALIDAÇÃO CONSISTÊNCIA (IA): ${validacaoConsistencia.motivo}`);
+          const resultadoInconsistente = {
+            encontrado: false,
+            referencia: resultado.referencia,
+            valor_invalido: valorLimpo,
+            motivo: 'dados_inconsistentes',
+            inconsistencias: validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo],
+            mensagem_erro: `❌ *DADOS INCONSISTENTES!*\n\n📋 *REFERÊNCIA:* ${resultado.referencia}\n💰 *VALOR:* ${valorLimpo}MT\n\n⚠️ *PROBLEMAS:*\n${(validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo]).map(inc => `• ${inc}`).join('\n')}\n\n💡 Verifique o comprovante e tente novamente.`
+          };
+          
+          // Salvar resultado inconsistente no cache
+          this.cacheResultados.set(cacheKey, {
+            resultado: resultadoInconsistente,
+            timestamp: Date.now()
+          });
+          
+          return resultadoInconsistente;
+        }
+        
+        // REGISTRAR REFERÊNCIA COMO PROCESSADA
+        if (this.referencias_processadas) {
+          this.referencias_processadas.set(resultado.referencia, Date.now());
         }
         
         const comprovanteProcessado = {
@@ -2418,6 +2835,26 @@ ou
     
     if (removidos > 0) {
       console.log(`🗑️ ATACADO: Cache limpo - ${removidos} entradas antigas removidas`);
+    }
+  }
+
+  // === LIMPAR REFERÊNCIAS ANTIGAS ===
+  limparReferenciasAntigas() {
+    if (!this.referencias_processadas) return;
+    
+    const agora = Date.now();
+    const seisHoras = 6 * 60 * 60 * 1000; // 6 horas
+    let removidas = 0;
+    
+    for (const [referencia, timestamp] of this.referencias_processadas.entries()) {
+      if (agora - timestamp > seisHoras) {
+        this.referencias_processadas.delete(referencia);
+        removidas++;
+      }
+    }
+    
+    if (removidas > 0) {
+      console.log(`🧹 Referências: ${removidas} referências antigas removidas`);
     }
   }
 

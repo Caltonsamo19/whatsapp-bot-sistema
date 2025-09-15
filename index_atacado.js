@@ -410,7 +410,7 @@ async function verificarPagamentoIndividual(referencia, valorEsperado) {
             referencia: referencia,
             valor: valorNormalizado
         }, {
-            timeout: 15000,
+            timeout: 30000,
             headers: {
                 'Content-Type': 'application/json'
             }
@@ -1709,7 +1709,15 @@ client.on('message', async (message) => {
         }
 
         // === TRATAMENTO DE ERROS/CASOS ESPECIAIS ===
-        if (resultadoIA.tipo === 'valor_nao_encontrado_na_tabela') {
+        if (resultadoIA.tipo === 'imagem_duplicada') {
+            await message.reply(resultadoIA.mensagem);
+            return;
+            
+        } else if (resultadoIA.tipo === 'valor_nao_encontrado_na_tabela') {
+            await message.reply(resultadoIA.mensagem);
+            return;
+            
+        } else if (resultadoIA.tipo === 'dados_inconsistentes') {
             await message.reply(resultadoIA.mensagem);
             return;
             

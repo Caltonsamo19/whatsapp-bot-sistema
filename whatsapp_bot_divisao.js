@@ -1328,8 +1328,8 @@ class WhatsAppBotDivisao {
             for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
                 try {
                     // Timeout adaptativo baseado nas estatísticas de rede
-                    const baseTimeout = Math.max(15000, this.estatisticasRede.tempoMedioResposta * 3);
-                    const timeout = baseTimeout + (tentativa * 15000); // 15s, 30s, 45s (adaptativo)
+                    const baseTimeout = Math.max(30000, this.estatisticasRede.tempoMedioResposta * 3);
+                    const timeout = baseTimeout + (tentativa * 15000); // 30s, 45s, 60s (adaptativo)
                     
                     console.log(`🔄 DIVISÃO: ${descricao} - Tentativa ${tentativa}/${maxTentativas} (timeout: ${timeout}ms)`);
                     
