@@ -3022,42 +3022,33 @@ ou
   // === NOVA FUNCIONALIDADE: SUBDIVISÃO EM BLOCOS DE 10GB PARA IMAGENS ===
   aplicarSubdivisaoSeNecessario(referenciaBase, megasTotal, numero) {
     console.log(`🔧 ATACADO: Verificando se ${megasTotal}MB (${Math.floor(megasTotal/1024)}GB) precisa subdivisão...`);
-    
+
     // Se for 10GB ou menos, não precisa subdividir
     if (megasTotal <= 10240) {
       console.log(`   ✅ ATACADO: ${Math.floor(megasTotal/1024)}GB ≤ 10GB - Não precisa subdividir`);
       return [`${referenciaBase}|${megasTotal}|${numero}`];
     }
-    
-    // Precisa subdividir em blocos de 10GB
-    const numeroBlocos = Math.ceil(megasTotal / 10240);
-    const megasPorBloco = Math.floor(megasTotal / numeroBlocos);
-    const megasRestante = megasTotal % numeroBlocos;
-    
-    console.log(`   🔧 ATACADO: ${Math.floor(megasTotal/1024)}GB → ${numeroBlocos} blocos de ~${Math.floor(megasPorBloco/1024)}GB`);
-    
+
+    // CORREÇÃO: Subdividir em blocos EXATOS de 10GB
     const pedidosSubdivididos = [];
-    
-    // Criar subdivisões
-    for (let i = 0; i < numeroBlocos; i++) {
-      let megasBloco = megasPorBloco;
-      
-      // Distribuir resto nos primeiros blocos
-      if (i < megasRestante) {
-        megasBloco += 1;
-      }
-      
-      // Garantir que nenhum bloco exceda 10GB
-      if (megasBloco > 10240) {
-        megasBloco = 10240;
-      }
-      
-      const novaReferencia = referenciaBase + String(i + 1);
+    let megasRestantes = megasTotal;
+    let contadorBloco = 1;
+
+    console.log(`   🔧 ATACADO: ${Math.floor(megasTotal/1024)}GB → Criando blocos de EXATAMENTE 10GB`);
+
+    // Criar blocos de exatamente 10GB
+    while (megasRestantes > 0) {
+      const megasBloco = megasRestantes >= 10240 ? 10240 : megasRestantes;
+
+      const novaReferencia = referenciaBase + String(contadorBloco);
       const pedidoSubdividido = `${novaReferencia}|${megasBloco}|${numero}`;
-      
+
       pedidosSubdivididos.push(pedidoSubdividido);
-      
-      console.log(`      📦 ATACADO: Bloco ${i + 1}/${numeroBlocos}: ${novaReferencia} - ${Math.floor(megasBloco/1024)}GB (${megasBloco}MB)`);
+
+      console.log(`      📦 ATACADO: Bloco ${contadorBloco}: ${novaReferencia} - ${Math.floor(megasBloco/1024)}GB (${megasBloco}MB)`);
+
+      megasRestantes -= megasBloco;
+      contadorBloco++;
     }
     
     // Validar se a subdivisão preservou o total
