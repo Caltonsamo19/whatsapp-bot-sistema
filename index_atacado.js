@@ -114,8 +114,9 @@ const MODERACAO_CONFIG = {
     removerUsuario: false,
     excecoes: [
         '258861645968@c.us',
-        '258871112049@c.us', 
-        '258852118624@c.us'
+        '258871112049@c.us',
+        '258852118624@c.us',
+        '258840326152@c.us'
     ]
 };
 
