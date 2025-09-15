@@ -544,7 +544,6 @@ class WhatsAppAIAtacado {
       } else {
         console.log(`⚠️ ATENÇÃO: Nenhuma referência válida encontrada`);
       }
-      }
 
       return textoCompleto;
 
