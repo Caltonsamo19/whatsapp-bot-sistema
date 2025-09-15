@@ -675,11 +675,11 @@ async function enviarParaTasker(referencia, megas, numero, grupoId, messageConte
                 console.error(`❌ Erro ao enviar notificação de duplicado:`, error);
             }
         }
-        
-        // ⚠️ PARAR PROCESSAMENTO AQUI - NÃO CONTINUAR
-        console.log(`🛑 DIVISÃO: Processamento interrompido devido a duplicado`);
-        return null; // Retorna null para indicar que foi duplicado
-        
+
+        // ✅ CONTINUAR PROCESSAMENTO MESMO COM DUPLICADOS
+        console.log(`⚠️ DIVISÃO: Pagamento duplicado detectado, mas continuando processamento normal`);
+        // Retornar dados normalmente para não quebrar o sistema de divisão
+
     } else {
         console.log(`🔄 [${grupoNome}] Google Sheets falhou, usando WhatsApp backup...`);
         enviarViaWhatsAppTasker(dadosCompletos, grupoNome);
@@ -693,6 +693,115 @@ async function enviarParaTasker(referencia, megas, numero, grupoId, messageConte
     }
     
     return dadosCompletos;
+}
+
+// === FUNÇÃO PARA SUBDIVIDIR PEDIDOS INDIVIDUAIS EM BLOCOS DE 10GB ===
+async function enviarComSubdivisaoAutomatica(referencia, megasTotal, numero, grupoId, messageContext = null) {
+    const LIMITE_MAXIMO_GB = 10240; // 10GB em MB
+
+    console.log(`🔧 SUBDIVISÃO INDIVIDUAL: Analisando pedido ${referencia} - ${megasTotal}MB (${megasTotal/1024}GB) para ${numero}`);
+
+    // Se for 10GB ou menos, enviar normalmente
+    if (megasTotal <= LIMITE_MAXIMO_GB) {
+        console.log(`✅ SUBDIVISÃO: Pedido dentro do limite (${megasTotal/1024}GB ≤ 10GB), enviando normalmente`);
+        return await enviarParaTasker(referencia, megasTotal, numero, grupoId, messageContext);
+    }
+
+    // Calcular quantos blocos de 10GB são necessários
+    const numeroBlocos = Math.ceil(megasTotal / LIMITE_MAXIMO_GB);
+    console.log(`🔧 SUBDIVISÃO: Dividindo ${megasTotal/1024}GB em ${numeroBlocos} blocos de máximo 10GB cada`);
+
+    let megasRestantes = megasTotal;
+    let contadorBloco = 1;
+    const resultados = [];
+
+    // Criar blocos de exatamente 10GB (exceto o último que pode ser menor)
+    while (megasRestantes > 0) {
+        const megasDoBloco = megasRestantes >= LIMITE_MAXIMO_GB ? LIMITE_MAXIMO_GB : megasRestantes;
+        const referenciaBloco = `${referencia}${String(contadorBloco).padStart(2, '0')}`;
+
+        console.log(`📦 SUBDIVISÃO: Bloco ${contadorBloco}/${numeroBlocos}: ${referenciaBloco} - ${megasDoBloco}MB (${megasDoBloco/1024}GB) para ${numero}`);
+
+        try {
+            const resultado = await enviarParaTasker(referenciaBloco, megasDoBloco, numero, grupoId, null);
+            resultados.push({
+                bloco: contadorBloco,
+                referencia: referenciaBloco,
+                megas: megasDoBloco,
+                numero: numero,
+                resultado: resultado,
+                sucesso: true
+            });
+
+            console.log(`✅ SUBDIVISÃO: Bloco ${contadorBloco} criado com sucesso: ${referenciaBloco}`);
+
+        } catch (error) {
+            console.error(`❌ SUBDIVISÃO: Erro no bloco ${contadorBloco}:`, error.message);
+            resultados.push({
+                bloco: contadorBloco,
+                referencia: referenciaBloco,
+                megas: megasDoBloco,
+                numero: numero,
+                erro: error.message,
+                sucesso: false
+            });
+        }
+
+        megasRestantes -= megasDoBloco;
+        contadorBloco++;
+
+        // Pequeno delay entre blocos para não sobrecarregar o sistema
+        if (megasRestantes > 0) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+
+    // Enviar mensagem de resumo se houver contexto
+    if (messageContext) {
+        const sucessos = resultados.filter(r => r.sucesso).length;
+        const erros = resultados.filter(r => !r.sucesso).length;
+
+        let mensagemResumo = `🔧 *SUBDIVISÃO AUTOMÁTICA*\n\n`;
+        mensagemResumo += `💰 **Referência Original:** ${referencia}\n`;
+        mensagemResumo += `📊 **Total:** ${megasTotal/1024}GB dividido em ${numeroBlocos} blocos\n`;
+        mensagemResumo += `📱 **Número:** ${numero}\n\n`;
+
+        if (erros === 0) {
+            mensagemResumo += `✅ **${sucessos}/${numeroBlocos} blocos criados com sucesso!**\n\n`;
+            mensagemResumo += `🚀 *O sistema processará as transferências automaticamente.*`;
+        } else {
+            mensagemResumo += `⚠️ **Resultado:** ${sucessos} sucessos, ${erros} erros\n\n`;
+            mensagemResumo += `📋 **Blocos criados:**\n`;
+            resultados.filter(r => r.sucesso).forEach(r => {
+                mensagemResumo += `   • ${r.referencia}: ${r.megas/1024}GB ✅\n`;
+            });
+            if (erros > 0) {
+                mensagemResumo += `\n❌ **Blocos com erro:**\n`;
+                resultados.filter(r => !r.sucesso).forEach(r => {
+                    mensagemResumo += `   • ${r.referencia}: ${r.megas/1024}GB ❌\n`;
+                });
+            }
+        }
+
+        try {
+            await messageContext.reply(mensagemResumo);
+            console.log(`📤 SUBDIVISÃO: Mensagem de resumo enviada - ${sucessos}✅ ${erros}❌`);
+        } catch (error) {
+            console.error(`❌ SUBDIVISÃO: Erro ao enviar mensagem de resumo:`, error.message);
+        }
+    }
+
+    const sucessoGeral = resultados.every(r => r.sucesso);
+    console.log(`🏁 SUBDIVISÃO: Processo concluído - ${resultados.filter(r => r.sucesso).length}/${numeroBlocos} blocos criados`);
+
+    return {
+        sucesso: sucessoGeral,
+        totalBlocos: numeroBlocos,
+        blocosProcessados: resultados.length,
+        blocosSucesso: resultados.filter(r => r.sucesso).length,
+        blocosErro: resultados.filter(r => !r.sucesso).length,
+        detalhes: resultados
+    };
 }
 
 // === FUNÇÃO AUXILIAR PARA CÁLCULO DE MEGAS ===
@@ -1812,11 +1921,7 @@ client.on('message', async (message) => {
                         if (!valorEsperado) {
                             console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
                             
-                            const resultadoEnvio = await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
-                            if (resultadoEnvio === null) {
-                                console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
-                                return; // Para aqui se for duplicado
-                            }
+                            await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
                             await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                             
                             if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -1856,11 +1961,7 @@ client.on('message', async (message) => {
                         console.log(`✅ INDIVIDUAL: Pagamento confirmado para screenshot! Processando...`);
                         
                         // 3. Se pagamento confirmado, processar normalmente
-                        const resultadoEnvio = await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
-                        if (resultadoEnvio === null) {
-                            console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
-                            return; // Para aqui se for duplicado
-                        }
+                        await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
                         await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                         
                         if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -2003,11 +2104,7 @@ client.on('message', async (message) => {
                 if (!valorEsperado) {
                     console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
                     
-                    const resultadoEnvio = await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
-                    if (resultadoEnvio === null) {
-                        console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
-                        return; // Para aqui se for duplicado
-                    }
+                    await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
                     await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                     
                     if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -2047,11 +2144,7 @@ client.on('message', async (message) => {
                 console.log(`✅ INDIVIDUAL: Pagamento confirmado para texto! Processando...`);
                 
                 // 3. Se pagamento confirmado, processar normalmente
-                const resultadoEnvio = await enviarParaTasker(referencia, megasConvertido, numero, message.from, message);
-                if (resultadoEnvio === null) {
-                    console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
-                    return; // Para aqui se for duplicado
-                }
+                await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
                 await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                 
                 if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
