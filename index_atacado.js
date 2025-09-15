@@ -22,9 +22,9 @@ const GOOGLE_SHEETS_CONFIG_ATACADO = {
 
 // === CONFIGURAÇÃO GOOGLE SHEETS - SALDO (NOVA) ===
 const GOOGLE_SHEETS_CONFIG_SALDO = {
-    scriptUrl: process.env.GOOGLE_SHEETS_SCRIPT_URL_SALDO || 'https://script.google.com/macros/s/NOVA_URL_PARA_SALDO/exec',
-    planilhaUrl: 'https://docs.google.com/spreadsheets/d/NOVA_PLANILHA_SALDO/edit',
-    planilhaId: 'NOVA_PLANILHA_SALDO',
+    scriptUrl: process.env.GOOGLE_SHEETS_SCRIPT_URL_SALDO || 'https://script.google.com/macros/s/AKfycby9UrgOSXkCnAKt4Csd3IPG6pr8i9jmgycrBy_cvsOT7x8eY0-EmJOmooSvw3eRuvF2tQ/exec',
+    planilhaUrl: 'https://docs.google.com/spreadsheets/d/1fIE-bODZOF0oyUY-y5oUGL2g_LYzwoKdjdwc3bGo8hQ/edit',
+    planilhaId: '1fIE-bODZOF0oyUY-y5oUGL2g_LYzwoKdjdwc3bGo8hQ',
     timeout: 30000,
     retryAttempts: 3,
     retryDelay: 2000
@@ -185,9 +185,14 @@ const CONFIGURACAO_GRUPOS_DIVISAO = {
             71680: 875,    // 70GB = 875MT
             81920: 1000    // 80GB = 1000MT
         },
-        // === TABELA DE SALDO (VAZIA POR ENQUANTO) ===
+        // === TABELA DE SALDO TREINAMENTO ===
         precosSaldo: {
-            // Adicionar valores conforme necessário
+            50: 45,      // 50MT saldo = 45MT pagamento
+            100: 90,     // 100MT saldo = 90MT pagamento
+            200: 180,    // 200MT saldo = 180MT pagamento
+            300: 270,    // 300MT saldo = 270MT pagamento
+            500: 450,    // 500MT saldo = 450MT pagamento
+            1000: 900    // 1000MT saldo = 900MT pagamento
         }
     }
     // Only Saldo foi removido pois não precisa de divisão automática
@@ -212,6 +217,25 @@ const CONFIGURACAO_GRUPOS = {
             81920: 1000,   // 80GB = 1000MT
             92160: 1125,   // 90GB = 1125MT
             102400: 1250   // 100GB = 1250MT
+        },
+        // === TABELA DE SALDO NET FORNECEDOR V ===
+        precosSaldo: {
+            50: 45,      // 50MT saldo = 45MT pagamento
+            100: 85,     // 100MT saldo = 85MT pagamento
+            200: 170,    // 200MT saldo = 170MT pagamento
+            300: 255,    // 300MT saldo = 255MT pagamento
+            400: 340,    // 400MT saldo = 340MT pagamento
+            500: 410,    // 500MT saldo = 410MT pagamento
+            1000: 815,   // 1000MT saldo = 815MT pagamento
+            2000: 1630,  // 2000MT saldo = 1630MT pagamento
+            3000: 2445,  // 3000MT saldo = 2445MT pagamento
+            4000: 3260,  // 4000MT saldo = 3260MT pagamento
+            5000: 4075,  // 5000MT saldo = 4075MT pagamento
+            6000: 4890,  // 6000MT saldo = 4890MT pagamento
+            7000: 5705,  // 7000MT saldo = 5705MT pagamento
+            8000: 6520,  // 8000MT saldo = 6520MT pagamento
+            9000: 7335,  // 9000MT saldo = 7335MT pagamento
+            10000: 8150  // 10000MT saldo = 8150MT pagamento
         },
         tabela: `GB'S COMPLETOS
 📱 10GB➜125MT 
@@ -281,6 +305,15 @@ NOME: Vasco José Mahumane
             61440: 750,    // 60GB = 750MT
             71680: 875,    // 70GB = 875MT
             81920: 1000    // 80GB = 1000MT
+        },
+        // === TABELA DE SALDO TREINAMENTO ===
+        precosSaldo: {
+            50: 45,      // 50MT saldo = 45MT pagamento
+            100: 90,     // 100MT saldo = 90MT pagamento
+            200: 180,    // 200MT saldo = 180MT pagamento
+            300: 270,    // 300MT saldo = 270MT pagamento
+            500: 450,    // 500MT saldo = 450MT pagamento
+            1000: 900    // 1000MT saldo = 900MT pagamento
         },
         tabela: `🚨PROMOÇÃO DE GIGABYTES🚨
 MAIS DE 40 GIGABYTES 12.5
@@ -532,6 +565,36 @@ function calcularValorEsperadoDosMegas(megas, grupoId) {
     }
 }
 
+// === FUNÇÃO PARA CALCULAR VALOR ESPERADO BASEADO NO SALDO ===
+function calcularValorEsperadoDoSaldo(saldo, grupoId) {
+    try {
+        const configGrupo = getConfiguracaoGrupo(grupoId);
+        if (!configGrupo || !configGrupo.precosSaldo) {
+            console.log(`⚠️ SALDO: Grupo ${grupoId} não tem tabela de preços de saldo configurada`);
+            return null;
+        }
+
+        // Converter saldo para número se for string
+        const saldoNum = typeof saldo === 'string' ?
+            parseInt(saldo.replace(/[^\d]/g, '')) : parseInt(saldo);
+
+        // Buscar o preço correspondente na tabela de saldo
+        const valorEncontrado = configGrupo.precosSaldo[saldoNum];
+
+        if (valorEncontrado) {
+            console.log(`💰 SALDO: ${saldoNum}MT = ${valorEncontrado}MT`);
+            return valorEncontrado;
+        }
+
+        console.log(`⚠️ SALDO: Não encontrou preço para ${saldoNum}MT na tabela de saldo`);
+        return null;
+
+    } catch (error) {
+        console.error(`❌ SALDO: Erro ao calcular valor:`, error);
+        return null;
+    }
+}
+
 // === FUNÇÃO PARA ENVIAR PEDIDOS DE SALDO ===
 async function enviarSaldoParaTasker(referencia, saldo, numero, grupoId, messageContext = null) {
     const timestamp = new Date().toLocaleString('pt-BR', {
@@ -612,6 +675,46 @@ async function enviarSaldoParaTasker(referencia, saldo, numero, grupoId, message
         }
 
         throw error;
+    }
+}
+
+// === FUNÇÃO PARA ENVIAR SALDO PARA GOOGLE SHEETS ===
+async function enviarSaldoParaGoogleSheets(dadosCompletos, grupoId, timestamp) {
+    try {
+        console.log(`📊 SALDO: Enviando para Google Sheets: ${dadosCompletos}`);
+
+        const payload = {
+            grupo_id: grupoId,
+            timestamp: timestamp,
+            dados: dadosCompletos
+        };
+
+        const response = await fetch(GOOGLE_SHEETS_CONFIG_SALDO.scriptUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload),
+            timeout: GOOGLE_SHEETS_CONFIG_SALDO.timeout
+        });
+
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
+        }
+
+        const resultado = await response.json();
+
+        if (resultado.success) {
+            console.log(`✅ SALDO: Enviado para Google Sheets com sucesso - Linha ${resultado.row}`);
+            return { sucesso: true, linha: resultado.row, referencia: resultado.referencia };
+        } else {
+            console.error(`❌ SALDO: Erro no Google Sheets:`, resultado.error || resultado.message);
+            return { sucesso: false, erro: resultado.error || resultado.message };
+        }
+
+    } catch (error) {
+        console.error(`❌ SALDO: Erro ao enviar para Google Sheets:`, error);
+        return { sucesso: false, erro: error.message };
     }
 }
 
@@ -1892,11 +1995,16 @@ client.on('message', async (message) => {
                 if (resultadoIA.sucesso) {
                     
                     if (resultadoIA.tipo === 'comprovante_imagem_recebido') {
+                        // Detectar se é saldo ou megas baseado no que a IA retornou
+                        const isSaldoComprovante = resultadoIA.tipoProduto === 'saldo';
+                        const produtoTexto = isSaldoComprovante ? `${resultadoIA.saldo || resultadoIA.megas}MT` : resultadoIA.megas;
+                        const tipoProdutoTexto = isSaldoComprovante ? 'Saldo' : 'Megas';
+
                         await message.reply(
                             `✅ *Comprovante da imagem processado!*\n\n` +
                             `💰 Referência: ${resultadoIA.referencia}\n` +
-                            `📊 Megas: ${resultadoIA.megas}\n\n` +
-                            `📱 *Agora envie UM número que vai receber ${resultadoIA.megas}!*`
+                            `📊 ${tipoProdutoTexto}: ${produtoTexto}\n\n` +
+                            `📱 *Agora envie UM número que vai receber ${produtoTexto}!*`
                         );
                         return;
                         
@@ -1913,26 +2021,38 @@ client.on('message', async (message) => {
                         const produtoConvertido = isSaldo ? parseInt(produto) : converterMegasParaNumero(produto);
                         
                         // === NOVA VERIFICAÇÃO: CONFIRMAR PAGAMENTO ANTES DE PROCESSAR ===
-                        console.log(`🔍 INDIVIDUAL: Verificando pagamento antes de processar screenshot...`);
-                        
-                        // 1. Calcular valor esperado baseado nos megas
-                        const valorEsperado = calcularValorEsperadoDosMegas(megasConvertido, message.from);
+                        console.log(`🔍 INDIVIDUAL: Verificando pagamento antes de processar screenshot (${isSaldo ? 'SALDO' : 'MEGAS'})...`);
+
+                        // 1. Calcular valor esperado baseado no tipo (megas ou saldo)
+                        const valorEsperado = isSaldo ?
+                            calcularValorEsperadoDoSaldo(produtoConvertido, message.from) :
+                            calcularValorEsperadoDosMegas(produtoConvertido, message.from);
                         
                         if (!valorEsperado) {
                             console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
-                            
-                            await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
-                            await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
+
+                            if (isSaldo) {
+                                // Processar saldo
+                                await enviarSaldoParaTasker(referencia, produtoConvertido, numero, message.from, message);
+                                await registrarComprador(message.from, numero, nomeContato, produtoConvertido);
+                            } else {
+                                // Processar megas
+                                await enviarComSubdivisaoAutomatica(referencia, produtoConvertido, numero, message.from, message);
+                                await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || produto);
+                            }
                             
                             if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
                                 const timestampMensagem = new Date().toLocaleString('pt-BR');
                                 adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
                             }
                             
+                            const tipoProdutoTexto = isSaldo ? 'Saldo' : 'Megas';
+                            const produtoTexto = isSaldo ? `${produtoConvertido}MT` : produto;
+
                             await message.reply(
                                 `✅ *Screenshot + Número processados!*\n\n` +
                                 `💰 Referência: ${referencia}\n` +
-                                `📊 Megas: ${megas}\n` +
+                                `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
                                 `📱 Número: ${numero}\n\n` +
                                 `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
                             );
@@ -1944,12 +2064,14 @@ client.on('message', async (message) => {
                         
                         if (!pagamentoConfirmado) {
                             const valorNormalizado = normalizarValor(valorEsperado);
-                            console.log(`❌ INDIVIDUAL: Pagamento não confirmado para screenshot - ${referencia} (${valorNormalizado}MT)`);
-                            
+                            const tipoProdutoTexto = isSaldo ? 'Saldo' : 'Megas';
+                            const produtoTexto = isSaldo ? `${produtoConvertido}MT` : produto;
+                            console.log(`❌ INDIVIDUAL: Pagamento não confirmado para screenshot (${tipoProdutoTexto}) - ${referencia} (${valorNormalizado}MT)`);
+
                             await message.reply(
                                 `⏳ *AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO*\n\n` +
                                 `💰 Referência: ${referencia}\n` +
-                                `📊 Megas: ${megas}\n` +
+                                `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
                                 `📱 Número: ${numero}\n` +
                                 `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
                                 `🔍 Aguardando confirmação do pagamento na planilha...\n` +
@@ -1958,21 +2080,31 @@ client.on('message', async (message) => {
                             return;
                         }
                         
-                        console.log(`✅ INDIVIDUAL: Pagamento confirmado para screenshot! Processando...`);
-                        
+                        console.log(`✅ INDIVIDUAL: Pagamento confirmado para screenshot (${isSaldo ? 'SALDO' : 'MEGAS'})! Processando...`);
+
                         // 3. Se pagamento confirmado, processar normalmente
-                        await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
-                        await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
+                        if (isSaldo) {
+                            // Processar saldo
+                            await enviarSaldoParaTasker(referencia, produtoConvertido, numero, message.from, message);
+                            await registrarComprador(message.from, numero, nomeContato, produtoConvertido);
+                        } else {
+                            // Processar megas
+                            await enviarComSubdivisaoAutomatica(referencia, produtoConvertido, numero, message.from, message);
+                            await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || produto);
+                        }
                         
                         if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
                             const timestampMensagem = new Date().toLocaleString('pt-BR');
                             adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
                         }
                         
+                        const tipoProdutoTexto = isSaldo ? 'Saldo' : 'Megas';
+                        const produtoTexto = isSaldo ? `${produtoConvertido}MT` : produto;
+
                         await message.reply(
                             `✅ *Screenshot + Número processados!*\n\n` +
                             `💰 Referência: ${referencia}\n` +
-                            `📊 Megas: ${megas}\n` +
+                            `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
                             `📱 Número: ${numero}\n` +
                             `💳 Pagamento: ${normalizarValor(valorEsperado)}MT confirmado\n\n` +
                             `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
@@ -2069,26 +2201,34 @@ client.on('message', async (message) => {
         if (resultadoIA.sucesso) {
             
             if (resultadoIA.tipo === 'comprovante_recebido') {
+                // Detectar se é saldo ou megas baseado no que a IA retornou
+                const isSaldoComprovante = resultadoIA.tipoProduto === 'saldo';
+                const produtoTexto = isSaldoComprovante ? `${resultadoIA.saldo || resultadoIA.megas}MT` : resultadoIA.megas;
+                const tipoProdutoTexto = isSaldoComprovante ? 'Saldo' : 'Megas';
+
                 await message.reply(
                     `✅ *Comprovante processado!*\n\n` +
                     `💰 Referência: ${resultadoIA.referencia}\n` +
-                    `📊 Megas: ${resultadoIA.megas}\n\n` +
-                    `📱 *Envie UM número que vai receber ${resultadoIA.megas}!*`
+                    `📊 ${tipoProdutoTexto}: ${produtoTexto}\n\n` +
+                    `📱 *Envie UM número que vai receber ${produtoTexto}!*`
                 );
                 return;
                 
-            } else if (resultadoIA.tipo === 'numero_processado') {
+            } else if (resultadoIA.tipo === 'numero_processado' || resultadoIA.tipo === 'saldo_processado') {
                 const dadosCompletos = resultadoIA.dadosCompletos;
-                const [referencia, megas, numero] = dadosCompletos.split('|');
+                const [referencia, produto, numero] = dadosCompletos.split('|');
                 const nomeContato = message._data.notifyName || 'N/A';
                 const autorMensagem = message.author || 'Desconhecido';
-                
-                // Converter megas para formato numérico
-                const megasConvertido = converterMegasParaNumero(megas);
+
+                // Verificar se é saldo ou megas
+                const isSaldo = resultadoIA.tipo === 'saldo_processado';
+
+                // Converter produto para formato numérico (megas ou saldo)
+                const produtoConvertido = isSaldo ? parseInt(produto) : converterMegasParaNumero(produto);
                 
                 // === NOVA VERIFICAÇÃO: CONFIRMAR PAGAMENTO ANTES DE PROCESSAR ===
-                console.log(`🔍 INDIVIDUAL: Verificando pagamento antes de processar texto...`);
-                
+                console.log(`🔍 INDIVIDUAL: Verificando pagamento antes de processar texto (${isSaldo ? 'SALDO' : 'MEGAS'})...`);
+
                 // 1. Usar valor do comprovante se disponível, senão calcular
                 let valorEsperado;
                 if (resultadoIA.valorPago && resultadoIA.valorPago > 0) {
@@ -2096,26 +2236,38 @@ client.on('message', async (message) => {
                     valorEsperado = normalizarValor(resultadoIA.valorPago);
                     console.log(`💰 INDIVIDUAL: Usando valor do comprovante: ${valorEsperado}MT`);
                 } else {
-                    // Senão, calcular baseado nos megas
-                    valorEsperado = calcularValorEsperadoDosMegas(megasConvertido, message.from);
-                    console.log(`💰 INDIVIDUAL: Calculando valor baseado nos megas: ${valorEsperado}MT`);
+                    // Senão, calcular baseado no tipo (saldo ou megas)
+                    valorEsperado = isSaldo ?
+                        calcularValorEsperadoDoSaldo(produtoConvertido, message.from) :
+                        calcularValorEsperadoDosMegas(produtoConvertido, message.from);
+                    console.log(`💰 INDIVIDUAL: Calculando valor baseado no ${isSaldo ? 'saldo' : 'megas'}: ${valorEsperado}MT`);
                 }
                 
                 if (!valorEsperado) {
                     console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
-                    
-                    await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
-                    await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
+
+                    if (isSaldo) {
+                        // Processar saldo
+                        await enviarSaldoParaTasker(referencia, produtoConvertido, numero, message.from, message);
+                        await registrarComprador(message.from, numero, nomeContato, produtoConvertido);
+                    } else {
+                        // Processar megas
+                        await enviarComSubdivisaoAutomatica(referencia, produtoConvertido, numero, message.from, message);
+                        await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || produto);
+                    }
                     
                     if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
                         const timestampMensagem = new Date().toLocaleString('pt-BR');
                         adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
                     }
                     
+                    const tipoProdutoTexto = isSaldo ? 'Saldo' : 'Megas';
+                    const produtoTexto = isSaldo ? `${produtoConvertido}MT` : produto;
+
                     await message.reply(
                         `✅ *Pedido processado!*\n\n` +
                         `💰 Referência: ${referencia}\n` +
-                        `📊 Megas: ${megas}\n` +
+                        `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
                         `📱 Número: ${numero}\n\n` +
                         `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
                     );
@@ -2127,12 +2279,14 @@ client.on('message', async (message) => {
                 
                 if (!pagamentoConfirmado) {
                     const valorNormalizado = normalizarValor(valorEsperado);
-                    console.log(`❌ INDIVIDUAL: Pagamento não confirmado para texto - ${referencia} (${valorNormalizado}MT)`);
-                    
+                    const tipoProdutoTexto = isSaldo ? 'Saldo' : 'Megas';
+                    const produtoTexto = isSaldo ? `${produtoConvertido}MT` : produto;
+                    console.log(`❌ INDIVIDUAL: Pagamento não confirmado para texto (${tipoProdutoTexto}) - ${referencia} (${valorNormalizado}MT)`);
+
                     await message.reply(
                         `⏳ *AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO*\n\n` +
                         `💰 Referência: ${referencia}\n` +
-                        `📊 Megas: ${megas}\n` +
+                        `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
                         `📱 Número: ${numero}\n` +
                         `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
                         `🔍 Aguardando confirmação do pagamento na planilha...\n` +
@@ -2141,21 +2295,31 @@ client.on('message', async (message) => {
                     return;
                 }
                 
-                console.log(`✅ INDIVIDUAL: Pagamento confirmado para texto! Processando...`);
-                
+                console.log(`✅ INDIVIDUAL: Pagamento confirmado para texto (${isSaldo ? 'SALDO' : 'MEGAS'})! Processando...`);
+
                 // 3. Se pagamento confirmado, processar normalmente
-                await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
-                await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
+                if (isSaldo) {
+                    // Processar saldo
+                    await enviarSaldoParaTasker(referencia, produtoConvertido, numero, message.from, message);
+                    await registrarComprador(message.from, numero, nomeContato, produtoConvertido);
+                } else {
+                    // Processar megas
+                    await enviarComSubdivisaoAutomatica(referencia, produtoConvertido, numero, message.from, message);
+                    await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || produto);
+                }
                 
                 if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
                     const timestampMensagem = new Date().toLocaleString('pt-BR');
                     adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
                 }
                 
+                const tipoProdutoTexto = isSaldo ? 'Saldo' : 'Megas';
+                const produtoTexto = isSaldo ? `${produtoConvertido}MT` : produto;
+
                 await message.reply(
                     `✅ *Pedido processado!*\n\n` +
                     `💰 Referência: ${referencia}\n` +
-                    `📊 Megas: ${megas}\n` +
+                    `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
                     `📱 Número: ${numero}\n` +
                     `💳 Pagamento: ${normalizarValor(valorEsperado)}MT confirmado\n\n` +
                     `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
