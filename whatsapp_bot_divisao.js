@@ -944,23 +944,37 @@ class WhatsAppBotDivisao {
                     continue;
                 }
                 
-                // CORREÇÃO: Subdividir em blocos EXATOS de 10GB
-                console.log(`   🔧 ${numero}: ${megas/1024}GB → Criando blocos de EXATAMENTE 10GB`);
-
-                let megasRestantes = megas;
-                let valorRestante = valorMT;
-                let contadorSubBloco = 1;
-
-                // Criar blocos de exatamente 10GB
-                while (megasRestantes > 0) {
-                    const megasBloco = megasRestantes >= 10240 ? 10240 : megasRestantes;
-
-                    // Calcular valor proporcional para este bloco
-                    const proporcao = megasBloco / megas;
-                    const valorBloco = Math.round(valorMT * proporcao);
-
-                    const novaReferencia = referenciaBase + String(contadorGlobal).padStart(3, '0') + String(contadorSubBloco);
-
+                // Precisa subdividir em blocos de 10GB
+                const numeroBlocos = Math.ceil(megas / 10240);
+                const megasPorBloco = Math.floor(megas / numeroBlocos);
+                const megasRestante = megas % numeroBlocos;
+                
+                console.log(`   🔧 ${numero}: ${megas/1024}GB → ${numeroBlocos} blocos de ~${megasPorBloco/1024}GB`);
+                
+                // Calcular valor proporcional por bloco
+                const valorPorBloco = Math.floor(valorMT / numeroBlocos);
+                const valorRestante = valorMT - (valorPorBloco * numeroBlocos);
+                
+                // Criar subdivisões
+                for (let i = 0; i < numeroBlocos; i++) {
+                    let megasBloco = megasPorBloco;
+                    let valorBloco = valorPorBloco;
+                    
+                    // Distribuir resto nos primeiros blocos
+                    if (i < megasRestante) {
+                        megasBloco += 1;
+                    }
+                    if (i < valorRestante) {
+                        valorBloco += 1;
+                    }
+                    
+                    // Garantir que nenhum bloco exceda 10GB
+                    if (megasBloco > 10240) {
+                        megasBloco = 10240;
+                    }
+                    
+                    const novaReferencia = referenciaBase + String(contadorGlobal).padStart(3, '0') + String(i + 1);
+                    
                     subdivisoes.push({
                         numero: numero,
                         megas: megasBloco,
@@ -969,17 +983,13 @@ class WhatsAppBotDivisao {
                         referenciaFinal: novaReferencia,
                         ehSubdivisao: true,
                         blocoOriginal: contadorGlobal,
-                        indiceBlocoSubdivisao: contadorSubBloco,
-                        totalBlocosSubdivisao: Math.ceil(megas / 10240)
+                        indiceBlocoSubdivisao: i + 1,
+                        totalBlocosSubdivisao: numeroBlocos
                     });
-
-                    console.log(`      📦 Bloco ${contadorSubBloco}: ${novaReferencia} - ${megasBloco/1024}GB (${valorBloco}MT)`);
-
-                    megasRestantes -= megasBloco;
-                    valorRestante -= valorBloco;
-                    contadorSubBloco++;
+                    
+                    console.log(`      📦 Bloco ${i + 1}/${numeroBlocos}: ${novaReferencia} - ${megasBloco/1024}GB (${valorBloco}MT)`);
                 }
-
+                
                 contadorGlobal++;
             }
             
@@ -1318,8 +1328,8 @@ class WhatsAppBotDivisao {
             for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
                 try {
                     // Timeout adaptativo baseado nas estatísticas de rede
-                    const baseTimeout = Math.max(30000, this.estatisticasRede.tempoMedioResposta * 3);
-                    const timeout = baseTimeout + (tentativa * 15000); // 30s, 45s, 60s (adaptativo)
+                    const baseTimeout = Math.max(15000, this.estatisticasRede.tempoMedioResposta * 3);
+                    const timeout = baseTimeout + (tentativa * 15000); // 15s, 30s, 45s (adaptativo)
                     
                     console.log(`🔄 DIVISÃO: ${descricao} - Tentativa ${tentativa}/${maxTentativas} (timeout: ${timeout}ms)`);
                     

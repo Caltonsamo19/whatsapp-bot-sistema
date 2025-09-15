@@ -20,16 +20,6 @@ const GOOGLE_SHEETS_CONFIG_ATACADO = {
     retryDelay: 2000
 };
 
-// === CONFIGURAÇÃO GOOGLE SHEETS - SALDO (NOVA) ===
-const GOOGLE_SHEETS_CONFIG_SALDO = {
-    scriptUrl: process.env.GOOGLE_SHEETS_SCRIPT_URL_SALDO || 'https://script.google.com/macros/s/NOVA_URL_PARA_SALDO/exec',
-    planilhaUrl: 'https://docs.google.com/spreadsheets/d/NOVA_PLANILHA_SALDO/edit',
-    planilhaId: 'NOVA_PLANILHA_SALDO',
-    timeout: 30000,
-    retryAttempts: 3,
-    retryDelay: 2000
-};
-
 // === CONFIGURAÇÃO GOOGLE SHEETS - BOT RETALHO (mantida para compatibilidade) ===
 const GOOGLE_SHEETS_CONFIG = {
     scriptUrl: process.env.GOOGLE_SHEETS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbz.../exec',
@@ -109,15 +99,20 @@ let gruposLogados = new Set();
 // Configuração de administradores GLOBAIS
 const ADMINISTRADORES_GLOBAIS = [
     '258861645968@c.us',
-    '258871112049@c.us',
-    '258852118624@c.us',
-    '258840326152@c.us'  // Adicionado para comandos administrativos
+    '258871112049@c.us', 
+    '258852118624@c.us'
 ];
 
-// === MAPEAMENTO DE NÚMEROS PARA GRUPOS ===
-const MAPEAMENTO_NUMEROS_GRUPOS = {
-    '258840326152': '120363419652375064@g.us',  // Net Fornecedor V
-    '258852118624': '120363419652375064@g.us'   // Net Fornecedor V
+// Configuração para comando .pedido (apenas no privado)
+const NUMEROS_AUTORIZADOS_PEDIDO = [
+    '258852118624@c.us',
+    '258840326152@c.us'
+];
+
+// Configuração de grupo padrão por número autorizado
+const GRUPOS_PADRAO_POR_NUMERO = {
+    '258852118624@c.us': '120363419652375064@g.us', // Grupo padrão para o primeiro número
+    '258840326152@c.us': '120363419652375064@g.us'  // Net Fornecedor V para o segundo número
 };
 
 // === CONFIGURAÇÃO DE MODERAÇÃO ===
@@ -130,9 +125,8 @@ const MODERACAO_CONFIG = {
     removerUsuario: false,
     excecoes: [
         '258861645968@c.us',
-        '258871112049@c.us',
-        '258852118624@c.us',
-        '258840326152@c.us'
+        '258871112049@c.us', 
+        '258852118624@c.us'
     ]
 };
 
@@ -152,25 +146,6 @@ const CONFIGURACAO_GRUPOS_DIVISAO = {
             81920: 1000,   // 80GB = 1000MT
             92160: 1125,   // 90GB = 1125MT
             102400: 1250   // 100GB = 1250MT
-        },
-        // === TABELA DE SALDO NET FORNECEDOR V ===
-        precosSaldo: {
-            50: 45,      // 50MT saldo = 45MT pagamento
-            100: 85,     // 100MT saldo = 85MT pagamento
-            200: 170,    // 200MT saldo = 170MT pagamento
-            300: 255,    // 300MT saldo = 255MT pagamento
-            400: 340,    // 400MT saldo = 340MT pagamento
-            500: 410,    // 500MT saldo = 410MT pagamento
-            1000: 815,   // 1000MT saldo = 815MT pagamento
-            2000: 1630,  // 2000MT saldo = 1630MT pagamento
-            3000: 2445,  // 3000MT saldo = 2445MT pagamento
-            4000: 3260,  // 4000MT saldo = 3260MT pagamento
-            5000: 4075,  // 5000MT saldo = 4075MT pagamento
-            6000: 4890,  // 6000MT saldo = 4890MT pagamento
-            7000: 5705,  // 7000MT saldo = 5705MT pagamento
-            8000: 6520,  // 8000MT saldo = 6520MT pagamento
-            9000: 7335,  // 9000MT saldo = 7335MT pagamento
-            10000: 8150  // 10000MT saldo = 8150MT pagamento
         }
     },
     '120363402160265624@g.us': {
@@ -184,10 +159,6 @@ const CONFIGURACAO_GRUPOS_DIVISAO = {
             61440: 750,    // 60GB = 750MT
             71680: 875,    // 70GB = 875MT
             81920: 1000    // 80GB = 1000MT
-        },
-        // === TABELA DE SALDO (VAZIA POR ENQUANTO) ===
-        precosSaldo: {
-            // Adicionar valores conforme necessário
         }
     }
     // Only Saldo foi removido pois não precisa de divisão automática
@@ -332,37 +303,6 @@ async function tentarComRetry(funcao, maxTentativas = 3, delay = 2000) {
     }
 }
 
-// === FUNÇÃO GOOGLE SHEETS PARA SALDO ===
-async function enviarSaldoParaGoogleSheets(dadosCompletos, grupoId, timestamp) {
-    const dados = {
-        grupo_id: grupoId,
-        timestamp: timestamp,
-        dados: dadosCompletos,
-        tipo: 'saldo'
-    };
-
-    try {
-        console.log(`📊 SALDO: Enviando para Google Sheets...`);
-
-        const resultado = await tentarComRetry(async () => {
-            const response = await axios.post(GOOGLE_SHEETS_CONFIG_SALDO.scriptUrl, dados, {
-                timeout: GOOGLE_SHEETS_CONFIG_SALDO.timeout,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-            return response.data;
-        }, GOOGLE_SHEETS_CONFIG_SALDO.retryAttempts, GOOGLE_SHEETS_CONFIG_SALDO.retryDelay);
-
-        console.log(`✅ SALDO: Dados enviados para Google Sheets:`, resultado);
-        return { sucesso: true, dados: resultado };
-
-    } catch (error) {
-        console.error(`❌ SALDO: Erro ao enviar para Google Sheets:`, error.message);
-        return { sucesso: false, erro: error.message };
-    }
-}
-
 // === FUNÇÃO GOOGLE SHEETS SIMPLIFICADA ===
 async function enviarParaGoogleSheets(dadosCompletos, grupoId, timestamp) {
     const dados = {
@@ -482,7 +422,7 @@ async function verificarPagamentoIndividual(referencia, valorEsperado) {
             referencia: referencia,
             valor: valorNormalizado
         }, {
-            timeout: 30000,
+            timeout: 45000,
             headers: {
                 'Content-Type': 'application/json'
             }
@@ -529,89 +469,6 @@ function calcularValorEsperadoDosMegas(megas, grupoId) {
     } catch (error) {
         console.error(`❌ INDIVIDUAL: Erro ao calcular valor:`, error);
         return null;
-    }
-}
-
-// === FUNÇÃO PARA ENVIAR PEDIDOS DE SALDO ===
-async function enviarSaldoParaTasker(referencia, saldo, numero, grupoId, messageContext = null) {
-    const timestamp = new Date().toLocaleString('pt-BR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-    });
-
-    const dadosCompletos = `${referencia}|${saldo}|${numero}|${timestamp}`;
-
-    // Verificar duplicados para saldo
-    if (dadosParaTasker.some(d => d.dados === dadosCompletos)) {
-        const configGrupo = getConfiguracaoGrupo(grupoId);
-        const grupoNome = configGrupo ? configGrupo.nome : 'Grupo Desconhecido';
-
-        if (messageContext) {
-            await messageContext.reply(
-                `⚠️ *PEDIDO DE SALDO DUPLICADO*\n\n` +
-                `🔖 **Referência:** ${referencia}\n` +
-                `💰 **Saldo:** ${saldo}MT\n` +
-                `📱 **Número:** ${numero}\n\n` +
-                `⏰ **Este pedido já foi enviado anteriormente.**\n` +
-                `🔄 **Se houve erro, contacte o administrador.**`
-            );
-        }
-
-        console.log(`🛑 SALDO: Pedido duplicado detectado: ${dadosCompletos}`);
-        return null;
-    }
-
-    try {
-        const configGrupo = getConfiguracaoGrupo(grupoId);
-        const grupoNome = configGrupo ? configGrupo.nome : 'Grupo Desconhecido';
-
-        // Salvar no arquivo para Tasker
-        await salvarArquivoTasker(dadosCompletos, grupoNome, timestamp);
-
-        // Adicionar aos dados para controle
-        dadosParaTasker.push({
-            dados: dadosCompletos,
-            grupo: grupoNome,
-            timestamp: timestamp,
-            metodo: 'saldo_tasker',
-            tipo: 'saldo'
-        });
-
-        // Enviar para Google Sheets (planilha de saldo)
-        const resultadoSheets = await enviarSaldoParaGoogleSheets(dadosCompletos, grupoId, timestamp);
-
-        if (messageContext) {
-            await messageContext.reply(
-                `✅ *PEDIDO DE SALDO CRIADO!*\n\n` +
-                `🔖 **Referência:** ${referencia}\n` +
-                `💰 **Saldo:** ${saldo}MT\n` +
-                `📱 **Número:** ${numero}\n` +
-                `🏢 **Grupo:** ${grupoNome}\n\n` +
-                `🚀 **Pedido enviado para processamento!**\n` +
-                `📊 **Status Google Sheets:** ${resultadoSheets.sucesso ? '✅ Salvo' : '⚠️ Erro'}`
-            );
-        }
-
-        console.log(`✅ SALDO: Pedido criado: ${dadosCompletos}`);
-        return { sucesso: true, dados: dadosCompletos };
-
-    } catch (error) {
-        console.error(`❌ SALDO: Erro ao processar:`, error);
-
-        if (messageContext) {
-            await messageContext.reply(
-                `❌ *ERRO AO PROCESSAR SALDO*\n\n` +
-                `⚠️ ${error.message}\n\n` +
-                `🔧 Contacte o administrador se o problema persistir.`
-            );
-        }
-
-        throw error;
     }
 }
 
@@ -675,11 +532,11 @@ async function enviarParaTasker(referencia, megas, numero, grupoId, messageConte
                 console.error(`❌ Erro ao enviar notificação de duplicado:`, error);
             }
         }
-
-        // ✅ CONTINUAR PROCESSAMENTO MESMO COM DUPLICADOS
-        console.log(`⚠️ DIVISÃO: Pagamento duplicado detectado, mas continuando processamento normal`);
-        // Retornar dados normalmente para não quebrar o sistema de divisão
-
+        
+        // ⚠️ PARAR PROCESSAMENTO AQUI - NÃO CONTINUAR
+        console.log(`🛑 DIVISÃO: Processamento interrompido devido a duplicado`);
+        return null; // Retorna null para indicar que foi duplicado
+        
     } else {
         console.log(`🔄 [${grupoNome}] Google Sheets falhou, usando WhatsApp backup...`);
         enviarViaWhatsAppTasker(dadosCompletos, grupoNome);
@@ -693,115 +550,6 @@ async function enviarParaTasker(referencia, megas, numero, grupoId, messageConte
     }
     
     return dadosCompletos;
-}
-
-// === FUNÇÃO PARA SUBDIVIDIR PEDIDOS INDIVIDUAIS EM BLOCOS DE 10GB ===
-async function enviarComSubdivisaoAutomatica(referencia, megasTotal, numero, grupoId, messageContext = null) {
-    const LIMITE_MAXIMO_GB = 10240; // 10GB em MB
-
-    console.log(`🔧 SUBDIVISÃO INDIVIDUAL: Analisando pedido ${referencia} - ${megasTotal}MB (${megasTotal/1024}GB) para ${numero}`);
-
-    // Se for 10GB ou menos, enviar normalmente
-    if (megasTotal <= LIMITE_MAXIMO_GB) {
-        console.log(`✅ SUBDIVISÃO: Pedido dentro do limite (${megasTotal/1024}GB ≤ 10GB), enviando normalmente`);
-        return await enviarParaTasker(referencia, megasTotal, numero, grupoId, messageContext);
-    }
-
-    // Calcular quantos blocos de 10GB são necessários
-    const numeroBlocos = Math.ceil(megasTotal / LIMITE_MAXIMO_GB);
-    console.log(`🔧 SUBDIVISÃO: Dividindo ${megasTotal/1024}GB em ${numeroBlocos} blocos de máximo 10GB cada`);
-
-    let megasRestantes = megasTotal;
-    let contadorBloco = 1;
-    const resultados = [];
-
-    // Criar blocos de exatamente 10GB (exceto o último que pode ser menor)
-    while (megasRestantes > 0) {
-        const megasDoBloco = megasRestantes >= LIMITE_MAXIMO_GB ? LIMITE_MAXIMO_GB : megasRestantes;
-        const referenciaBloco = `${referencia}${String(contadorBloco).padStart(2, '0')}`;
-
-        console.log(`📦 SUBDIVISÃO: Bloco ${contadorBloco}/${numeroBlocos}: ${referenciaBloco} - ${megasDoBloco}MB (${megasDoBloco/1024}GB) para ${numero}`);
-
-        try {
-            const resultado = await enviarParaTasker(referenciaBloco, megasDoBloco, numero, grupoId, null);
-            resultados.push({
-                bloco: contadorBloco,
-                referencia: referenciaBloco,
-                megas: megasDoBloco,
-                numero: numero,
-                resultado: resultado,
-                sucesso: true
-            });
-
-            console.log(`✅ SUBDIVISÃO: Bloco ${contadorBloco} criado com sucesso: ${referenciaBloco}`);
-
-        } catch (error) {
-            console.error(`❌ SUBDIVISÃO: Erro no bloco ${contadorBloco}:`, error.message);
-            resultados.push({
-                bloco: contadorBloco,
-                referencia: referenciaBloco,
-                megas: megasDoBloco,
-                numero: numero,
-                erro: error.message,
-                sucesso: false
-            });
-        }
-
-        megasRestantes -= megasDoBloco;
-        contadorBloco++;
-
-        // Pequeno delay entre blocos para não sobrecarregar o sistema
-        if (megasRestantes > 0) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
-    }
-
-    // Enviar mensagem de resumo se houver contexto
-    if (messageContext) {
-        const sucessos = resultados.filter(r => r.sucesso).length;
-        const erros = resultados.filter(r => !r.sucesso).length;
-
-        let mensagemResumo = `🔧 *SUBDIVISÃO AUTOMÁTICA*\n\n`;
-        mensagemResumo += `💰 **Referência Original:** ${referencia}\n`;
-        mensagemResumo += `📊 **Total:** ${megasTotal/1024}GB dividido em ${numeroBlocos} blocos\n`;
-        mensagemResumo += `📱 **Número:** ${numero}\n\n`;
-
-        if (erros === 0) {
-            mensagemResumo += `✅ **${sucessos}/${numeroBlocos} blocos criados com sucesso!**\n\n`;
-            mensagemResumo += `🚀 *O sistema processará as transferências automaticamente.*`;
-        } else {
-            mensagemResumo += `⚠️ **Resultado:** ${sucessos} sucessos, ${erros} erros\n\n`;
-            mensagemResumo += `📋 **Blocos criados:**\n`;
-            resultados.filter(r => r.sucesso).forEach(r => {
-                mensagemResumo += `   • ${r.referencia}: ${r.megas/1024}GB ✅\n`;
-            });
-            if (erros > 0) {
-                mensagemResumo += `\n❌ **Blocos com erro:**\n`;
-                resultados.filter(r => !r.sucesso).forEach(r => {
-                    mensagemResumo += `   • ${r.referencia}: ${r.megas/1024}GB ❌\n`;
-                });
-            }
-        }
-
-        try {
-            await messageContext.reply(mensagemResumo);
-            console.log(`📤 SUBDIVISÃO: Mensagem de resumo enviada - ${sucessos}✅ ${erros}❌`);
-        } catch (error) {
-            console.error(`❌ SUBDIVISÃO: Erro ao enviar mensagem de resumo:`, error.message);
-        }
-    }
-
-    const sucessoGeral = resultados.every(r => r.sucesso);
-    console.log(`🏁 SUBDIVISÃO: Processo concluído - ${resultados.filter(r => r.sucesso).length}/${numeroBlocos} blocos criados`);
-
-    return {
-        sucesso: sucessoGeral,
-        totalBlocos: numeroBlocos,
-        blocosProcessados: resultados.length,
-        blocosSucesso: resultados.filter(r => r.sucesso).length,
-        blocosErro: resultados.filter(r => !r.sucesso).length,
-        detalhes: resultados
-    };
 }
 
 // === FUNÇÃO AUXILIAR PARA CÁLCULO DE MEGAS ===
@@ -950,71 +698,6 @@ function detectarPerguntaPorNumero(mensagem) {
 
 function isAdministrador(numero) {
     return ADMINISTRADORES_GLOBAIS.includes(numero);
-}
-
-function obterGrupoDoNumero(numeroAdmin) {
-    // Extrair apenas o número do ID completo (ex: '258840326152@c.us' -> '258840326152')
-    const numeroLimpo = numeroAdmin.replace('@c.us', '');
-    return MAPEAMENTO_NUMEROS_GRUPOS[numeroLimpo] || null;
-}
-
-// === NOVAS FUNÇÕES PARA SISTEMA DUAL (MEGAS + SALDO) ===
-
-function verificarTipoValor(valor, grupoId) {
-    const configGrupo = getConfiguracaoGrupo(grupoId);
-    if (!configGrupo) return null;
-
-    // 1. Primeiro verifica se existe na tabela de MEGAS
-    if (configGrupo.precos) {
-        const valoresValidos = Object.values(configGrupo.precos);
-        if (valoresValidos.includes(valor)) {
-            // Encontrar quantos megas correspondem a esse valor
-            for (const [megas, preco] of Object.entries(configGrupo.precos)) {
-                if (preco === valor) {
-                    return {
-                        tipo: 'megas',
-                        quantidade: parseInt(megas),
-                        valor: valor,
-                        unidade: 'MB'
-                    };
-                }
-            }
-        }
-    }
-
-    // 2. Se não existe em MEGAS, verifica na tabela de SALDO
-    if (configGrupo.precosSaldo) {
-        const valoresValidosSaldo = Object.values(configGrupo.precosSaldo);
-        if (valoresValidosSaldo.includes(valor)) {
-            // Encontrar quanto saldo corresponde a esse valor
-            for (const [saldo, preco] of Object.entries(configGrupo.precosSaldo)) {
-                if (preco === valor) {
-                    return {
-                        tipo: 'saldo',
-                        quantidade: parseInt(saldo),
-                        valor: valor,
-                        unidade: 'MT'
-                    };
-                }
-            }
-        }
-    }
-
-    // 3. Valor não encontrado em nenhuma tabela
-    return null;
-}
-
-function obterTabelasDisponiveis(grupoId) {
-    const configGrupo = getConfiguracaoGrupo(grupoId);
-    if (!configGrupo) return { megas: [], saldo: [] };
-
-    const valoresMegas = configGrupo.precos ? Object.values(configGrupo.precos) : [];
-    const valoresSaldo = configGrupo.precosSaldo ? Object.values(configGrupo.precosSaldo) : [];
-
-    return {
-        megas: valoresMegas,
-        saldo: valoresSaldo
-    };
 }
 
 function isGrupoMonitorado(chatId) {
@@ -1306,7 +989,7 @@ client.on('ready', async () => {
         console.log(`   📋 ${config.nome} (${grupoId})`);
     });
     
-    console.log('\n🔧 Comandos admin: .ia .divisao .test_busca .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo .pedido');
+    console.log('\n🔧 Comandos admin: .ia .divisao .clear_cache .test_busca .stats .sheets .test_sheets .test_grupo .grupos_status .grupos .grupo_atual .debug_grupo');
 });
 
 client.on('group-join', async (notification) => {
@@ -1385,13 +1068,13 @@ client.on('message', async (message) => {
 
         // === COMANDOS ADMINISTRATIVOS ===
         if (isAdmin) {
-            const mensagemOriginal = message.body.trim();
-            const comando = mensagemOriginal.toLowerCase();
+            const comando = message.body.toLowerCase().trim();
 
             if (comando === '.ia') {
-                const statusIA = ia.getStatusDetalhado();
+                // OTIMIZAÇÃO: Usar status otimizado com estatísticas de cache
+                const statusIA = ia.getStatusOtimizado();
                 await message.reply(statusIA);
-                console.log(`🧠 Comando .ia executado`);
+                console.log(`🧠 Comando .ia executado (com estatísticas de cache)`);
                 return;
             }
 
@@ -1411,7 +1094,7 @@ client.on('message', async (message) => {
             
             // NOVO COMANDO: Testar busca de pagamento
             if (comando.startsWith('.test_busca ')) {
-                const parametros = mensagemOriginal.replace(/^\.test_busca\s+/i, '').split(' ');
+                const parametros = comando.replace('.test_busca ', '').split(' ');
                 if (parametros.length >= 2) {
                     const referencia = parametros[0];
                     const valor = parseFloat(parametros[1]);
@@ -1506,6 +1189,112 @@ client.on('message', async (message) => {
                 return;
             }
 
+            // === COMANDO .PEDIDO (APENAS NO PRIVADO PARA NÚMEROS AUTORIZADOS) ===
+            if (comando.startsWith('.pedido ')) {
+                // Verificar se é mensagem privada
+                if (!isPrivado) {
+                    await message.reply('❌ Este comando só funciona no chat privado.');
+                    return;
+                }
+                
+                // Verificar se o número está autorizado
+                if (!NUMEROS_AUTORIZADOS_PEDIDO.includes(message.from)) {
+                    await message.reply('❌ Você não tem permissão para usar este comando.');
+                    return;
+                }
+                
+                // Obter grupo padrão para este número
+                const grupoId = GRUPOS_PADRAO_POR_NUMERO[message.from];
+                if (!grupoId) {
+                    await message.reply('❌ Nenhum grupo configurado para este número.');
+                    return;
+                }
+                
+                const configGrupo = getConfiguracaoGrupo(grupoId);
+                if (!configGrupo) {
+                    await message.reply('❌ Grupo configurado não foi encontrado no sistema.');
+                    return;
+                }
+                
+                // Extrair parâmetros da mensagem original (preservar maiúsculas/minúsculas)
+                const params = message.body.replace(/^\.pedido\s+/i, '').trim().split(' ');
+                
+                if (params.length < 3) {
+                    await message.reply('❌ *Formato incorreto!*\n\n📝 Use: .pedido REFERENCIA MEGAS TELEFONE\n💡 Exemplo: .pedido CIC8HCO4GXC 10GB 851609341');
+                    return;
+                }
+                
+                const [referencia, megasStr, telefone] = params;
+                
+                // Validar referência
+                if (!referencia || referencia.length < 5) {
+                    await message.reply('❌ Referência inválida! Deve ter pelo menos 5 caracteres.');
+                    return;
+                }
+                
+                // Converter GB para MB
+                let megasValue;
+                if (megasStr.toUpperCase().includes('GB')) {
+                    const gb = parseFloat(megasStr.replace(/[^0-9.]/g, ''));
+                    if (isNaN(gb) || gb <= 0) {
+                        await message.reply('❌ Quantidade de GB inválida!');
+                        return;
+                    }
+                    megasValue = gb * 1024; // GB para MB
+                } else if (megasStr.toUpperCase().includes('MB')) {
+                    megasValue = parseFloat(megasStr.replace(/[^0-9.]/g, ''));
+                    if (isNaN(megasValue) || megasValue <= 0) {
+                        await message.reply('❌ Quantidade de MB inválida!');
+                        return;
+                    }
+                } else {
+                    await message.reply('❌ Formato de megas inválido! Use GB ou MB (ex: 10GB, 500MB)');
+                    return;
+                }
+                
+                // Validar telefone
+                const telefoneClean = telefone.replace(/[^0-9]/g, '');
+                if (telefoneClean.length < 9) {
+                    await message.reply('❌ Número de telefone inválido!');
+                    return;
+                }
+                
+                // Criar dados para planilha no formato: REFERENCIA|MEGAS|TELEFONE|TIMESTAMP
+                const timestamp = new Date().toLocaleString('pt-BR');
+                const dadosPlanilha = `${referencia}|${megasValue}|${telefoneClean}|${timestamp}`;
+                
+                try {
+                    console.log(`📝 Criando pedido via comando .pedido: ${dadosPlanilha} - Grupo: ${configGrupo.nome}`);
+                    
+                    // Enviar para Google Sheets com o grupo correto
+                    const resultado = await enviarParaGoogleSheets(dadosPlanilha, grupoId, timestamp);
+                    
+                    if (resultado.sucesso) {
+                        const confirmacao = `✅ *PEDIDO CRIADO COM SUCESSO*\n\n` +
+                            `🎯 **DETALHES DO PEDIDO**\n` +
+                            `━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                            `📋 Referência: \`${referencia}\`\n` +
+                            `📊 Megas: ${megasValue}MB (${megasStr})\n` +
+                            `📱 Telefone: ${telefoneClean}\n` +
+                            `🏢 Grupo: ${configGrupo.nome}\n` +
+                            `⏰ Criado: ${timestamp}\n` +
+                            `📊 Linha na planilha: ${resultado.row}\n\n` +
+                            `🚀 Pedido enviado para processamento automático!`;
+                        
+                        await message.reply(confirmacao);
+                        console.log(`✅ Pedido criado via comando .pedido: ${referencia} - ${megasValue}MB - ${telefoneClean}`);
+                    } else {
+                        await message.reply(`❌ *Erro ao criar pedido*\n\n⚠️ ${resultado.erro}\n\n🔄 Tente novamente em alguns segundos.`);
+                        console.error('❌ Erro ao enviar pedido via .pedido:', resultado.erro);
+                    }
+                } catch (error) {
+                    console.error('❌ Erro no comando .pedido:', error);
+                    await message.reply('❌ Erro interno ao processar pedido. Tente novamente.');
+                }
+                
+                return;
+            }
+
             if (comando === '.sheets') {
                 const dados = obterDadosTasker();
                 const hoje = obterDadosTaskerHoje();
@@ -1532,7 +1321,7 @@ client.on('message', async (message) => {
             }
 
             if (comando.startsWith('.clear_grupo ')) {
-                const nomeGrupo = mensagemOriginal.replace(/^\.clear_grupo\s+/i, '');
+                const nomeGrupo = comando.replace('.clear_grupo ', '');
                 const antes = dadosParaTasker.length;
                 
                 dadosParaTasker = dadosParaTasker.filter(d => !d.grupo.toLowerCase().includes(nomeGrupo.toLowerCase()));
@@ -1548,35 +1337,20 @@ client.on('message', async (message) => {
                 return;
             }
 
+            // NOVO COMANDO: Limpar cache da IA
+            if (comando === '.clear_cache') {
+                const tamanhoAnterior = ia.cacheResultados.size;
+                ia.cacheResultados.clear();
+                ia.tokenStats = { total: 0, saved: 0, calls: 0, cacheHits: 0 };
+                await message.reply(`🗑️ *Cache da IA limpo!*\n\n📊 ${tamanhoAnterior} entradas removidas\n📈 Estatísticas zeradas`);
+                return;
+            }
+
             // === COMANDOS PARA DETECÇÃO DE GRUPOS ===
             if (comando === '.grupos') {
                 try {
-                    let resposta = `📋 *GRUPOS CONFIGURADOS ATACADO*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-                    // Mostrar grupo padrão do admin (se existir)
-                    const meuGrupo = obterGrupoDoNumero(message.from);
-                    if (meuGrupo) {
-                        const configMeuGrupo = getConfiguracaoGrupo(meuGrupo);
-                        resposta += `🏠 *SEU GRUPO PADRÃO:*\n`;
-                        resposta += `📋 ${configMeuGrupo.nome}\n`;
-                        resposta += `🆔 ${meuGrupo}\n\n`;
-                    }
-
-                    resposta += `📊 *TODOS OS GRUPOS:*\n`;
-                    Object.keys(CONFIGURACAO_GRUPOS).forEach(grupoId => {
-                        const config = CONFIGURACAO_GRUPOS[grupoId];
-                        const isMeuGrupo = meuGrupo === grupoId ? ' ⭐' : '';
-                        resposta += `📋 ${config.nome}${isMeuGrupo}\n`;
-                        resposta += `🆔 \`${grupoId}\`\n\n`;
-                    });
-
-                    resposta += `💡 *MAPEAMENTO DE ADMINS:*\n`;
-                    Object.keys(MAPEAMENTO_NUMEROS_GRUPOS).forEach(numero => {
-                        const grupoId = MAPEAMENTO_NUMEROS_GRUPOS[numero];
-                        const config = getConfiguracaoGrupo(grupoId);
-                        resposta += `📱 ${numero} → ${config.nome}\n`;
-                    });
-
+                    let resposta = `📋 *GRUPOS DETECTADOS ATACADO*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+                    
                     const chats = await client.getChats();
                     const grupos = chats.filter(chat => chat.isGroup);
                     
@@ -1648,121 +1422,6 @@ client.on('message', async (message) => {
                 );
                 return;
             }
-
-            // NOVO COMANDO: .pedido - Permite ao admin criar pedidos diretamente (APENAS PRIVADO)
-            if (comando.startsWith('.pedido ')) {
-                // Verificar se está sendo usado no privado
-                if (!isPrivado) {
-                    await message.reply('❌ Este comando só pode ser usado no chat privado!\n\n🔒 Mande uma mensagem privada para o bot para usar este comando.');
-                    return;
-                }
-
-                const parametros = mensagemOriginal.replace(/^\.pedido\s+/i, '').trim();
-                const partes = parametros.split(' ');
-
-                if (partes.length < 3) {
-                    await message.reply(
-                        `❌ *Uso do comando .pedido*\n\n` +
-                        `📝 **Formato:** .pedido REFERENCIA MEGAS NUMERO [GRUPO_ID]\n\n` +
-                        `💡 **Exemplos:**\n` +
-                        `• .pedido ADMIN001 10240 847777777\n` +
-                        `• .pedido PROMO123 20480 848888888 120363419652375064@g.us\n\n` +
-                        `📊 **MEGAS em MB:** 10240 = 10GB, 20480 = 20GB, etc.\n` +
-                        `🏢 **GRUPO_ID:** Opcional - se não informado, usa seu grupo padrão\n` +
-                        `💡 Use .grupos para ver IDs disponíveis`
-                    );
-                    return;
-                }
-
-                const [referencia, megas, numero, grupoIdManual] = partes;
-
-                // Determinar o grupo: manual ou automático baseado no admin
-                let grupoId;
-                if (grupoIdManual) {
-                    grupoId = grupoIdManual;
-                } else {
-                    grupoId = obterGrupoDoNumero(message.from);
-                    if (!grupoId) {
-                        await message.reply(
-                            `❌ *Grupo não configurado para seu número!*\n\n` +
-                            `🔧 Você precisa especificar o GRUPO_ID manualmente:\n` +
-                            `📝 .pedido ${referencia} ${megas} ${numero} GRUPO_ID\n\n` +
-                            `💡 Use .grupos para ver grupos disponíveis`
-                        );
-                        return;
-                    }
-                }
-
-                const configGrupo = getConfiguracaoGrupo(grupoId);
-
-                // Verificar se o grupo está configurado
-                if (!configGrupo) {
-                    await message.reply('❌ Grupo não configurado no sistema!\n\n💡 Use .grupos para ver grupos disponíveis.');
-                    return;
-                }
-
-                // Validar formato dos parâmetros
-                const megasNum = parseInt(megas);
-                if (isNaN(megasNum) || megasNum <= 0) {
-                    await message.reply('❌ Megas deve ser um número positivo (ex: 10240 para 10GB)');
-                    return;
-                }
-
-                // Validar número de telefone
-                if (!/^\d{9,12}$/.test(numero)) {
-                    await message.reply('❌ Número inválido! Use formato: 847777777 ou 258847777777');
-                    return;
-                }
-
-                const grupoTipo = grupoIdManual ? 'manual' : 'automático';
-                console.log(`🔧 ADMIN: Comando .pedido executado pelo admin no privado`);
-                console.log(`   📋 Referência: ${referencia}`);
-                console.log(`   📊 Megas: ${megasNum} (${Math.floor(megasNum/1024)}GB)`);
-                console.log(`   📱 Número: ${numero}`);
-                console.log(`   🏢 Grupo: ${configGrupo.nome} (${grupoTipo})`);
-                console.log(`   🆔 ID: ${grupoId}`);
-
-                try {
-                    // Enviar pedido direto para o sistema
-                    const resultadoEnvio = await enviarParaTasker(
-                        referencia,
-                        megasNum,
-                        numero,
-                        grupoId,
-                        message
-                    );
-
-                    if (resultadoEnvio === null) {
-                        console.log(`🛑 ADMIN: Pedido duplicado detectado`);
-                        return; // Mensagem de duplicado já foi enviada
-                    }
-
-                    // Registrar no histórico
-                    const nomeAdmin = message._data.notifyName || 'Admin';
-                    await registrarComprador(grupoId, numero, `${nomeAdmin} (Admin)`, megasNum);
-
-                    // Resposta de sucesso
-                    await message.reply(
-                        `✅ *PEDIDO ADMINISTRATIVO CRIADO!*\n\n` +
-                        `💰 **Referência:** ${referencia}\n` +
-                        `📊 **Megas:** ${Math.floor(megasNum/1024)}GB (${megasNum}MB)\n` +
-                        `📱 **Número:** ${numero}\n` +
-                        `🏢 **Grupo:** ${configGrupo.nome}\n\n` +
-                        `⏳ *O sistema irá processar em instantes...*`
-                    );
-
-                    console.log(`✅ ADMIN: Pedido administrativo criado com sucesso!`);
-
-                } catch (error) {
-                    console.error(`❌ ADMIN: Erro ao criar pedido:`, error);
-                    await message.reply(
-                        `❌ *Erro ao criar pedido administrativo*\n\n` +
-                        `⚠️ ${error.message}\n\n` +
-                        `🔧 Tente novamente ou contacte o suporte técnico.`
-                    );
-                }
-                return;
-            }
         }
 
         // === DETECÇÃO DE GRUPOS NÃO CONFIGURADOS ===
@@ -1788,8 +1447,10 @@ client.on('message', async (message) => {
         
         if (textoMensagem === 'tabela') {
             const configGrupoBasico = getConfiguracaoGrupo(message.from);
-            if (configGrupoBasico && configGrupoBasico.tabela) {
-                await message.reply(configGrupoBasico.tabela);
+            // OTIMIZAÇÃO: Usar cache da IA
+            const tabelaCacheada = ia.getCachedResponse('tabela', configGrupoBasico);
+            if (tabelaCacheada) {
+                await message.reply(tabelaCacheada);
             } else {
                 await message.reply('❌ Tabela não configurada para este grupo.');
             }
@@ -1798,8 +1459,10 @@ client.on('message', async (message) => {
         
         if (textoMensagem === 'pagamento') {
             const configGrupoBasico = getConfiguracaoGrupo(message.from);
-            if (configGrupoBasico && configGrupoBasico.pagamento) {
-                await message.reply(configGrupoBasico.pagamento);
+            // OTIMIZAÇÃO: Usar cache da IA
+            const pagamentoCacheado = ia.getCachedResponse('pagamento', configGrupoBasico);
+            if (pagamentoCacheado) {
+                await message.reply(pagamentoCacheado);
             } else {
                 await message.reply('❌ Informações de pagamento não configuradas para este grupo.');
             }
@@ -1900,91 +1563,65 @@ client.on('message', async (message) => {
                         );
                         return;
                         
-                    } else if (resultadoIA.tipo === 'numero_processado' || resultadoIA.tipo === 'saldo_processado') {
-                        const dadosCompletos = resultadoIA.dadosCompletos;
-                        const [referencia, produto, numero] = dadosCompletos.split('|');
-                        const nomeContato = message._data.notifyName || 'N/A';
-                        const autorMensagem = message.author || 'Desconhecido';
-
-                        // Verificar se é saldo ou megas
-                        const isSaldo = resultadoIA.tipo === 'saldo_processado';
-
-                        // Converter produto para formato numérico (megas ou saldo)
-                        const produtoConvertido = isSaldo ? parseInt(produto) : converterMegasParaNumero(produto);
-                        
-                        // === NOVA VERIFICAÇÃO: CONFIRMAR PAGAMENTO ANTES DE PROCESSAR ===
-                        console.log(`🔍 INDIVIDUAL: Verificando pagamento antes de processar screenshot...`);
-                        
-                        // 1. Calcular valor esperado baseado nos megas
-                        const valorEsperado = calcularValorEsperadoDosMegas(megasConvertido, message.from);
-                        
-                        if (!valorEsperado) {
-                            console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
+                    } else if (resultadoIA.tipo === 'numero_processado') {
+                        // NOVA LÓGICA: Verificar se houve subdivisão
+                        if (resultadoIA.subdividido && resultadoIA.pedidosSubdivididos) {
+                            console.log(`🔧 ATACADO: Processando ${resultadoIA.pedidosSubdivididos.length} pedidos subdivididos...`);
                             
-                            await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
-                            await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
-                            
-                            if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
-                                const timestampMensagem = new Date().toLocaleString('pt-BR');
-                                adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
+                            // Processar cada pedido subdividido separadamente (SEM VERIFICAÇÃO DE PAGAMENTO)
+                            for (let i = 0; i < resultadoIA.pedidosSubdivididos.length; i++) {
+                                const pedidoSubdividido = resultadoIA.pedidosSubdivididos[i];
+                                const [referenciaSubdiv, megasSubdiv, numeroSubdiv] = pedidoSubdividido.split('|');
+                                
+                                console.log(`   📦 ATACADO: Processando bloco ${i + 1}/${resultadoIA.pedidosSubdivididos.length}: ${referenciaSubdiv} - ${Math.floor(megasSubdiv/1024)}GB`);
+                                
+                                const nomeContato = message._data.notifyName || 'N/A';
+                                const autorMensagem = message.author || 'Desconhecido';
+                                const megasConvertido = converterMegasParaNumero(megasSubdiv);
+                                
+                                // ENVIAR DIRETO (pagamento original já foi verificado)
+                                console.log(`   💰 ATACADO: Bloco subdividido - pulando verificação de pagamento (original já verificado)`);
+                                
+                                const resultadoEnvio = await enviarParaTasker(referenciaSubdiv, megasConvertido, numeroSubdiv, message.from, message);
+                                if (resultadoEnvio === null) {
+                                    console.log(`   🛑 ATACADO: Bloco ${referenciaSubdiv} duplicado - continuando`);
+                                } else {
+                                    console.log(`   ✅ ATACADO: Bloco ${referenciaSubdiv} enviado com sucesso`);
+                                }
+                                
+                                await registrarComprador(message.from, numeroSubdiv, nomeContato, Math.floor(megasConvertido/1024) + 'GB');
+                                
+                                if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
+                                    const timestampMensagem = new Date().toLocaleString('pt-BR');
+                                    const configGrupo = CONFIGURACAO_GRUPOS[message.from] || { nome: 'Grupo' };
+                                    adicionarNaFila(pedidoSubdividido, autorMensagem, configGrupo.nome, timestampMensagem);
+                                }
                             }
                             
-                            await message.reply(
-                                `✅ *Screenshot + Número processados!*\n\n` +
-                                `💰 Referência: ${referencia}\n` +
-                                `📊 Megas: ${megas}\n` +
-                                `📱 Número: ${numero}\n\n` +
-                                `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
-                            );
+                            // Mensagem final sobre subdivisão
+                            await message.reply(`✅ *DIVISÃO CONCLUÍDA!*\n\n🔧 **${Math.floor(converterMegasParaNumero(resultadoIA.megas)/1024)}GB subdividido** em **${resultadoIA.pedidosSubdivididos.length} blocos de máx 10GB**\n\n📦 **Blocos criados:**\n${resultadoIA.pedidosSubdivididos.map((p, i) => `• ${p.split('|')[0]}: ${Math.floor(p.split('|')[1]/1024)}GB`).join('\n')}\n\n⚙️ *Sistema processa max 10GB por bloco*\n⏳ *Transferências serão executadas em instantes...*`);
                             return;
-                        }
-                        
-                        // 2. Verificar se pagamento existe
-                        const pagamentoConfirmado = await verificarPagamentoIndividual(referencia, valorEsperado);
-                        
-                        if (!pagamentoConfirmado) {
-                            const valorNormalizado = normalizarValor(valorEsperado);
-                            console.log(`❌ INDIVIDUAL: Pagamento não confirmado para screenshot - ${referencia} (${valorNormalizado}MT)`);
                             
-                            await message.reply(
-                                `⏳ *AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO*\n\n` +
-                                `💰 Referência: ${referencia}\n` +
-                                `📊 Megas: ${megas}\n` +
-                                `📱 Número: ${numero}\n` +
-                                `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
-                                `🔍 Aguardando confirmação do pagamento na planilha...\n` +
-                                `⏱️ Tente novamente em alguns minutos.`
-                            );
-                            return;
+                        } else {
+                            // LÓGICA ORIGINAL: Pedido único (≤10GB)
+                            const dadosCompletos = resultadoIA.dadosCompletos;
+                            const [referencia, megas, numero] = dadosCompletos.split('|');
+                            const nomeContato = message._data.notifyName || 'N/A';
+                            const autorMensagem = message.author || 'Desconhecido';
+                            
+                            // Converter megas para formato numérico
+                            const megasConvertido = converterMegasParaNumero(megas);
+                            
+                            // Processar como pedido único
+                            await processarPedidoIndividual(dadosCompletos, megasConvertido, referencia, numero, nomeContato, autorMensagem, message);
                         }
-                        
-                        console.log(`✅ INDIVIDUAL: Pagamento confirmado para screenshot! Processando...`);
-                        
-                        // 3. Se pagamento confirmado, processar normalmente
-                        await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
-                        await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
-                        
-                        if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
-                            const timestampMensagem = new Date().toLocaleString('pt-BR');
-                            adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
-                        }
-                        
-                        await message.reply(
-                            `✅ *Screenshot + Número processados!*\n\n` +
-                            `💰 Referência: ${referencia}\n` +
-                            `📊 Megas: ${megas}\n` +
-                            `📱 Número: ${numero}\n` +
-                            `💳 Pagamento: ${normalizarValor(valorEsperado)}MT confirmado\n\n` +
-                            `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
-                        );
-                        return;
-                    }
                 } else {
                     await message.reply(
                         `❌ *Não consegui processar o comprovante da imagem!*\n\n` +
                         `📝 Envie o comprovante como texto.`
                     );
                 }
+            }
                 
             } catch (error) {
                 console.error('❌ Erro ao processar imagem:', error);
@@ -2004,14 +1641,16 @@ client.on('message', async (message) => {
             return;
         }
 
-        // Comandos de tabela e pagamento
+        // Comandos de tabela e pagamento (OTIMIZADOS)
         if (/tabela/i.test(message.body)) {
-            await message.reply(configGrupo.tabela);
+            const tabelaCacheada = ia.getCachedResponse('tabela', configGrupo);
+            await message.reply(tabelaCacheada || configGrupo.tabela);
             return;
         }
 
         if (/pagamento/i.test(message.body)) {
-            await message.reply(configGrupo.pagamento);
+            const pagamentoCacheado = ia.getCachedResponse('pagamento', configGrupo);
+            await message.reply(pagamentoCacheado || configGrupo.pagamento);
             return;
         }
 
@@ -2056,6 +1695,14 @@ client.on('message', async (message) => {
             if (resultadoDivisao.resposta) {
                 return;
             }
+        }
+
+        // FILTRO: Ignorar mensagens do sistema/bot
+        if (/^Transação Concluída Com Sucesso/i.test(message.body) || 
+            /^✅.*Transação Concluída Com Sucesso/i.test(message.body) ||
+            /^✅.*Pedido processado/i.test(message.body)) {
+            console.log(`🤖 ATACADO: Ignorando mensagem do sistema/bot`);
+            return;
         }
 
         // === PROCESSAMENTO COM IA ===
@@ -2104,7 +1751,11 @@ client.on('message', async (message) => {
                 if (!valorEsperado) {
                     console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
                     
-                    await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
+                    const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, message.from, message);
+                    if (resultadoEnvio === null) {
+                        console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado`);
+                        return; // Para aqui se for duplicado
+                    }
                     await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
                     
                     if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
@@ -2112,12 +1763,12 @@ client.on('message', async (message) => {
                         adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
                     }
                     
+                    // OTIMIZAÇÃO: Resposta imediata para número único
                     await message.reply(
-                        `✅ *Pedido processado!*\n\n` +
-                        `💰 Referência: ${referencia}\n` +
-                        `📊 Megas: ${megas}\n` +
-                        `📱 Número: ${numero}\n\n` +
-                        `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
+                        `🚀 *PEDIDO INICIADO!*\n\n` +
+                        `💰 **${referencia}** - ${resultadoIA.valorPago || 'N/A'}MT\n` +
+                        `📊 **${megas}** → **${numero}**\n\n` +
+                        `⚡ *Processando em segundos...*`
                     );
                     return;
                 }
@@ -2129,55 +1780,40 @@ client.on('message', async (message) => {
                     const valorNormalizado = normalizarValor(valorEsperado);
                     console.log(`❌ INDIVIDUAL: Pagamento não confirmado para texto - ${referencia} (${valorNormalizado}MT)`);
                     
+                    // Detectar tipo de pagamento pela referência
+                    const eEMola = referencia.includes('PP') || referencia.includes('.') && referencia.length > 10;
+                    const tipoSistema = eEMola ? 'eMola' : 'M-Pesa';
+                    
                     await message.reply(
-                        `⏳ *AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO*\n\n` +
+                        `⏳ *AGUARDANDO MENSAGEM DE CONFIRMAÇÃO DE PAGAMENTO*\n\n` +
                         `💰 Referência: ${referencia}\n` +
                         `📊 Megas: ${megas}\n` +
                         `📱 Número: ${numero}\n` +
                         `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
-                        `🔍 Aguardando confirmação do pagamento na planilha...\n` +
+                        `🔍 O sistema ainda não recebeu a mensagem de confirmação do ${tipoSistema}.\n` +
                         `⏱️ Tente novamente em alguns minutos.`
                     );
                     return;
                 }
                 
-                console.log(`✅ INDIVIDUAL: Pagamento confirmado para texto! Processando...`);
+                console.log(`✅ INDIVIDUAL: Pagamento confirmado! Enviando resposta imediata...`);
                 
-                // 3. Se pagamento confirmado, processar normalmente
-                await enviarComSubdivisaoAutomatica(referencia, megasConvertido, numero, message.from, message);
-                await registrarComprador(message.from, numero, nomeContato, resultadoIA.valorPago || megas);
+                // PROCESSAMENTO ACELERADO - SEM MENSAGEM IMEDIATA
+                const inicioProcessamento = Date.now();
                 
-                if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
-                    const timestampMensagem = new Date().toLocaleString('pt-BR');
-                    adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
-                }
-                
-                await message.reply(
-                    `✅ *Pedido processado!*\n\n` +
-                    `💰 Referência: ${referencia}\n` +
-                    `📊 Megas: ${megas}\n` +
-                    `📱 Número: ${numero}\n` +
-                    `💳 Pagamento: ${normalizarValor(valorEsperado)}MT confirmado\n\n` +
-                    `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
+                // PROCESSAMENTO EM BACKGROUND - NÃO BLOQUEIA RESPOSTA
+                console.log(`🚀 INDIVIDUAL: Chamando função de background para ${referencia}`);
+                processarPedidoUnicoEmBackground(
+                    referencia, megasConvertido, numero, message.from, message, 
+                    dadosCompletos, autorMensagem, configGrupo, nomeContato, 
+                    resultadoIA.valorPago || megas, valorEsperado, inicioProcessamento
                 );
                 return;
             }
         }
 
         // === TRATAMENTO DE ERROS/CASOS ESPECIAIS ===
-        if (resultadoIA.tipo === 'imagem_duplicada') {
-            await message.reply(resultadoIA.mensagem);
-            return;
-            
-        } else if (resultadoIA.tipo === 'valor_nao_encontrado_na_tabela') {
-            await message.reply(resultadoIA.mensagem);
-            return;
-            
-        } else if (resultadoIA.tipo === 'dados_inconsistentes') {
-            await message.reply(resultadoIA.mensagem);
-            return;
-            
-        } else if (resultadoIA.tipo === 'numero_sem_comprovante') {
+        if (resultadoIA.tipo === 'numero_sem_comprovante') {
             await message.reply(
                 `📱 *Número detectado*\n\n` +
                 `❌ Não encontrei seu comprovante.\n\n` +
@@ -2308,5 +1944,223 @@ process.on('SIGINT', async () => {
     process.exit(0);
 
 });
+
+// === NOVA FUNÇÃO: ENVIAR COM SUBDIVISÃO AUTOMÁTICA ===
+async function enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, grupoId, message) {
+    console.log(`🔧 WRAPPER: Verificando se ${Math.floor(megasConvertido/1024)}GB precisa subdivisão antes de enviar...`);
+    
+    // Se for 10GB ou menos, enviar normalmente
+    if (megasConvertido <= 10240) {
+        console.log(`   ✅ WRAPPER: ${Math.floor(megasConvertido/1024)}GB ≤ 10GB - Enviando direto`);
+        return await enviarParaTasker(referencia, megasConvertido, numero, grupoId, message);
+    }
+    
+    // Precisa subdividir
+    console.log(`   🔧 WRAPPER: ${Math.floor(megasConvertido/1024)}GB > 10GB - Aplicando subdivisão...`);
+    
+    const numeroBlocos = Math.ceil(megasConvertido / 10240);
+    const megasPorBloco = Math.floor(megasConvertido / numeroBlocos);
+    const megasRestante = megasConvertido % numeroBlocos;
+    
+    console.log(`   📦 WRAPPER: ${Math.floor(megasConvertido/1024)}GB → ${numeroBlocos} blocos de ~${Math.floor(megasPorBloco/1024)}GB`);
+    
+    let todosSucesso = 0;
+    let totalDuplicados = 0;
+    
+    // Criar e enviar cada bloco
+    for (let i = 0; i < numeroBlocos; i++) {
+        let megasBloco = megasPorBloco;
+        
+        // Distribuir resto nos primeiros blocos
+        if (i < megasRestante) {
+            megasBloco += 1;
+        }
+        
+        // Garantir que nenhum bloco exceda 10GB
+        if (megasBloco > 10240) {
+            megasBloco = 10240;
+        }
+        
+        const referenciaSubdiv = referencia + String(i + 1);
+        
+        console.log(`      📋 WRAPPER: Enviando bloco ${i + 1}/${numeroBlocos}: ${referenciaSubdiv} - ${Math.floor(megasBloco/1024)}GB (${megasBloco}MB)`);
+        
+        try {
+            const resultadoBloco = await enviarParaTasker(referenciaSubdiv, megasBloco, numero, grupoId, message);
+            
+            if (resultadoBloco === null) {
+                console.log(`      ⚠️ WRAPPER: Bloco ${referenciaSubdiv} duplicado - continuando com próximos`);
+                totalDuplicados++;
+            } else {
+                console.log(`      ✅ WRAPPER: Bloco ${referenciaSubdiv} enviado com sucesso`);
+                todosSucesso++;
+            }
+            
+        } catch (error) {
+            console.error(`      ❌ WRAPPER: Erro ao enviar bloco ${referenciaSubdiv}:`, error);
+        }
+    }
+    
+    // Validar resultado
+    const totalProcessados = todosSucesso + totalDuplicados;
+    
+    if (totalProcessados === 0) {
+        console.log(`❌ WRAPPER: Nenhum bloco foi processado com sucesso`);
+        return null; // Indicar falha total
+    }
+    
+    if (todosSucesso === 0) {
+        console.log(`⚠️ WRAPPER: Todos os ${numeroBlocos} blocos eram duplicados`);
+        return null; // Todos duplicados
+    }
+    
+    console.log(`✅ WRAPPER: Subdivisão concluída! ${todosSucesso} novos + ${totalDuplicados} duplicados = ${totalProcessados}/${numeroBlocos} blocos`);
+    
+    // Retornar resultado de sucesso com informações da subdivisão
+    return { 
+        sucesso: true, 
+        subdividido: true,
+        blocosNovos: todosSucesso,
+        blocosDuplicados: totalDuplicados,
+        totalBlocos: numeroBlocos
+    };
+}
+
+// === NOVA FUNÇÃO: PROCESSAR PEDIDO INDIVIDUAL (EVITA DUPLICAÇÃO) ===
+async function processarPedidoIndividual(dadosCompletos, megasConvertido, referencia, numero, nomeContato, autorMensagem, message) {
+    console.log(`📝 INDIVIDUAL: Processando pedido individual: ${referencia} - ${Math.floor(megasConvertido/1024)}GB para ${numero}`);
+    
+    // 1. Calcular valor esperado baseado nos megas
+    const valorEsperado = calcularValorEsperadoDosMegas(megasConvertido, message.from);
+    
+    if (!valorEsperado) {
+        console.log(`⚠️ INDIVIDUAL: Não foi possível calcular valor, processando sem verificação`);
+        
+        const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, message.from, message);
+        if (resultadoEnvio === null) {
+            console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado para ${referencia}`);
+            return; // Para aqui se for duplicado
+        }
+        await registrarComprador(message.from, numero, nomeContato, Math.floor(megasConvertido/1024) + 'GB');
+        
+        if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
+            const timestampMensagem = new Date().toLocaleString('pt-BR');
+            const configGrupo = CONFIGURACAO_GRUPOS[message.from] || { nome: 'Grupo' };
+            adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
+        }
+        
+        console.log(`✅ INDIVIDUAL: ${referencia} processado sem verificação de pagamento`);
+        return;
+    }
+    
+    // 2. Verificar se pagamento existe
+    const pagamentoConfirmado = await verificarPagamentoIndividual(referencia, valorEsperado);
+    
+    if (!pagamentoConfirmado) {
+        const valorNormalizado = normalizarValor(valorEsperado);
+        console.log(`❌ INDIVIDUAL: Pagamento não confirmado para ${referencia} (${valorNormalizado}MT)`);
+        return; // Não processar se pagamento não confirmado
+    }
+    
+    console.log(`✅ INDIVIDUAL: Pagamento confirmado para ${referencia}! Processando...`);
+    
+    // ENVIAR MENSAGEM DE CONFIRMAÇÃO IMEDIATA
+    await message.reply(
+        `✅ *Pedido processado!*\n\n` +
+        `💰 *Referência:* ${referencia}\n` +
+        `📊 *Megas:* ${Math.floor(megasConvertido/1024)}GB\n` +
+        `📱 *Número:* ${numero}\n` +
+        `💳 *Pagamento:* 125MT Confirmado\n\n` +
+        `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
+    );
+    console.log(`📤 INDIVIDUAL: Mensagem de confirmação enviada imediatamente para ${numero}`);
+    
+    // 3. Se pagamento confirmado, processar normalmente
+    const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, message.from, message);
+    if (resultadoEnvio === null) {
+        console.log(`🛑 INDIVIDUAL: Processamento parado - duplicado detectado para ${referencia}`);
+        return; // Para aqui se for duplicado
+    }
+    
+    await registrarComprador(message.from, numero, nomeContato, Math.floor(megasConvertido/1024) + 'GB');
+    
+    if (message.from === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
+        const timestampMensagem = new Date().toLocaleString('pt-BR');
+        const configGrupo = CONFIGURACAO_GRUPOS[message.from] || { nome: 'Grupo' };
+        adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
+    }
+    
+    console.log(`✅ INDIVIDUAL: ${referencia} processado com sucesso - ${Math.floor(megasConvertido/1024)}GB para ${numero}`);
+}
+
+// === PROCESSAMENTO DE PEDIDO ÚNICO EM BACKGROUND (NOVA FUNÇÃO) ===
+async function processarPedidoUnicoEmBackground(
+    referencia, megasConvertido, numero, grupoId, message, 
+    dadosCompletos, autorMensagem, configGrupo, nomeContato, 
+    valorIA, valorEsperado, inicioProcessamento
+) {
+    const inicioBackground = Date.now();
+    
+    try {
+        console.log(`🔄 BACKGROUND-ÚNICO: INICIADO - Processando ${referencia} para ${numero}`);
+        
+        // Processar o envio
+        const resultadoEnvio = await enviarParaTaskerComSubdivisao(referencia, megasConvertido, numero, grupoId, message);
+        
+        if (resultadoEnvio === null) {
+            console.log(`🛑 BACKGROUND-ÚNICO: Duplicado detectado - ${referencia}`);
+            
+            // Enviar mensagem de duplicado
+            await message.reply(
+                `⚠️ *PEDIDO JÁ EXISTE*\n\n` +
+                `💰 **${referencia}** já foi processado\n` +
+                `📊 **${Math.floor(megasConvertido/1024)}GB** → **${numero}**\n\n` +
+                `✅ *Verificar status na planilha*`
+            );
+            return;
+        }
+        
+        // Registrar comprador
+        await registrarComprador(grupoId, numero, nomeContato, valorIA);
+        
+        // Adicionar na fila se for grupo de origem
+        if (grupoId === ENCAMINHAMENTO_CONFIG.grupoOrigem) {
+            const timestampMensagem = new Date().toLocaleString('pt-BR');
+            adicionarNaFila(dadosCompletos, autorMensagem, configGrupo.nome, timestampMensagem);
+        }
+        
+        const tempoTotal = Date.now() - inicioBackground;
+        const tempoTotalCompleto = Date.now() - inicioProcessamento;
+        
+        console.log(`🏁 BACKGROUND-ÚNICO: Concluído em ${tempoTotal}ms (total: ${tempoTotalCompleto}ms)`);
+        
+        // ENVIAR MENSAGEM FINAL - FORMATO SOLICITADO
+        await message.reply(
+            `✅ *Pedido processado!*\n\n` +
+            `💰 *Referência:* ${referencia}\n` +
+            `📊 *Megas:* ${Math.floor(megasConvertido/1024)}GB\n` +
+            `📱 *Número:* ${numero}\n` +
+            `💳 *Pagamento:* ${normalizarValor(valorEsperado)}MT Confirmado\n\n` +
+            `⏳ *Aguarde uns instantes enquanto o sistema executa a transferência*`
+        );
+        
+        console.log(`📤 BACKGROUND-ÚNICO: Mensagem final enviada para ${numero}`);
+        
+    } catch (error) {
+        console.error(`❌ BACKGROUND-ÚNICO: Erro no processamento de ${referencia}:`, error.message);
+        
+        // Enviar mensagem de erro
+        try {
+            await message.reply(
+                `❌ *ERRO NO PROCESSAMENTO*\n\n` +
+                `💰 **${referencia}**\n` +
+                `📱 **${numero}**\n\n` +
+                `🔄 *Tente novamente em alguns instantes*`
+            );
+        } catch (replyError) {
+            console.error(`❌ BACKGROUND-ÚNICO: Erro ao enviar mensagem de erro:`, replyError.message);
+        }
+    }
+}
 
 
