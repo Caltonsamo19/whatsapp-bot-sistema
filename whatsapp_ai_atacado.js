@@ -1290,7 +1290,7 @@ Analisa TODO o texto e reconstrói a referência completa:`;
         return {
           sucesso: false,
           tipo: 'processamento_imagem_removido',
-          mensagem: 'Processamento de imagens foi removido. Envie como texto.'
+          mensagem: '❌ Processamento de imagens desativado\n📄 Solicitamos que o comprovante seja enviado em formato de texto.\n\nℹ️ Esta medida foi adotada para garantir que o sistema funcione de forma mais rápida, estável e com menos falhas.'
         };
       } else {
         return await this.processarTexto(mensagem, remetente, timestamp, configGrupo);

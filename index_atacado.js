@@ -1932,7 +1932,11 @@ client.on('message', async (message) => {
 
         // === PROCESSAMENTO DE IMAGENS REMOVIDO ===
         if (message.type === 'image') {
-            await message.reply('❌ *Processamento de imagens desabilitado!*\n\n📝 Envie o comprovante como texto.');
+            await message.reply(
+                '❌ Processamento de imagens desativado\n' +
+                '📄 Solicitamos que o comprovante seja enviado em formato de texto.\n\n' +
+                'ℹ️ Esta medida foi adotada para garantir que o sistema funcione de forma mais rápida, estável e com menos falhas.'
+            );
             return;
         }
 
