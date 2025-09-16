@@ -1,5 +1,4 @@
 const { OpenAI } = require("openai");
-const vision = require('@google-cloud/vision');
 
 class WhatsAppAIAtacado {
   constructor(apiKey) {
@@ -18,89 +17,6 @@ class WhatsAppAIAtacado {
       cacheHits: 0
     };
 
-    // MÉTRICAS DE PROCESSAMENTO DE IMAGENS ROBUSTAS
-    this.imagemStats = {
-      total: 0,
-      sucessos: 0,
-      falhas: 0,
-      metodos: {
-        hibrido_direto: 0,
-        abordagem_alternativa: 0,
-        regex_direto: 0,
-        prompt_simplificado: 0,
-        gpt4_vision_fallback: 0
-      },
-      referencias_reconstruidas: 0,
-      referencias_validadas: 0,
-      referencias_rejeitadas: 0
-    };
-    
-    // Configurar Google Vision com verificação robusta
-    this.googleVisionEnabled = process.env.GOOGLE_VISION_ENABLED === 'true';
-    this.googleVisionTimeout = parseInt(process.env.GOOGLE_VISION_TIMEOUT) || 10000;
-    
-    console.log('🔍 Iniciando Google Vision...');
-    console.log(`📋 GOOGLE_VISION_ENABLED: ${process.env.GOOGLE_VISION_ENABLED}`);
-    console.log(`📁 GOOGLE_APPLICATION_CREDENTIALS: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
-    
-    if (this.googleVisionEnabled) {
-      try {
-        const fs = require('fs');
-        const path = require('path');
-        
-        let initialized = false;
-        
-        // MÉTODO 1: Credenciais JSON diretamente na variável de ambiente
-        if (!initialized && process.env.GOOGLE_VISION_CREDENTIALS_JSON) {
-          try {
-            const credentials = JSON.parse(process.env.GOOGLE_VISION_CREDENTIALS_JSON);
-            this.visionClient = new vision.ImageAnnotatorClient({
-              credentials: credentials
-            });
-            console.log('✅ Google Vision inicializado com JSON das credenciais');
-            initialized = true;
-          } catch (jsonError) {
-            console.warn('⚠️ Erro ao parsear GOOGLE_VISION_CREDENTIALS_JSON:', jsonError.message);
-          }
-        }
-        
-        // MÉTODO 2: Arquivo de credenciais
-        if (!initialized && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-          const credentialsPath = path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS);
-          console.log(`🔍 Verificando credenciais em: ${credentialsPath}`);
-          
-          if (fs.existsSync(credentialsPath)) {
-            this.visionClient = new vision.ImageAnnotatorClient();
-            console.log('✅ Google Vision inicializado com arquivo de credenciais');
-            initialized = true;
-          } else {
-            console.error(`❌ Arquivo de credenciais não encontrado: ${credentialsPath}`);
-          }
-        }
-        
-        // MÉTODO 3: API Key
-        if (!initialized && process.env.GOOGLE_VISION_API_KEY) {
-          this.visionClient = new vision.ImageAnnotatorClient({
-            apiKey: process.env.GOOGLE_VISION_API_KEY
-          });
-          console.log('✅ Google Vision inicializado com API Key');
-          initialized = true;
-        }
-        
-        if (!initialized) {
-          console.log('⚠️ Google Vision desabilitado: nenhuma credencial válida encontrada');
-          this.googleVisionEnabled = false;
-        } else {
-          console.log('🧪 Google Vision pronto para uso');
-        }
-      } catch (error) {
-        console.error('❌ Erro ao inicializar Google Vision:', error.message);
-        console.error('❌ Stack trace:', error.stack);
-        this.googleVisionEnabled = false;
-      }
-    } else {
-      console.log('⚠️ Google Vision desabilitado via GOOGLE_VISION_ENABLED');
-    }
     
     // INICIALIZAR SISTEMA DE CONTROLE DE REFERÊNCIAS
     this.referencias_processadas = new Map();
@@ -111,8 +27,7 @@ class WhatsAppAIAtacado {
       this.limparReferenciasAntigas(); // NOVO: Limpar referências antigas
     }, 5 * 60 * 1000); // Reduzido para 5 minutos para limpeza mais frequente
     
-    const visionStatus = this.googleVisionEnabled ? 'Google Vision + GPT-4' : 'GPT-4 Vision';
-    console.log(`🧠 IA WhatsApp ATACADO v5.0 inicializada - ${visionStatus}`);
+    console.log('🧠 IA WhatsApp ATACADO v5.0 inicializada - Processamento apenas de texto');
   }
 
   // === RECONSTRUÇÃO BREVE DE REFERÊNCIAS ===
@@ -441,8 +356,6 @@ class WhatsAppAIAtacado {
       console.log(`✅ ${alteracoes} referência(s) reconstruída(s)`);
       console.log(`📝 Texto processado: ${textoProcessado.substring(0, 200)}...`);
       
-      // MÉTRICAS: Referências reconstruídas
-      this.imagemStats.referencias_reconstruidas += alteracoes;
     } else {
       console.log(`ℹ️ Nenhuma referência quebrada detectada`);
     }
@@ -490,68 +403,6 @@ class WhatsAppAIAtacado {
     return textoProcessado;
   }
 
-  // === EXTRAIR TEXTO COM GOOGLE VISION (COPIADO EXATAMENTE DO BOT DE REFERÊNCIA) ===
-  async extrairTextoGoogleVision(imagemBase64) {
-    if (!this.googleVisionEnabled || !this.visionClient) {
-      throw new Error('Google Vision não está disponível');
-    }
-
-    try {
-      console.log('🔍 Extraindo texto com Google Vision...');
-      
-      // Preparar imagem para Google Vision
-      const imageBuffer = Buffer.from(imagemBase64, 'base64');
-      
-      // Chamar Google Vision API com timeout
-      const [result] = await Promise.race([
-        this.visionClient.textDetection({ image: { content: imageBuffer } }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Google Vision timeout')), this.googleVisionTimeout)
-        )
-      ]);
-
-      if (!result.textAnnotations || result.textAnnotations.length === 0) {
-        console.log('⚠️ Google Vision não encontrou texto na imagem');
-        throw new Error('Nenhum texto encontrado na imagem');
-      }
-
-      // O primeiro item contém todo o texto detectado
-      let textoCompleto = result.textAnnotations[0].description;
-      console.log(`✅ Google Vision extraiu ${textoCompleto.length} caracteres`);
-      console.log(`📝 Texto bruto extraído:\n"${textoCompleto}"`);
-
-      // === VALIDAR COMPLETUDE ANTES DA RECONSTRUÇÃO ===
-      console.log(`🔍 Verificando completude das referências...`);
-      const completude = this.validarCompletude(textoCompleto);
-      
-      if (!completude.completo && completude.fragmentosSuspeitos.length > 0) {
-        console.log(`⚠️ REFERÊNCIAS POSSIVELMENTE INCOMPLETAS DETECTADAS! Iniciando reconstrução forçada...`);
-      } else if (completude.completo) {
-        console.log(`✅ Referências aparentemente completas encontradas (${completude.referenciasCompletas})`);
-      }
-
-      // PRÉ-PROCESSAMENTO: Reconstrução breve
-      console.log(`🔧 Reconstrução breve de referências...`);
-      textoCompleto = this.reconstruirReferenciasBreve(textoCompleto);
-      console.log(`✅ Reconstrução breve concluída`);
-      
-      // === VALIDAR COMPLETUDE SIMPLIFICADA ===
-      console.log(`🔍 Validação simplificada final...`);
-      const completudeFinal = this.validarCompletude(textoCompleto);
-      
-      if (completudeFinal.completo) {
-        console.log(`✅ SUCESSO: ${completudeFinal.referenciasCompletas} referência(s) válida(s) encontrada(s)`);
-      } else {
-        console.log(`⚠️ ATENÇÃO: Nenhuma referência válida encontrada`);
-      }
-
-      return textoCompleto;
-
-    } catch (error) {
-      console.error('❌ Erro no Google Vision:', error.message);
-      throw error;
-    }
-  }
 
   // === INTERPRETAR COMPROVANTE COM GPT (OTIMIZADO) ===
   async interpretarComprovanteComGPT(textoExtraido) {
@@ -625,14 +476,12 @@ Analisa TODO o texto e reconstrói a referência completa:`;
           console.log(`📝 Referência rejeitada: "${resultado.referencia}"`);
           
           // MÉTRICAS: Referência rejeitada
-          this.imagemStats.referencias_rejeitadas++;
           
           // Tentar extrair referência alternativa do texto original
           const referenciaAlternativa = this.buscarReferenciaAlternativa(textoExtraido);
           if (referenciaAlternativa) {
             console.log(`🔄 Usando referência alternativa: "${referenciaAlternativa}"`);
             resultado.referencia = referenciaAlternativa;
-            this.imagemStats.referencias_validadas++;
           } else {
             console.log(`❌ Nenhuma referência válida encontrada`);
             resultado.encontrado = false;
@@ -640,7 +489,6 @@ Analisa TODO o texto e reconstrói a referência completa:`;
         } else {
           console.log(`✅ Referência validada: ${resultado.referencia} (${validacao.tipo})`);
           // MÉTRICAS: Referência validada
-          this.imagemStats.referencias_validadas++;
         }
       }
       
@@ -658,290 +506,8 @@ Analisa TODO o texto e reconstrói a referência completa:`;
     }
   }
 
-  // === GERAR HASH ÚNICO DA IMAGEM ===
-  gerarHashImagem(imagemBase64) {
-    const crypto = require('crypto');
-    const hash = crypto.createHash('sha256');
-    hash.update(imagemBase64);
-    const hashCompleto = hash.digest('hex');
-    const hashCurto = hashCompleto.substring(0, 16); // 16 caracteres únicos
-    return {
-      completo: hashCompleto,
-      curto: hashCurto,
-      timestamp: Date.now()
-    };
-  }
 
-  // === VERIFICAR SE IMAGEM JÁ FOI PROCESSADA ===
-  verificarImagemDuplicada(hashImagem) {
-    // Verificar se essa imagem já foi processada recentemente (reduzido para evitar confusão)
-    const timeout = 30 * 60 * 1000; // 30 minutos (reduzido de 2 horas)
-    const agora = Date.now();
-    
-    if (!this.imagensProcessadas) {
-      this.imagensProcessadas = new Map();
-    }
-    
-    // Limpar imagens antigas
-    for (const [hash, dados] of this.imagensProcessadas.entries()) {
-      if (agora - dados.timestamp > timeout) {
-        this.imagensProcessadas.delete(hash);
-      }
-    }
-    
-    // Verificar se esta imagem específica já foi processada
-    const imagemExistente = this.imagensProcessadas.get(hashImagem.curto);
-    if (imagemExistente) {
-      console.log(`⚠️ DUPLICATA DETECTADA: Imagem já processada há ${Math.floor((agora - imagemExistente.timestamp) / 60000)} minutos`);
-      console.log(`🔍 Hash: ${hashImagem.curto}`);
-      console.log(`📋 Resultado anterior: ${imagemExistente.referencia} - ${imagemExistente.valor}MT`);
-      return {
-        isDuplicata: true,
-        dadosAnteriores: imagemExistente
-      };
-    }
-    
-    return { isDuplicata: false };
-  }
 
-  // === REGISTRAR IMAGEM PROCESSADA ===
-  registrarImagemProcessada(hashImagem, resultado) {
-    if (!this.imagensProcessadas) {
-      this.imagensProcessadas = new Map();
-    }
-    
-    this.imagensProcessadas.set(hashImagem.curto, {
-      timestamp: hashImagem.timestamp,
-      hash: hashImagem.curto,
-      referencia: resultado.referencia || 'N/A',
-      valor: resultado.valor || 'N/A',
-      remetente: resultado.remetente || 'N/A',
-      sucesso: resultado.sucesso || false
-    });
-    
-    console.log(`📝 IMAGEM REGISTRADA: ${hashImagem.curto} - ${resultado.referencia || 'N/A'}`);
-  }
-
-  // === PROCESSAR IMAGEM COM MÉTODO HÍBRIDO ROBUSTO (VERSÃO MELHORADA + ANTI-DUPLICAÇÃO) ===
-  async processarImagemHibrida(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
-    console.log(`🔄 MÉTODO HÍBRIDO ROBUSTO: Google Vision + GPT-4 para ${remetente}`);
-    
-    // === SISTEMA ANTI-DUPLICAÇÃO ===
-    const hashImagem = this.gerarHashImagem(imagemBase64);
-    console.log(`🔍 Hash da imagem: ${hashImagem.curto}`);
-    
-    const verificacaoDuplicata = this.verificarImagemDuplicada(hashImagem);
-    if (verificacaoDuplicata.isDuplicata) {
-      const dadosAnteriores = verificacaoDuplicata.dadosAnteriores;
-      return {
-        sucesso: false,
-        tipo: 'imagem_duplicada',
-        hashImagem: hashImagem.curto,
-        dadosAnteriores: dadosAnteriores,
-        mensagem: `⚠️ *IMAGEM DUPLICADA*\n\n🔍 Esta imagem já foi processada anteriormente.\n\n📋 *Dados do processamento anterior:*\n• Referência: ${dadosAnteriores.referencia}\n• Valor: ${dadosAnteriores.valor}MT\n• Processado há: ${Math.floor((Date.now() - dadosAnteriores.timestamp) / 60000)} minutos\n\n💡 Se precisa reprocessar, envie uma nova captura de tela.`
-      };
-    }
-    
-    // MÉTRICAS: Incrementar contador total
-    this.imagemStats.total++;
-    
-    try {
-      // ETAPA 1: Extrair texto com Google Vision (com logs detalhados)
-      console.log(`📷 Etapa 1/3: Extraindo texto da imagem...`);
-      const textoExtraido = await this.extrairTextoGoogleVision(imagemBase64);
-      console.log(`✅ Google Vision extraiu ${textoExtraido.length} caracteres`);
-      
-      // ETAPA 2: Interpretar texto com GPT-4 robusto
-      console.log(`🧠 Etapa 2/3: Interpretando texto com GPT-4...`);
-      const resultadoGPT = await this.interpretarComprovanteComGPT(textoExtraido);
-      
-      if (resultadoGPT.encontrado) {
-        console.log(`✅ SUCESSO HÍBRIDO: ${resultadoGPT.referencia} - ${resultadoGPT.valor}MT`);
-        console.log(`📊 Etapa 3/3: Processando comprovante extraído...`);
-        
-        // MÉTRICAS: Sucesso com método híbrido direto
-        this.imagemStats.sucessos++;
-        this.imagemStats.metodos.hibrido_direto++;
-        
-        // VALIDAÇÃO ROBUSTA DO VALOR EXTRAÍDO
-        const valorLimpo = this.limparValor(resultadoGPT.valor);
-        if (!valorLimpo || valorLimpo === '0' || valorLimpo === 'undefined' || valorLimpo === 'null') {
-          console.error(`❌ ATACADO: Valor inválido extraído via GPT: "${resultadoGPT.valor}" → "${valorLimpo}"`);
-          throw new Error(`Valor inválido: ${resultadoGPT.valor}`);
-        }
-
-        const comprovante = {
-          referencia: resultadoGPT.referencia,
-          valor: valorLimpo,
-          fonte: 'google_vision_gpt_v2',
-          metodo: 'hibrido_robusto',
-          textoOriginal: textoExtraido.substring(0, 100) // Para debug
-        };
-        
-        return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem, hashImagem);
-      } else {
-        console.log(`❌ GPT-4 não encontrou dados no texto extraído`);
-        console.log(`📝 Texto que foi analisado: "${textoExtraido.substring(0, 300)}..."`);
-        
-        // ETAPA 3: Tentar múltiplas abordagens de reconstrução
-        console.log(`🔄 Etapa 3/3: Tentando abordagens alternativas...`);
-        const resultadoAlternativo = await this.tentarAbordagensAlternativas(textoExtraido);
-        
-        if (resultadoAlternativo.encontrado) {
-          console.log(`✅ SUCESSO COM ABORDAGEM ALTERNATIVA: ${resultadoAlternativo.referencia}`);
-          
-          // MÉTRICAS: Sucesso com abordagem alternativa
-          this.imagemStats.sucessos++;
-          this.imagemStats.metodos.abordagem_alternativa++;
-          
-          // VALIDAÇÃO ROBUSTA DO VALOR ALTERNATIVO
-          const valorLimpoAlt = this.limparValor(resultadoAlternativo.valor);
-          if (!valorLimpoAlt || valorLimpoAlt === '0' || valorLimpoAlt === 'undefined' || valorLimpoAlt === 'null') {
-            console.error(`❌ ATACADO: Valor inválido extraído via abordagem alternativa: "${resultadoAlternativo.valor}" → "${valorLimpoAlt}"`);
-            throw new Error(`Valor alternativo inválido: ${resultadoAlternativo.valor}`);
-          }
-
-          const comprovante = {
-            referencia: resultadoAlternativo.referencia,
-            valor: valorLimpoAlt,
-            fonte: 'google_vision_gpt_alternativo',
-            metodo: 'hibrido_alternativo'
-          };
-          
-          return await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem, hashImagem);
-        }
-        
-        throw new Error('Nenhuma abordagem conseguiu extrair dados da imagem');
-      }
-      
-    } catch (error) {
-      console.error(`❌ MÉTODO HÍBRIDO ROBUSTO FALHOU: ${error.message}`);
-      console.log('🔄 Fallback: Tentando com GPT-4 Vision diretamente...');
-      
-      // MÉTRICAS: Tentar fallback
-      this.imagemStats.metodos.gpt4_vision_fallback++;
-      
-      try {
-        // FALLBACK: Usar GPT-4 Vision diretamente (método original)
-        const resultado = await this.processarImagemGPT4Vision(imagemBase64, remetente, timestamp, configGrupo, legendaImagem);
-        
-        // Se chegou aqui, o fallback funcionou
-        this.imagemStats.sucessos++;
-        return resultado;
-        
-      } catch (fallbackError) {
-        // MÉTRICAS: Falha completa
-        this.imagemStats.falhas++;
-        console.error(`❌ Fallback também falhou: ${fallbackError.message}`);
-        throw fallbackError;
-      }
-    }
-  }
-
-  // === FALLBACK: GPT-4 VISION DIRETO (MÉTODO ORIGINAL) ===
-  async processarImagemGPT4Vision(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
-    console.log(`🔄 Fallback GPT-4 Vision para ${remetente}`);
-    
-    const temLegendaValida = legendaImagem && 
-                            typeof legendaImagem === 'string' && 
-                            legendaImagem.trim().length > 0;
-    
-    if (temLegendaValida) {
-      console.log(`   📝 ATACADO: Legenda detectada: "${legendaImagem.trim()}"`);
-    }
-
-    // OTIMIZAÇÃO: Cache para imagens (hash pequeno para performance)
-    const imageHash = imagemBase64.substring(0, 50);
-    const cacheKey = `vision_${Buffer.from(imageHash).toString('base64').substring(0, 32)}`;
-    const cached = this.cacheResultados.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
-      console.log('💾 ATACADO: Cache hit - GPT-4 Vision');
-      this.tokenStats.cacheHits++;
-      return cached.resultado;
-    }
-
-    // OTIMIZAÇÃO: Prompt 30% mais curto
-    const prompt = `Extrair referência e valor de comprovante M-Pesa/E-Mola da imagem:
-JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":false}`;
-
-    try {
-      this.tokenStats.calls++;
-      const resposta = await this.openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${imagemBase64}`,
-                  detail: "high"
-                }
-              }
-            ]
-          }
-        ],
-        temperature: 0,
-        max_tokens: 150
-      });
-
-      console.log(`   🔍 ATACADO: Resposta da IA para imagem: ${resposta.choices[0].message.content}`);
-      
-      const resultado = this.extrairJSON(resposta.choices[0].message.content);
-      console.log(`   ✅ ATACADO: JSON extraído da imagem:`, resultado);
-      
-      if (resultado.encontrado) {
-        // VALIDAÇÃO ROBUSTA DO VALOR FALLBACK
-        const valorLimpoFallback = this.limparValor(resultado.valor);
-        if (!valorLimpoFallback || valorLimpoFallback === '0' || valorLimpoFallback === 'undefined' || valorLimpoFallback === 'null') {
-          console.error(`❌ ATACADO: Valor inválido extraído via fallback: "${resultado.valor}" → "${valorLimpoFallback}"`);
-          return null;
-        }
-
-        const comprovante = {
-          referencia: resultado.referencia,
-          valor: valorLimpoFallback,
-          fonte: 'gpt4_vision',
-          metodo: 'fallback'
-        };
-        
-        const processado = await this.processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo, legendaImagem);
-        
-        // OTIMIZAÇÃO: Salvar resultado positivo no cache
-        this.cacheResultados.set(cacheKey, {
-          resultado: processado,
-          timestamp: Date.now()
-        });
-        
-        return processado;
-      } else {
-        console.log(`   ❌ ATACADO: IA não conseguiu extrair dados da imagem`);
-        const resultadoNegativo = {
-          sucesso: false,
-          tipo: 'imagem_nao_reconhecida',
-          mensagem: 'Não consegui ler o comprovante na imagem. Envie como texto.'
-        };
-        
-        // OTIMIZAÇÃO: Salvar resultado negativo no cache também
-        this.cacheResultados.set(cacheKey, {
-          resultado: resultadoNegativo,
-          timestamp: Date.now()
-        });
-        
-        return resultadoNegativo;
-      }
-      
-    } catch (error) {
-      console.error('❌ ATACADO: Erro ao processar imagem com GPT-4 Vision:', error);
-      return {
-        sucesso: false,
-        tipo: 'erro_processamento_imagem',
-        mensagem: 'Erro ao processar imagem. Tente enviar como texto.'
-      };
-    }
-  }
 
   // === PROCESSAR COMPROVANTE EXTRAÍDO (FUNÇÃO AUXILIAR) ===
   async processarComprovanteExtraido(comprovante, remetente, timestamp, configGrupo = null, legendaImagem = null, hashImagem = null) {
@@ -1042,15 +608,6 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
               };
             }
 
-            // REGISTRAR IMAGEM COMO PROCESSADA COM SUCESSO
-            if (hashImagem) {
-              this.registrarImagemProcessada(hashImagem, {
-                referencia: comprovante.referencia,
-                valor: comprovante.valor,
-                remetente: remetente,
-                sucesso: true
-              });
-            }
           } else {
             console.log(`   ❌ ATACADO: Valor ${comprovante.valor}MT não encontrado na tabela`);
             return {
@@ -1084,15 +641,6 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     if (megasCalculados) {
       await this.processarComprovante(comprovante, remetente, timestamp);
       
-      // REGISTRAR IMAGEM COMO PROCESSADA COM SUCESSO
-      if (hashImagem) {
-        this.registrarImagemProcessada(hashImagem, {
-          referencia: comprovante.referencia,
-          valor: comprovante.valor,
-          remetente: remetente,
-          sucesso: true
-        });
-      }
       
       return { 
         sucesso: true, 
@@ -1739,7 +1287,11 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     
     try {
       if (tipoMensagem === 'imagem') {
-        return await this.processarImagem(mensagem, remetente, timestamp, configGrupo, legendaImagem);
+        return {
+          sucesso: false,
+          tipo: 'processamento_imagem_removido',
+          mensagem: 'Processamento de imagens foi removido. Envie como texto.'
+        };
       } else {
         return await this.processarTexto(mensagem, remetente, timestamp, configGrupo);
       }
@@ -2198,7 +1750,6 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     const resultado2 = this.extrairDiretoPorRegex(textoExtraido);
     if (resultado2.encontrado) {
       console.log(`✅ Abordagem 2 funcionou!`);
-      this.imagemStats.metodos.regex_direto++;
       return resultado2;
     }
     
@@ -2207,7 +1758,6 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
     const resultado3 = await this.interpretarComPromptSimplificado(textoExtraido);
     if (resultado3.encontrado) {
       console.log(`✅ Abordagem 3 funcionou!`);
-      this.imagemStats.metodos.prompt_simplificado++;
       return resultado3;
     }
     
@@ -2258,7 +1808,6 @@ JSON: {"referencia":"XXX","valor":"123","encontrado":true} ou {"encontrado":fals
                 console.log(`   ✅ RECONSTRUÇÃO FORÇADA SUCESSO (método ${i+1}): "${original}" → "${candidato}"`);
                 
                 // Incrementar métrica
-                this.imagemStats.referencias_reconstruidas++;
               } else {
                 console.log(`   ❌ RECONSTRUÇÃO FORÇADA FALHOU (método ${i+1}): "${candidato}" não é M-Pesa válido`);
               }
@@ -2379,70 +1928,7 @@ Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"enco
     }
   }
 
-  // === PROCESSAMENTO DE IMAGEM MELHORADO ===
-  async processarImagem(imagemBase64, remetente, timestamp, configGrupo = null, legendaImagem = null) {
-    console.log(`   📸 ATACADO: Processando imagem de ${remetente} com método híbrido (Google Vision + GPT-4)`);
-    
-    // Usar o novo método híbrido Google Vision + GPT-4
-    return await this.processarImagemHibrida(imagemBase64, remetente, timestamp, configGrupo, legendaImagem);
-  }
 
-  // === OBTER ESTATÍSTICAS DE PROCESSAMENTO DE IMAGENS ===
-  getImagemStats() {
-    const stats = this.imagemStats;
-    const taxaSucesso = stats.total > 0 ? ((stats.sucessos / stats.total) * 100).toFixed(1) : '0.0';
-    
-    let relatorio = `📊 *ESTATÍSTICAS DE PROCESSAMENTO DE IMAGENS ROBUSTAS*\n`;
-    relatorio += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-    
-    relatorio += `📈 **RESUMO GERAL**\n`;
-    relatorio += `• Total processadas: ${stats.total}\n`;
-    relatorio += `• Sucessos: ${stats.sucessos} (${taxaSucesso}%)\n`;
-    relatorio += `• Falhas: ${stats.falhas}\n\n`;
-    
-    relatorio += `🔧 **MÉTODOS UTILIZADOS**\n`;
-    relatorio += `• Híbrido direto: ${stats.metodos.hibrido_direto}\n`;
-    relatorio += `• Abordagem alternativa: ${stats.metodos.abordagem_alternativa}\n`;
-    relatorio += `• Regex direto: ${stats.metodos.regex_direto}\n`;
-    relatorio += `• Prompt simplificado: ${stats.metodos.prompt_simplificado}\n`;
-    relatorio += `• GPT-4 Vision fallback: ${stats.metodos.gpt4_vision_fallback}\n\n`;
-    
-    relatorio += `🔍 **PROCESSAMENTO DE REFERÊNCIAS**\n`;
-    relatorio += `• Referencias reconstruídas: ${stats.referencias_reconstruidas}\n`;
-    relatorio += `• Referencias validadas: ${stats.referencias_validadas}\n`;
-    relatorio += `• Referencias rejeitadas: ${stats.referencias_rejeitadas}\n\n`;
-    
-    relatorio += `💾 **CACHE E TOKENS**\n`;
-    relatorio += `• Chamadas GPT: ${this.tokenStats.calls}\n`;
-    relatorio += `• Cache hits: ${this.tokenStats.cacheHits}\n`;
-    
-    const taxaCache = this.tokenStats.calls > 0 ? 
-      ((this.tokenStats.cacheHits / (this.tokenStats.calls + this.tokenStats.cacheHits)) * 100).toFixed(1) : '0.0';
-    relatorio += `• Taxa de cache: ${taxaCache}%`;
-    
-    return relatorio;
-  }
-
-  // === RESETAR ESTATÍSTICAS ===
-  resetImagemStats() {
-    this.imagemStats = {
-      total: 0,
-      sucessos: 0,
-      falhas: 0,
-      metodos: {
-        hibrido_direto: 0,
-        abordagem_alternativa: 0,
-        regex_direto: 0,
-        prompt_simplificado: 0,
-        gpt4_vision_fallback: 0
-      },
-      referencias_reconstruidas: 0,
-      referencias_validadas: 0,
-      referencias_rejeitadas: 0
-    };
-    
-    console.log('📊 Estatísticas de processamento de imagens resetadas');
-  }
 
   // === EXTRAIR NÚMEROS SIMPLES ===
   extrairNumerosSimples(legenda) {
