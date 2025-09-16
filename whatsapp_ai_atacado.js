@@ -2699,6 +2699,7 @@ Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"enco
             console.log(`❌ VALIDAÇÃO RIGOROSA: Valor ${valorLimpo}MT REJEITADO - ${validacao.motivo}`);
             return {
               encontrado: false,
+              valor: valorLimpo, // CORREÇÃO: Incluir o valor mesmo quando há validação rigorosa inválida
               valor_invalido: valorLimpo,
               referencia: referencia,
               motivo: 'valor_nao_esta_na_tabela',
@@ -2722,6 +2723,7 @@ Resposta JSON: {"encontrado":true,"referencia":"CODIGO","valor":"125"} ou {"enco
           return {
             encontrado: false,
             referencia: referencia,
+            valor: valorLimpo, // CORREÇÃO: Incluir o valor mesmo quando há inconsistências
             valor_invalido: valorLimpo,
             motivo: 'dados_inconsistentes',
             inconsistencias: validacaoConsistencia.inconsistencias || [validacaoConsistencia.motivo],
@@ -2797,6 +2799,7 @@ ou
             console.log(`❌ VALIDAÇÃO RIGOROSA (IA): Valor ${valorLimpo}MT REJEITADO - ${validacao.motivo}`);
             const resultadoInvalido = {
               encontrado: false,
+              valor: valorLimpo, // CORREÇÃO: Incluir o valor mesmo quando há validação inválida na IA
               valor_invalido: valorLimpo,
               referencia: resultado.referencia,
               motivo: 'valor_nao_esta_na_tabela',
