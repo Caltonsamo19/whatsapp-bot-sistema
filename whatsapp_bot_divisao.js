@@ -1134,7 +1134,7 @@ class WhatsAppBotDivisao {
                 
                 if (statusPredominante === 'pendente') {
                     mensagemFinal = `⏳ *PEDIDOS JÁ EM PROCESSAMENTO*\n\n` +
-                        `📋 **${duplicados} pedidos já estão na planilha**\n` +
+                        `📋 **${duplicados} pedidos já estão no sistema**\n` +
                         `⚡ **Verificado em ${tempoFormatado}**\n\n` +
                         `🔄 *As transferências serão executadas automaticamente.*`;
                 } else if (statusPredominante === 'processado') {
@@ -1144,7 +1144,7 @@ class WhatsAppBotDivisao {
                         `🎯 *Transferências já foram concluídas anteriormente.*`;
                 } else {
                     mensagemFinal = `📋 *PEDIDOS EXISTENTES*\n\n` +
-                        `⚠️ **${duplicados} pedidos já estão na planilha**\n` +
+                        `⚠️ **${duplicados} pedidos já estão no sistema**\n` +
                         `⚡ **Verificado em ${tempoFormatado}**\n\n` +
                         `🔍 *Verifique o status individual dos pedidos.*`;
                 }

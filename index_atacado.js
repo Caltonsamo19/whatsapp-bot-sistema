@@ -656,7 +656,7 @@ async function enviarSaldoParaTasker(referencia, saldo, numero, grupoId, message
                 `📱 **Número:** ${numero}\n` +
                 `🏢 **Grupo:** ${grupoNome}\n\n` +
                 `🚀 **Pedido enviado para processamento!**\n` +
-                `📊 **Status Google Sheets:** ${resultadoSheets.sucesso ? '✅ Salvo' : '⚠️ Erro'}`
+                `📊 **Status Sistema:** ${resultadoSheets.sucesso ? '✅ Salvo' : '⚠️ Erro'}`
             );
         }
 
@@ -1559,9 +1559,9 @@ client.on('message', async (message) => {
                 const resultado = await enviarParaGoogleSheets('TEST123|1250|842223344|' + new Date().toLocaleString('pt-BR'), 'test_group', new Date().toLocaleString('pt-BR'));
                 
                 if (resultado.sucesso) {
-                    await message.reply(`✅ *Google Sheets funcionando!*\n\n📊 URL: ${GOOGLE_SHEETS_CONFIG.scriptUrl}\n📝 Row: ${resultado.row}\n🎉 Dados enviados com sucesso!`);
+                    await message.reply(`✅ *Sistema funcionando!*\n\n📊 Conexão ativa\n📝 Row: ${resultado.row}\n🎉 Dados enviados com sucesso!`);
                 } else {
-                    await message.reply(`❌ *Google Sheets com problema!*\n\n📊 URL: ${GOOGLE_SHEETS_CONFIG.scriptUrl}\n⚠️ Erro: ${resultado.erro}\n\n🔧 *Verifique:*\n• Script publicado corretamente\n• Permissões do Google Sheets\n• Internet funcionando`);
+                    await message.reply(`❌ *Sistema com problema!*\n\n📊 Conexão falhou\n⚠️ Erro: ${resultado.erro}\n\n🔧 *Verifique:*\n• Conexão com internet\n• Sistema funcionando`);
                 }
                 return;
             }
@@ -1647,7 +1647,7 @@ client.on('message', async (message) => {
 
             if (comando === '.clear_sheets') {
                 dadosParaTasker = [];
-                await message.reply('🗑️ *Dados do Google Sheets atacado limpos!*');
+                await message.reply('🗑️ *Dados do sistema limpos!*');
                 return;
             }
 
@@ -2103,7 +2103,7 @@ client.on('message', async (message) => {
                         `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
                         `📱 Número: ${numero}\n` +
                         `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
-                        `🔍 Aguardando confirmação do pagamento na planilha...\n` +
+                        `🔍 Aguardando confirmação do pagamento no sistema...\n` +
                         `⏱️ Tente novamente em alguns minutos.`
                     );
                     return;
