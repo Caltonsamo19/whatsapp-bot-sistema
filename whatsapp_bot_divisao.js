@@ -551,10 +551,18 @@ class WhatsAppBotDivisao {
             
             // 1. CONFIRMAR PAGAMENTO EXISTE
             const pagamentoExiste = await this.buscarPagamentoNaPlanilha(
-                comprovativo.referencia, 
+                comprovativo.referencia,
                 comprovativo.valor
             );
-            
+
+            // CASO ESPECIAL: Pagamento já foi processado
+            if (pagamentoExiste === 'ja_processado') {
+                console.log(`⚠️ DIVISÃO: Pagamento já processado - ${comprovativo.referencia}`);
+                return {
+                    resposta: `⚠️ *PAGAMENTO JÁ PROCESSADO*\n\n💰 Referência: ${comprovativo.referencia}\n💳 Valor: ${comprovativo.valor}MT\n\n✅ Este pagamento já foi processado anteriormente. Não é necessário enviar novamente.\n\nSe você acredita que isso é um erro, entre em contato com o suporte.`
+                };
+            }
+
             if (!pagamentoExiste) {
                 console.log(`⏳ DIVISÃO: Pagamento não encontrado, aguardando...`);
                 return {
@@ -689,10 +697,16 @@ class WhatsAppBotDivisao {
                     });
                     
                     if (response.data && response.data.encontrado) {
-                        console.log(`✅ DIVISÃO: Pagamento encontrado!`);
+                        // VERIFICAR SE PAGAMENTO JÁ FOI PROCESSADO
+                        if (response.data.ja_processado) {
+                            console.log(`⚠️ DIVISÃO: Pagamento já foi processado anteriormente!`);
+                            return 'ja_processado';
+                        }
+
+                        console.log(`✅ DIVISÃO: Pagamento encontrado e marcado como processado!`);
                         return true;
                     }
-                    
+
                     console.log(`❌ DIVISÃO: Pagamento não encontrado`);
                     return false;
                 },
@@ -1602,7 +1616,13 @@ class WhatsAppBotDivisao {
         try {
             // Verificar se o pedido realmente foi perdido
             const existeNaPlanilha = await this.buscarPagamentoNaPlanilha(referencia, dadosOriginais.valor);
-            
+
+            // Se já foi processado, também não precisa recuperar
+            if (existeNaPlanilha === 'ja_processado') {
+                console.log(`⚠️ DIVISÃO: Pedido ${referencia} já foi processado - Não é necessário recuperar`);
+                return false;
+            }
+
             if (!existeNaPlanilha) {
                 console.log(`❌ DIVISÃO: Pedido ${referencia} realmente não existe - Não é necessário recuperar`);
                 return false;

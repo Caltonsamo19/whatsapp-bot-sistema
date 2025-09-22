@@ -522,10 +522,16 @@ async function verificarPagamentoIndividual(referencia, valorEsperado) {
         });
         
         if (response.data && response.data.encontrado) {
-            console.log(`✅ INDIVIDUAL: Pagamento encontrado!`);
+            // VERIFICAR SE PAGAMENTO JÁ FOI PROCESSADO
+            if (response.data.ja_processado) {
+                console.log(`⚠️ INDIVIDUAL: Pagamento já foi processado anteriormente!`);
+                return 'ja_processado';
+            }
+
+            console.log(`✅ INDIVIDUAL: Pagamento encontrado e marcado como processado!`);
             return true;
         }
-        
+
         console.log(`❌ INDIVIDUAL: Pagamento não encontrado`);
         return false;
         
@@ -2090,7 +2096,26 @@ client.on('message', async (message) => {
                 
                 // 2. Verificar se pagamento existe
                 const pagamentoConfirmado = await verificarPagamentoIndividual(referencia, valorEsperado);
-                
+
+                // CASO ESPECIAL: Pagamento já foi processado
+                if (pagamentoConfirmado === 'ja_processado') {
+                    const valorNormalizado = normalizarValor(valorEsperado);
+                    const tipoProdutoTexto = isSaldo ? 'Saldo' : 'Megas';
+                    const produtoTexto = isSaldo ? `${produtoConvertido}MT` : produto;
+
+                    console.log(`⚠️ INDIVIDUAL: Pagamento já processado - ${referencia} (${valorNormalizado}MT)`);
+
+                    await message.reply(
+                        `⚠️ *PAGAMENTO JÁ PROCESSADO*\n\n` +
+                        `💰 Referência: ${referencia}\n` +
+                        `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
+                        `💵 Valor: ${valorNormalizado}MT\n\n` +
+                        `✅ Este pagamento já foi processado anteriormente. Não é necessário enviar novamente.\n\n` +
+                        `Se você acredita que isso é um erro, entre em contato com o suporte.`
+                    );
+                    return;
+                }
+
                 if (!pagamentoConfirmado) {
                     const valorNormalizado = normalizarValor(valorEsperado);
                     const tipoProdutoTexto = isSaldo ? 'Saldo' : 'Megas';
