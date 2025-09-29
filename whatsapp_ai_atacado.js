@@ -2628,6 +2628,8 @@ ou
       resultado = configGrupo.tabela;
     } else if (comando === 'pagamento' && configGrupo?.pagamento) {
       resultado = configGrupo.pagamento;
+    } else if (comando === 'saldo' && configGrupo?.saldo) {
+      resultado = configGrupo.saldo;
     }
     
     if (resultado) {

@@ -252,14 +252,35 @@ const CONFIGURACAO_GRUPOS = {
 📞 1 Comprovante = 1 Número = Valor Completo`,
 
         pagamento: `FORMAS DE PAGAMENTO
- 
-M-PESA❤: 840326152 
-E-MOLA🧡: 870059057 
-NOME: Vasco José Mahumane 
+
+M-PESA❤: 840326152
+E-MOLA🧡: 870059057
+NOME: Vasco José Mahumane
 
 📝 Após a transferência, mande:
-1️⃣ Comprovativo 
-2️⃣ UM número que vai receber`
+1️⃣ Comprovativo
+2️⃣ UM número que vai receber`,
+
+        saldo: `SALDO PROMO 1K🟰815📞
+    
+ 📞 50      💫 45     MT
+ 📞 100    💫 85     MT
+📞 200     💫 170   MT
+📞 300     💫 255   MT
+📞 400     💫 340   MT
+📞 500     💫 410   MT 
+📞 1000   💫 815   MT
+📞 2000   💫 1630 MT
+📞 3000   💫 2445 MT
+📞 4000   💫 3260 MT
+📞 5000   💫 4075 MT
+📞 6000   💫 4890 MT
+📞 7000   💫 5705 MT
+📞 8000   💫 6520 MT
+📞 9000   💫 7335 MT
+📞 10000 💫 8150 MT
+
+📩 Após o envio do valor, mande o compravativo no grupo e o respectivo número beneficiário.`
     },
     '120363419741642342@g.us': {
         nome: 'Only Saldo',
@@ -285,14 +306,33 @@ NOME: Vasco José Mahumane
 📩 Após o envio do valor, mande o compravativo no grupo e o respectivo número beneficiário.`,
 
         pagamento: `FORMAS DE PAGAMENTO
- 
-M-PESA❤: 840326152 
-E-MOLA🧡: 870059057 
-NOME: Vasco José Mahumane 
+
+M-PESA❤: 840326152
+E-MOLA🧡: 870059057
+NOME: Vasco José Mahumane
 
 📝 Após a transferência, mande:
-1️⃣ Comprovativo 
-2️⃣ UM número que vai receber`
+1️⃣ Comprovativo
+2️⃣ UM número que vai receber`,
+
+        saldo: `📱 TABELA DE SALDO - ONLY SALDO 📱
+
+💰 50MT saldo = 45MT pagamento
+💰 100MT saldo = 85MT pagamento
+💰 200MT saldo = 170MT pagamento
+💰 300MT saldo = 255MT pagamento
+💰 400MT saldo = 340MT pagamento
+💰 500MT saldo = 410MT pagamento
+💰 1000MT saldo = 815MT pagamento
+💰 2000MT saldo = 1630MT pagamento
+💰 3000MT saldo = 2445MT pagamento
+💰 4000MT saldo = 3260MT pagamento
+💰 5000MT saldo = 4075MT pagamento
+💰 6000MT saldo = 4890MT pagamento
+💰 7000MT saldo = 5705MT pagamento
+💰 8000MT saldo = 6520MT pagamento
+💰 9000MT saldo = 7335MT pagamento
+💰 10000MT saldo = 8150MT pagamento`
     },
     '120363402160265624@g.us': {
         nome: 'Treinamento IA',
@@ -334,14 +374,23 @@ PACOTE VIP 12.5 24H
 SINTAM-SE AVONTADE, EXPLOREM-NOS ENQUANTO PUDEREM!`,
 
         pagamento: `FORMAS DE PAGAMENTO
- 
-M-PESA❤: 840326152 
-E-MOLA🧡: 870059057 
-NOME: Vasco José Mahumane 
+
+M-PESA❤: 840326152
+E-MOLA🧡: 870059057
+NOME: Vasco José Mahumane
 
 📝 Após a transferência, mande:
-1️⃣ Comprovativo 
-2️⃣ UM número que vai receber`
+1️⃣ Comprovativo
+2️⃣ UM número que vai receber`,
+
+        saldo: `📱 TABELA DE SALDO - TREINAMENTO IA 📱
+
+💰 50MT saldo = 45MT pagamento
+💰 100MT saldo = 90MT pagamento
+💰 200MT saldo = 180MT pagamento
+💰 300MT saldo = 270MT pagamento
+💰 500MT saldo = 450MT pagamento
+💰 1000MT saldo = 900MT pagamento`
     }
 };
 
@@ -539,6 +588,105 @@ async function verificarPagamentoIndividual(referencia, valorEsperado) {
         console.error(`❌ INDIVIDUAL: Erro ao verificar pagamento:`, error.message);
         return false;
     }
+}
+
+// === FUNÇÃO DE RETRY AUTOMÁTICO PARA PAGAMENTOS ===
+async function tentarPagamentoComRetryAutomatico(referencia, valorEsperado, dadosCompletos, message) {
+    const INTERVALO_RETRY = 15000; // 15 segundos
+    const DURACAO_TOTAL = 2 * 60 * 1000; // 2 minutos
+    const TENTATIVAS_MAX = Math.floor(DURACAO_TOTAL / INTERVALO_RETRY); // 8 tentativas
+
+    console.log(`🔄 RETRY: Iniciando retry automático para ${referencia} - ${TENTATIVAS_MAX} tentativas a cada 15s por 2min`);
+
+    // Extrair dados do objeto dadosCompletos
+    const { isSaldo, produtoConvertido, produto, numero, valorNormalizado, tipoProdutoTexto, produtoTexto } = dadosCompletos;
+
+    let tentativa = 1;
+
+    const intervalId = setInterval(async () => {
+        try {
+            console.log(`🔄 RETRY: Tentativa ${tentativa}/${TENTATIVAS_MAX} - Verificando pagamento ${referencia}`);
+
+            const pagamentoConfirmado = await verificarPagamentoIndividual(referencia, valorEsperado);
+
+            if (pagamentoConfirmado === 'ja_processado') {
+                console.log(`✅ RETRY: Pagamento já processado encontrado na tentativa ${tentativa}!`);
+                clearInterval(intervalId);
+
+                await message.reply(
+                    `⚠️ *PAGAMENTO JÁ PROCESSADO*\n\n` +
+                    `💰 Referência: ${referencia}\n` +
+                    `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
+                    `💵 Valor: ${valorNormalizado}MT\n\n` +
+                    `✅ Este pagamento já foi processado anteriormente. Não é necessário enviar novamente.\n\n` +
+                    `Se você acredita que isso é um erro, entre em contato com o suporte.`
+                );
+                return;
+            }
+
+            if (pagamentoConfirmado) {
+                console.log(`✅ RETRY: Pagamento confirmado na tentativa ${tentativa}! Processando...`);
+                clearInterval(intervalId);
+
+                // Notificar sucesso
+                await message.reply(
+                    `✅ *PAGAMENTO ENCONTRADO!*\n\n` +
+                    `💰 Referência: ${referencia}\n` +
+                    `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
+                    `📱 Número: ${numero}\n` +
+                    `💵 Valor: ${valorNormalizado}MT\n\n` +
+                    `🚀 Processando seu pedido...`
+                );
+
+                // Processar o pedido
+                if (isSaldo) {
+                    await enviarSaldoParaTasker(referencia, produtoConvertido, numero, message.from, message);
+                    await registrarComprador(message.from, numero, message._data.notifyName || 'Cliente', produtoConvertido);
+                } else {
+                    await enviarComSubdivisaoAutomatica(referencia, produtoConvertido, numero, message.from, message);
+                    await registrarComprador(message.from, numero, message._data.notifyName || 'Cliente', produto);
+                }
+                return;
+            }
+
+            tentativa++;
+
+            // Se chegou ao limite de tentativas
+            if (tentativa > TENTATIVAS_MAX) {
+                console.log(`❌ RETRY: Pagamento não encontrado após ${TENTATIVAS_MAX} tentativas em 2 minutos`);
+                clearInterval(intervalId);
+
+                await message.reply(
+                    `⏰ *TEMPO LIMITE ATINGIDO*\n\n` +
+                    `💰 Referência: ${referencia}\n` +
+                    `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
+                    `📱 Número: ${numero}\n` +
+                    `💵 Valor: ${valorNormalizado}MT\n\n` +
+                    `❌ Pagamento não foi encontrado após 2 minutos de tentativas.\n\n` +
+                    `🔄 Envie novamente o comprovante ou verifique se o pagamento foi processado corretamente.`
+                );
+            }
+
+        } catch (error) {
+            console.error(`❌ RETRY: Erro na tentativa ${tentativa}:`, error.message);
+            tentativa++;
+
+            if (tentativa > TENTATIVAS_MAX) {
+                clearInterval(intervalId);
+                await message.reply(
+                    `❌ *ERRO NO SISTEMA*\n\n` +
+                    `💰 Referência: ${referencia}\n\n` +
+                    `⚠️ Ocorreu um erro durante as tentativas automáticas. Tente novamente mais tarde.`
+                );
+            }
+        }
+    }, INTERVALO_RETRY);
+
+    // Timeout de segurança (2.5 minutos para garantir limpeza)
+    setTimeout(() => {
+        clearInterval(intervalId);
+        console.log(`🛑 RETRY: Timeout de segurança ativado para ${referencia}`);
+    }, DURACAO_TOTAL + 30000);
 }
 
 // === FUNÇÃO PARA CALCULAR VALOR ESPERADO BASEADO NOS MEGAS ===
@@ -1435,7 +1583,7 @@ client.on('group-join', async (notification) => {
                 try {
                     const isMonitorado = CONFIGURACAO_GRUPOS.hasOwnProperty(chatId);
                     const mensagem = isMonitorado ? 
-                        `🤖 *BOT ATACADO ATIVO E CONFIGURADO!*\n\nEste grupo está monitorado e o sistema automático já está funcionando.\n\n📋 Digite: *tabela* (ver preços)\n💳 Digite: *pagamento* (ver formas)\n\n⚠️ *ATACADO: Cálculo automático de megas*` :
+                        `🤖 *BOT ATACADO ATIVO E CONFIGURADO!*\n\nEste grupo está monitorado e o sistema automático já está funcionando.\n\n📋 Digite: *tabela* (ver preços)\n💳 Digite: *pagamento* (ver formas)\n💰 Digite: *saldo* (ver tabela saldo)\n\n⚠️ *ATACADO: Cálculo automático de megas*` :
                         `🤖 *BOT ATACADO CONECTADO!*\n\n⚙️ Este grupo ainda não está configurado.\n🔧 Contacte o administrador para ativação.\n\n📝 ID do grupo copiado no console do servidor.`;
                     
                     await client.sendMessage(chatId, mensagem);
@@ -1889,7 +2037,13 @@ client.on('message', async (message) => {
 
         // === COMANDOS BÁSICOS (PARA TODAS AS MENSAGENS) ===
         const textoMensagem = message.body ? message.body.toLowerCase().trim() : '';
-        
+
+        // === IGNORAR MENSAGENS DE SALDO TRANSFERIDO ===
+        if (message.body && message.body.startsWith('✅Saldo Transferido Com Sucesso')) {
+            console.log('🚫 Mensagem de saldo transferido ignorada');
+            return;
+        }
+
         if (textoMensagem === 'teste') {
             await message.reply('🤖 Bot funcionando normalmente!');
             return;
@@ -1911,6 +2065,16 @@ client.on('message', async (message) => {
                 await message.reply(configGrupoBasico.pagamento);
             } else {
                 await message.reply('❌ Informações de pagamento não configuradas para este grupo.');
+            }
+            return;
+        }
+
+        if (textoMensagem === 'saldo') {
+            const configGrupoBasico = getConfiguracaoGrupo(message.from);
+            if (configGrupoBasico && configGrupoBasico.saldo) {
+                await message.reply(configGrupoBasico.saldo);
+            } else {
+                await message.reply('❌ Informações de saldo não configuradas para este grupo.');
             }
             return;
         }
@@ -2122,15 +2286,30 @@ client.on('message', async (message) => {
                     const produtoTexto = isSaldo ? `${produtoConvertido}MT` : produto;
                     console.log(`❌ INDIVIDUAL: Pagamento não confirmado para texto (${tipoProdutoTexto}) - ${referencia} (${valorNormalizado}MT)`);
 
+                    // Primeira mensagem informando o início das tentativas automáticas
                     await message.reply(
                         `⏳ *AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO*\n\n` +
                         `💰 Referência: ${referencia}\n` +
                         `📊 ${tipoProdutoTexto}: ${produtoTexto}\n` +
                         `📱 Número: ${numero}\n` +
                         `💳 Valor esperado: ${valorNormalizado}MT\n\n` +
-                        `🔍 Aguardando confirmação do pagamento no sistema...\n` +
-                        `⏱️ Tente novamente em alguns minutos.`
+                        `🔄 **Iniciando tentativas automáticas...**\n` +
+                        `⏰ Vou verificar a cada 15 segundos por 2 minutos\n` +
+                        `✨ Não é necessário reenviar o comprovante!`
                     );
+
+                    // Iniciar retry automático
+                    const dadosCompletos = {
+                        isSaldo,
+                        produtoConvertido,
+                        produto,
+                        numero,
+                        valorNormalizado,
+                        tipoProdutoTexto,
+                        produtoTexto
+                    };
+
+                    await tentarPagamentoComRetryAutomatico(referencia, valorEsperado, dadosCompletos, message);
                     return;
                 }
                 
