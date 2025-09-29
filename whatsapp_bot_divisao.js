@@ -131,14 +131,15 @@ class WhatsAppBotDivisao {
                 return null;
             }
             
-            // FILTRO: Ignorar mensagens do sistema/bot 
-            if (/✅.*Transação Concluída Com Sucesso/i.test(mensagem) || 
+            // FILTRO: Ignorar mensagens do sistema/bot
+            if (/✅.*Transação Concluída Com Sucesso/i.test(mensagem) ||
                 /✅.*Pedido processado/i.test(mensagem) ||
                 /Transferencia Processada Automaticamente/i.test(mensagem) ||
+                mensagem.startsWith('✅Saldo Transferido Com Sucesso') ||
                 (/📱.*Número:/i.test(mensagem) && /📊.*Megas:/i.test(mensagem) && /💰.*Referência:/i.test(mensagem)) ||
                 (/📱.*Número:/i.test(mensagem) && /📊.*Megas:/i.test(mensagem) && /🔖.*Referência:/i.test(mensagem))) {
                 console.log(`🤖 DIVISÃO: Ignorando mensagem do sistema/bot de ${remetente}`);
-                return null;
+                return { ignorado: true, processado: false };
             }
             
             console.log(`\n🔍 DIVISÃO: Analisando mensagem de ${remetente}`);

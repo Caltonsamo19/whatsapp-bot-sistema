@@ -2151,13 +2151,19 @@ client.on('message', async (message) => {
         const resultadoDivisao = await botDivisao.processarMensagem(message, remetente, message.from);
         
         if (resultadoDivisao) {
+            // Se a mensagem foi ignorada pelo bot de divisão, parar aqui
+            if (resultadoDivisao.ignorado) {
+                console.log('🚫 DIVISÃO: Mensagem ignorada pelo bot de divisão');
+                return;
+            }
+
             console.log('🔄 DIVISÃO: Mensagem processada pelo bot de divisão');
-            
+
             // Se o bot de divisão retornou uma resposta, enviar
             if (resultadoDivisao.resposta) {
                 await message.reply(resultadoDivisao.resposta);
             }
-            
+
             // Se foi processado com sucesso, não continuar para o bot original
             if (resultadoDivisao.processado) {
                 if (resultadoDivisao.duplicados > 0) {
@@ -2167,7 +2173,7 @@ client.on('message', async (message) => {
                 }
                 return; // IMPORTANTE: Sair aqui, não processar no bot original
             }
-            
+
             // Se retornou uma resposta mas não foi processado, também sair
             if (resultadoDivisao.resposta) {
                 return;
