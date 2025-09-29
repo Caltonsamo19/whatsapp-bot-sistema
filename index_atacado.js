@@ -1637,6 +1637,12 @@ Bem-vindo(a) ao *${configGrupo.nome}*!
 
 client.on('message', async (message) => {
     try {
+        // === IGNORAR MENSAGENS DE SALDO TRANSFERIDO (PRIMEIRO FILTRO) ===
+        if (message.body && message.body.startsWith('✅Saldo Transferido Com Sucesso')) {
+            console.log('🚫 Mensagem de saldo transferido ignorada');
+            return;
+        }
+
         const isPrivado = !message.from.endsWith('@g.us');
         const isAdmin = isAdministrador(message.from);
 
@@ -2037,12 +2043,6 @@ client.on('message', async (message) => {
 
         // === COMANDOS BÁSICOS (PARA TODAS AS MENSAGENS) ===
         const textoMensagem = message.body ? message.body.toLowerCase().trim() : '';
-
-        // === IGNORAR MENSAGENS DE SALDO TRANSFERIDO ===
-        if (message.body && message.body.startsWith('✅Saldo Transferido Com Sucesso')) {
-            console.log('🚫 Mensagem de saldo transferido ignorada');
-            return;
-        }
 
         if (textoMensagem === 'teste') {
             await message.reply('🤖 Bot funcionando normalmente!');
