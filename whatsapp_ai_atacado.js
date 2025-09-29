@@ -1270,8 +1270,14 @@ Analisa TODO o texto e reconstrói a referência completa:`;
 
   // === FUNÇÃO PRINCIPAL PARA O BOT (CÓDIGO ORIGINAL) ===
   async processarMensagemBot(mensagem, remetente, tipoMensagem = 'texto', configGrupo = null, legendaImagem = null) {
+    // === IGNORAR MENSAGENS DE SALDO TRANSFERIDO ===
+    if (mensagem && mensagem.startsWith('✅Saldo Transferido Com Sucesso')) {
+      console.log('🚫 IA: Mensagem de saldo transferido ignorada');
+      return { sucesso: false, erro: false, ignorado: true };
+    }
+
     const timestamp = Date.now();
-    
+
     if (tipoMensagem === 'imagem') {
       console.log(`\n🧠 IA ATACADO processando IMAGEM de ${remetente}`);
       if (legendaImagem && legendaImagem.trim().length > 0) {
